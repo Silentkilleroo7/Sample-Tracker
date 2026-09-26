@@ -1,9 +1,9 @@
 -- =====================================================================================
--- GA SAMPLE TRACKING MASTER (THREADTRACK PRO 4.0) - SUPABASE COMPLETE SQL SCHEMA
--- Run this entire script inside your Supabase Dashboard -> SQL Editor -> New Query
+-- GA SAMPLE TRACKING MASTER (THREADTRACK PRO 4.0) - SINGLE COMPLETE SUPABASE SQL SCRIPT
+-- Copy & Run this single SQL command in Supabase Dashboard -> SQL Editor -> New Query
 -- =====================================================================================
 
--- Enable UUID generation extension if not already enabled
+-- Enable UUID generation extension
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- =====================================================================================
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS public.fabrics (
 );
 
 -- =====================================================================================
--- 2. SAMPLES PIPELINE TABLE (Tracks Requisition, Sewing, Wash, Finishing, Parcel, Approval, & Product Photos)
+-- 2. SAMPLES PIPELINE TABLE (Tracks Requisition, Locked Status, Shipment Date, Approvals)
 -- =====================================================================================
 CREATE TABLE IF NOT EXISTS public.samples (
   id TEXT PRIMARY KEY,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.samples (
   buyer TEXT NOT NULL,
   po_number TEXT NOT NULL DEFAULT '',
   line_code TEXT NOT NULL DEFAULT '',
-  sample_type TEXT NOT NULL DEFAULT 'Red Seal Sample',
+  sample_type TEXT NOT NULL DEFAULT 'Proto Sample',
   color TEXT NOT NULL DEFAULT '',
   size TEXT NOT NULL DEFAULT '',
   quantity INTEGER NOT NULL DEFAULT 1,
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS public.samples (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Safe migration for existing deployments
+-- Safe migration columns for existing deployments
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS shipment_date TEXT NOT NULL DEFAULT '';
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS is_requisition_locked BOOLEAN NOT NULL DEFAULT TRUE;
 
@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- =====================================================================================
--- 5. REQUISITION OPTIONS TABLE (Persistent Buyers, Sewing Lines, Wash Recipes, Couriers)
+-- 5. REQUISITION OPTIONS TABLE (Stores User-Entered Sizes, Buyers, Lines, Colors, Washes)
 -- =====================================================================================
 CREATE TABLE IF NOT EXISTS public.requisition_options (
   id TEXT PRIMARY KEY DEFAULT 'default',
@@ -135,22 +135,29 @@ CREATE TABLE IF NOT EXISTS public.requisition_options (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Seed initial dropdown options if not already present
+-- Initialize clean empty options row (no mock data)
 INSERT INTO public.requisition_options (
   id, buyers, line_codes, sample_types, sizes, colors, wash_types, couriers
 ) VALUES (
   'default',
-  '["Levi Strauss & Co.", "Zara / Inditex", "Tommy Hilfiger", "COS / H&M Group", "Represent Clo / UK", "Urban Outfitters", "Club Monaco", "Massimo Dutti", "Nudie Jeans Co.", "G-Star RAW", "Calvin Klein Jeans"]'::jsonb,
-  '[{"code":"LINE-A01","label":"LINE-A01 (Woven Tops)"},{"code":"LINE-A02","label":"LINE-A02 (Shirts)"},{"code":"LINE-B02","label":"LINE-B02 (Chino Bottoms)"},{"code":"LINE-B05","label":"LINE-B05 (Cargo Pants)"},{"code":"LINE-D01","label":"LINE-D01 (Rigid Denim)"},{"code":"LINE-D02","label":"LINE-D02 (Stretch Denim)"},{"code":"LINE-D03","label":"LINE-D03 (Denim Jackets)"},{"code":"LINE-K01","label":"LINE-K01 (Heavy Knits / Hoodies)"},{"code":"LINE-K04","label":"LINE-K04 (T-Shirts / Jersey)"}]'::jsonb,
-  '["Proto Sample", "Fit Sample", "Salesman Sample (SMS)", "Red Seal Sample", "TOP Sample", "Gold Seal Sample", "Size Set Sample", "Photo Shoot Sample"]'::jsonb,
-  '["XS", "S", "M", "L", "XL", "XXL", "28", "30", "32", "34", "36", "38"]'::jsonb,
-  '["Vintage Indigo", "Desert Sand Khaki", "Washed Black Carbon", "Vintage Bone / Ecru", "Raw Indigo", "Washed Olive", "Bleach Blue", "Natural Ecru", "Charcoal Heather", "Dusty Sage"]'::jsonb,
-  '["Bio-Enzyme Stone Wash", "Bleach Stone Wash", "Vintage Acid Burnout Wash", "Ozone Cold Bleach Rinse", "Neutral Enzyme Bath + Softening", "Resin 3D Whiskers + Tint", "Raw / Rinse Wash", "Super Heavy Enzyme + Destroy", "Silicone Peach Soft Finish"]'::jsonb,
-  '["DHL Express Worldwide", "FedEx Priority", "UPS Worldwide Express", "Aramex Global", "TNT Express"]'::jsonb
-) ON CONFLICT (id) DO NOTHING;
+  '[]'::jsonb,
+  '[]'::jsonb,
+  '[]'::jsonb,
+  '[]'::jsonb,
+  '[]'::jsonb,
+  '[]'::jsonb,
+  '[]'::jsonb
+) ON CONFLICT (id) DO UPDATE SET
+  buyers = '[]'::jsonb,
+  line_codes = '[]'::jsonb,
+  sample_types = '[]'::jsonb,
+  sizes = '[]'::jsonb,
+  colors = '[]'::jsonb,
+  wash_types = '[]'::jsonb,
+  couriers = '[]'::jsonb;
 
 -- =====================================================================================
--- 6. STYLE PHOTOS METADATA TABLE (Logs Every Uploaded Product Picture)
+-- 6. STYLE PHOTOS METADATA TABLE (Logs Uploaded Product Pictures)
 -- =====================================================================================
 CREATE TABLE IF NOT EXISTS public.style_photos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -172,7 +179,7 @@ VALUES (
   'style-photos',
   'style-photos',
   true,
-  10485760, -- 10 MB per photo
+  10485760,
   ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 )
 ON CONFLICT (id) DO UPDATE SET
@@ -190,7 +197,6 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.requisition_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.style_photos ENABLE ROW LEVEL SECURITY;
 
--- Drop existing policies if re-running script
 DROP POLICY IF EXISTS "Allow full access to fabrics" ON public.fabrics;
 DROP POLICY IF EXISTS "Allow full access to samples" ON public.samples;
 DROP POLICY IF EXISTS "Allow full access to bv_tests" ON public.bv_tests;

@@ -4,6 +4,7 @@ import {
   FlaskConical,
   Layers,
   ScrollText,
+  Plus,
 } from 'lucide-react';
 import { BVTestItem, TestSampleType } from '../types/test';
 import { SampleItem } from '../types/sample';
@@ -17,7 +18,7 @@ interface NewBVTestModalProps {
   onCreateTest: (testData: Partial<BVTestItem>) => void;
 }
 
-const COMMON_PARAMETERS = [
+const STANDARD_PARAMETERS = [
   'pH-Value of Aqueous Extract (ISO 3071 / AATCC 81)',
   'Dimensional Stability / Shrinkage (ISO 6330)',
   'Colorfastness to Washing (ISO 105-C06)',
@@ -36,50 +37,56 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
   onCreateTest,
 }) => {
   const [sampleType, setSampleType] = useState<TestSampleType>('garment');
-  const [selectedSampleId, setSelectedSampleId] = useState<string>(samples[0]?.id || '');
-  const [selectedFabricCode, setSelectedFabricCode] = useState<string>(fabrics[0]?.code || '');
+  const [selectedSampleId, setSelectedSampleId] = useState<string>('');
+  const [selectedFabricCode, setSelectedFabricCode] = useState<string>('');
   const [manualStyleCode, setManualStyleCode] = useState<string>('');
   const [manualStyleName, setManualStyleName] = useState<string>('');
   const [manualPoNumber, setManualPoNumber] = useState<string>('');
   const [manualFabricCode, setManualFabricCode] = useState<string>('');
   const [manualFabricName, setManualFabricName] = useState<string>('');
-  const [buyer, setBuyer] = useState<string>(samples[0]?.buyer || 'Levi Strauss & Co.');
-
-  useEffect(() => {
-    if (samples.length > 0 && (!selectedSampleId || !samples.some((s) => s.id === selectedSampleId))) {
-      setSelectedSampleId(samples[0].id);
-      setBuyer(samples[0].buyer);
-    }
-  }, [samples, selectedSampleId]);
-
-  useEffect(() => {
-    if (fabrics.length > 0 && (!selectedFabricCode || !fabrics.some((f) => f.code === selectedFabricCode))) {
-      setSelectedFabricCode(fabrics[0].code);
-    }
-  }, [fabrics, selectedFabricCode]);
-  const [testingAgency, setTestingAgency] = useState<string>('Bureau Veritas (BV) - Dhaka Textiles Lab');
-  const [testPackage, setTestPackage] = useState<string>('Full Apparel Eco-Chemical & Physical Performance Package');
-  const [selectedParams, setSelectedParams] = useState<string[]>([
-    'pH-Value of Aqueous Extract (ISO 3071 / AATCC 81)',
-    'Dimensional Stability / Shrinkage (ISO 6330)',
-    'Colorfastness to Washing (ISO 105-C06)',
-  ]);
-  const [sentDate, setSentDate] = useState<string>(new Date().toISOString().split('T')[0]);
-
-  const defaultExpDate = new Date();
-  defaultExpDate.setDate(defaultExpDate.getDate() + 4);
-  const [expectedDate, setExpectedDate] = useState<string>(defaultExpDate.toISOString().split('T')[0]);
+  const [buyer, setBuyer] = useState<string>('');
+  const [testingAgency, setTestingAgency] = useState<string>('Bureau Veritas (BV)');
+  const [testPackage, setTestPackage] = useState<string>('');
+  const [reportNumber, setReportNumber] = useState<string>('');
+  const [paramInput, setParamInput] = useState<string>('');
+  const [selectedParams, setSelectedParams] = useState<string[]>([]);
+  const [sentDate, setSentDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [expectedDate, setExpectedDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 4);
+    return d.toISOString().split('T')[0];
+  });
   const [inspectorNotes, setInspectorNotes] = useState<string>('');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (samples.length > 0 && !selectedSampleId) {
+        setSelectedSampleId(samples[0].id);
+        setBuyer(samples[0].buyer || '');
+      }
+      if (fabrics.length > 0 && !selectedFabricCode) {
+        setSelectedFabricCode(fabrics[0].code);
+      }
+    }
+  }, [isOpen, samples, fabrics]);
 
   if (!isOpen) return null;
 
   const toggleParam = (param: string) => {
     if (selectedParams.includes(param)) {
-      if (selectedParams.length === 1) return;
       setSelectedParams(selectedParams.filter((p) => p !== param));
     } else {
       setSelectedParams([...selectedParams, param]);
     }
+  };
+
+  const handleAddCustomParam = () => {
+    const trimmed = paramInput.trim();
+    if (!trimmed) return;
+    if (!selectedParams.includes(trimmed)) {
+      setSelectedParams((prev) => [...prev, trimmed]);
+    }
+    setParamInput('');
   };
 
   const handleSampleChange = (id: string) => {
@@ -117,46 +124,50 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
         fabricCode = s.fabricCode;
         fabricName = s.fabricName;
       } else {
-        styleCode = manualStyleCode.trim().toUpperCase() || 'ST-LIVE-01';
-        styleName = manualStyleName.trim() || 'Garment Test Specimen';
-        poNumber = manualPoNumber.trim() || 'PO-0001';
-        fabricCode = manualFabricCode.trim().toUpperCase() || 'FAB-01';
-        fabricName = manualFabricName.trim() || 'Production Fabric';
+        styleCode = manualStyleCode.trim().toUpperCase();
+        styleName = manualStyleName.trim();
+        poNumber = manualPoNumber.trim();
+        fabricCode = manualFabricCode.trim().toUpperCase();
+        fabricName = manualFabricName.trim();
       }
     } else {
       const f = fabrics.find((x) => x.code === selectedFabricCode);
       if (f) {
         fabricCode = f.code;
         fabricName = f.name;
-        styleCode = f.linkedStyleCodes[0] || 'Bulk Mill Fabric';
-        styleName = `${f.name} (Mill Fabric Swatch)`;
+        styleCode = f.linkedStyleCodes[0] || '';
+        styleName = f.name;
       } else {
-        fabricCode = manualFabricCode.trim().toUpperCase() || 'FAB-LIVE-01';
-        fabricName = manualFabricName.trim() || 'Bulk Mill Fabric Swatch';
-        styleCode = manualStyleCode.trim().toUpperCase() || 'Bulk Mill Fabric';
-        styleName = `${fabricName} (Mill Fabric Swatch)`;
+        fabricCode = manualFabricCode.trim().toUpperCase();
+        fabricName = manualFabricName.trim();
+        styleCode = manualStyleCode.trim().toUpperCase();
+        styleName = fabricName;
       }
     }
 
+    const finalParams = paramInput.trim()
+      ? Array.from(new Set([...selectedParams, paramInput.trim()]))
+      : selectedParams;
+
     const newTest: Partial<BVTestItem> = {
       sampleType,
-      sampleId: sampleType === 'garment' ? selectedSampleId : undefined,
+      sampleId: sampleType === 'garment' && selectedSampleId ? selectedSampleId : undefined,
       styleCode,
       styleName,
       poNumber,
       fabricCode,
       fabricName,
-      buyer,
-      testingAgency,
-      testPackage,
-      testParameters: selectedParams,
+      buyer: buyer.trim(),
+      testingAgency: testingAgency.trim() || 'Bureau Veritas (BV)',
+      testPackage: testPackage.trim() || 'Standard Test Package',
+      testParameters: finalParams,
       sentDate,
       expectedDate,
       status: 'pending',
       overallResult: 'PENDING',
       reTestRequired: false,
-      reportNumber: `BV-(8826) ${Math.floor(100 + Math.random() * 900)}-${Math.floor(1000 + Math.random() * 9000)} (In Testing)`,
-      inspectorNotes,
+      reportNumber: reportNumber.trim() || 'Pending BV Report',
+      inspectorNotes: inspectorNotes.trim(),
     };
 
     onCreateTest(newTest);
@@ -177,6 +188,7 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
           >
@@ -184,7 +196,15 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+              e.preventDefault();
+            }
+          }}
+          className="space-y-4 text-xs"
+        >
           {/* 1. Category Switcher */}
           <div>
             <label className="block text-slate-400 font-semibold mb-1.5 uppercase text-[10px] tracking-wider">
@@ -224,14 +244,14 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
             samples.length > 0 ? (
               <div>
                 <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px] tracking-wider">
-                  Select Garment Style & PO
+                  Select Garment Style &amp; PO
                 </label>
                 <select
                   value={selectedSampleId}
                   onChange={(e) => handleSampleChange(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500"
-                  required
                 >
+                  <option value="">-- Enter Manual Style Below --</option>
                   {samples.map((s) => (
                     <option key={s.id} value={s.id}>
                       [{s.styleCode}] {s.styleName} • Buyer: {s.buyer} • PO: {s.poNumber}
@@ -239,59 +259,18 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
                   ))}
                 </select>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-                    Style Code *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. ST-9010"
-                    value={manualStyleCode}
-                    onChange={(e) => setManualStyleCode(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-                    Style Name *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Slim Chino Pant"
-                    value={manualStyleName}
-                    onChange={(e) => setManualStyleName(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-                    PO Number
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. PO-8821"
-                    value={manualPoNumber}
-                    onChange={(e) => setManualPoNumber(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono"
-                  />
-                </div>
-              </div>
-            )
+            ) : null
           ) : fabrics.length > 0 ? (
             <div>
               <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px] tracking-wider">
-                Select Fabric Code & Specification
+                Select Fabric Code &amp; Specification
               </label>
               <select
                 value={selectedFabricCode}
                 onChange={(e) => handleFabricChange(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-indigo-500"
-                required
               >
+                <option value="">-- Enter Manual Fabric Below --</option>
                 {fabrics.map((f) => (
                   <option key={f.id} value={f.code}>
                     [{f.code}] {f.name} ({f.composition}) • Avail: {f.availableYards} yds
@@ -299,7 +278,52 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
                 ))}
               </select>
             </div>
-          ) : (
+          ) : null}
+
+          {sampleType === 'garment' && !selectedSampleId && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
+                  Style Code *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter Style Code"
+                  value={manualStyleCode}
+                  onChange={(e) => setManualStyleCode(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
+                  Style Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Enter Style Name"
+                  value={manualStyleName}
+                  onChange={(e) => setManualStyleName(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
+                  PO Number
+                </label>
+                <input
+                  type="text"
+                  placeholder="Enter PO Number"
+                  value={manualPoNumber}
+                  onChange={(e) => setManualPoNumber(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {sampleType === 'fabric' && !selectedFabricCode && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
                 <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
@@ -308,7 +332,7 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. FAB-DNM-01"
+                  placeholder="Enter Fabric Code"
                   value={manualFabricCode}
                   onChange={(e) => setManualFabricCode(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono"
@@ -321,7 +345,7 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 12.5oz Indigo Ring Denim"
+                  placeholder="Enter Fabric Specification"
                   value={manualFabricName}
                   onChange={(e) => setManualFabricName(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"
@@ -334,10 +358,11 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-                Buyer Brand / Account
+                Buyer Brand / Account *
               </label>
               <input
                 type="text"
+                placeholder="Enter Buyer Name"
                 value={buyer}
                 onChange={(e) => setBuyer(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"
@@ -347,10 +372,11 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
 
             <div>
               <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-                Testing Agency (Lab)
+                Testing Agency (Lab) *
               </label>
               <input
                 type="text"
+                placeholder="Enter Testing Agency"
                 value={testingAgency}
                 onChange={(e) => setTestingAgency(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"
@@ -359,27 +385,88 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
             </div>
           </div>
 
-          {/* 4. Test Package Name */}
-          <div>
-            <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-              Test Package Name
-            </label>
-            <input
-              type="text"
-              value={testPackage}
-              onChange={(e) => setTestPackage(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"
-              required
-            />
+          {/* 4. Test Package Name & Report / Submission Reference */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
+                Test Package Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter Test Package Name"
+                value={testPackage}
+                onChange={(e) => setTestPackage(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
+                BV Submission / Report Reference #
+              </label>
+              <input
+                type="text"
+                placeholder="Optional TRF / Report #"
+                value={reportNumber}
+                onChange={(e) => setReportNumber(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono"
+              />
+            </div>
           </div>
 
-          {/* 5. Parameters Checkboxes */}
-          <div>
-            <label className="block text-slate-400 font-semibold mb-1.5 uppercase text-[10px] tracking-wider">
-              Test Parameters to Inspect (Includes pH-Value)
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60 max-h-44 overflow-y-auto">
-              {COMMON_PARAMETERS.map((param) => {
+          {/* 5. Parameters (Type & Press Enter to List + Quick Checkboxes) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
+                Test Parameters (Type &amp; Press Enter to List or Select Below)
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Type test parameter & press Enter to list..."
+                value={paramInput}
+                onChange={(e) => setParamInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddCustomParam();
+                  }
+                }}
+                className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomParam}
+                className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>List</span>
+              </button>
+            </div>
+
+            {selectedParams.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 py-1">
+                {selectedParams.map((p) => (
+                  <span
+                    key={p}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 text-[11px] font-medium"
+                  >
+                    <span>{p}</span>
+                    <button
+                      type="button"
+                      onClick={() => toggleParam(p)}
+                      className="hover:text-rose-300 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 bg-slate-800/50 p-2.5 rounded-xl border border-slate-700/60 max-h-36 overflow-y-auto">
+              {STANDARD_PARAMETERS.map((param) => {
                 const checked = selectedParams.includes(param);
                 return (
                   <label
@@ -438,7 +525,7 @@ export const NewBVTestModal: React.FC<NewBVTestModalProps> = ({
             </label>
             <input
               type="text"
-              placeholder="e.g., Pay special attention to pH value after enzyme wash & neutralization"
+              placeholder="Enter any special instructions for BV lab..."
               value={inspectorNotes}
               onChange={(e) => setInspectorNotes(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs"

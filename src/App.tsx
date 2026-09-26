@@ -101,6 +101,7 @@ export default function App() {
       localStorage.removeItem('threadtrack_fabrics');
       localStorage.removeItem('threadtrack_notifs');
       localStorage.removeItem('threadtrack_bv_tests');
+      localStorage.removeItem('threadtrack_live_req_options_v1');
     } catch {
       // Ignore storage access errors in restricted browsers
     }
@@ -927,6 +928,7 @@ export default function App() {
     localStorage.removeItem('threadtrack_live_fabrics_v1');
     localStorage.removeItem('threadtrack_live_notifs_v1');
     localStorage.removeItem('threadtrack_live_bv_tests_v1');
+    localStorage.removeItem('threadtrack_clean_req_options_v2');
     void clearAllDatabaseTablesInSupabase();
     setSamples(INITIAL_SAMPLES);
     setFabrics(INITIAL_FABRICS);

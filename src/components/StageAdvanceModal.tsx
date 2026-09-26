@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SampleItem, STAGE_CONFIG, SampleStage } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
@@ -29,23 +29,30 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
   sample,
   onConfirmAdvance,
 }) => {
+  const [note, setNote] = useState('');
+  const [operator, setOperator] = useState('');
+  const [washRecipe, setWashRecipe] = useState('');
+  const [courierName, setCourierName] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [parcelDate, setParcelDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  useEffect(() => {
+    if (sample && isOpen) {
+      setNote('');
+      setOperator('');
+      setWashRecipe(sample.washDetails.washType || '');
+      setCourierName(sample.parcelDetails.courier || '');
+      setTrackingNumber(sample.parcelDetails.trackingNumber || '');
+      setParcelDate(sample.parcelDetails.parcelDate || new Date().toISOString().split('T')[0]);
+    }
+  }, [sample, isOpen]);
+
   if (!isOpen || !sample) return null;
 
   const currentConfig = STAGE_CONFIG[sample.stage];
   const nextStageKey = currentConfig.nextStage;
   const prevStageKey = currentConfig.prevStage;
   const nextConfig = nextStageKey ? STAGE_CONFIG[nextStageKey] : null;
-
-  const [note, setNote] = useState('');
-  const [operator, setOperator] = useState('Floor Supervisor');
-  const [washRecipe, setWashRecipe] = useState(sample.washDetails.washType || 'Enzyme Stone Wash');
-  const [courierName, setCourierName] = useState(sample.parcelDetails.courier || 'DHL Express');
-  const [trackingNumber, setTrackingNumber] = useState(
-    sample.parcelDetails.trackingNumber || `AWB-${Math.floor(1000 + Math.random() * 9000)}-DHL`
-  );
-  const [parcelDate] = useState(
-    sample.parcelDetails.parcelDate || new Date().toISOString().split('T')[0]
-  );
 
   const handleAdvance = () => {
     if (!nextStageKey) return;
@@ -56,7 +63,7 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
       stageUpdates = {
         washDetails: {
           ...sample.washDetails,
-          washType: washRecipe,
+          washType: washRecipe.trim(),
           startedAt: new Date().toISOString(),
         },
       };
@@ -64,8 +71,8 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
       stageUpdates = {
         parcelDetails: {
           ...sample.parcelDetails,
-          courier: courierName,
-          trackingNumber,
+          courier: courierName.trim(),
+          trackingNumber: trackingNumber.trim(),
           parcelDate,
           dispatchStatus: 'dispatched',
         },
@@ -80,7 +87,7 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
       sample.id,
       nextStageKey,
       transitionNote,
-      operator,
+      operator.trim() || 'Operator',
       stageUpdates
     );
     onClose();
@@ -96,7 +103,7 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
       sample.id,
       prevStageKey,
       rollbackNote,
-      operator
+      operator.trim() || 'Operator'
     );
     onClose();
   };
@@ -105,6 +112,7 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-xs text-slate-300">
         <button
+          type="button"
           onClick={onClose}
           className="absolute top-5 right-5 p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
         >
@@ -153,8 +161,8 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
                 type="text"
                 value={washRecipe}
                 onChange={(e) => setWashRecipe(e.target.value)}
-                placeholder="e.g. Enzyme Bio-Stone Wash + Potassium Fade"
-                className="w-full bg-slate-800 border border-cyan-500/40 rounded-lg p-2 text-white text-xs"
+                placeholder="Enter Wash Recipe / Formula"
+                className="w-full bg-slate-800 border border-cyan-500/40 rounded-lg p-2 text-white text-xs placeholder-slate-500"
               />
             </div>
           )}
@@ -163,7 +171,7 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
             <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 space-y-2">
               <div className="flex items-center gap-1.5 text-emerald-300 font-semibold">
                 <Truck className="w-4 h-4 text-emerald-400" />
-                Courier & Shipping Details:
+                Courier &amp; Shipping Details:
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -172,7 +180,8 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
                     type="text"
                     value={courierName}
                     onChange={(e) => setCourierName(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-1.5 text-white font-medium"
+                    placeholder="Enter Courier Name"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-1.5 text-white font-medium placeholder-slate-500"
                   />
                 </div>
                 <div>
@@ -181,7 +190,8 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
                     type="text"
                     value={trackingNumber}
                     onChange={(e) => setTrackingNumber(e.target.value)}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-1.5 text-white font-mono"
+                    placeholder="Enter Tracking / AWB Number"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-1.5 text-white font-mono placeholder-slate-500"
                   />
                 </div>
               </div>
@@ -194,19 +204,20 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
               <label className="block text-slate-400 mb-1">Station Operator / QA Inspector</label>
               <input
                 type="text"
+                placeholder="Enter Operator Name"
                 value={operator}
                 onChange={(e) => setOperator(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white placeholder-slate-500"
               />
             </div>
             <div>
               <label className="block text-slate-400 mb-1">Transition Note / Handover Memo</label>
               <input
                 type="text"
-                placeholder="e.g. Passed seam tolerance check"
+                placeholder="Enter Handover Note"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white placeholder-slate-500"
               />
             </div>
           </div>

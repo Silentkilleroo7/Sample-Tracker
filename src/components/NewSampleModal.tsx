@@ -19,6 +19,7 @@ import {
   Edit3,
   ShieldAlert,
   Calendar,
+  Tag,
 } from 'lucide-react';
 import {
   RequisitionOptions,
@@ -43,23 +44,27 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   onCreateSample,
   onOpenAddFabric,
 }) => {
-  // Load persistent database options
+  // Load persistent user-saved database options (clean, no mock data)
   const [options, setOptions] = useState<RequisitionOptions>(loadRequisitionOptions);
 
-  // Field values
+  // Clean, blank initial form fields (no pre-filled mock data)
   const [styleCode, setStyleCode] = useState('');
   const [styleName, setStyleName] = useState('');
-  const [buyer, setBuyer] = useState(options.buyers[0] || 'Levi Strauss & Co.');
+  const [buyer, setBuyer] = useState('');
   const [poNumber, setPoNumber] = useState('');
-  const [lineCode, setLineCode] = useState(options.lineCodes[0]?.code || 'LINE-A01');
-  const [sampleType, setSampleType] = useState<SampleType>('Red Seal Sample');
-  const [color, setColor] = useState(options.colors[0] || 'Vintage Indigo');
-  const [size, setSize] = useState(options.sizes[2] || 'M');
-  const [quantity, setQuantity] = useState(1);
-  const [selectedFabricId, setSelectedFabricId] = useState(fabrics[0]?.id || '');
+  const [lineCode, setLineCode] = useState('');
+  const [sampleType, setSampleType] = useState<string>('');
+  const [color, setColor] = useState('');
+
+  // Size input: type a size and press Enter to list it without submitting or filling the rest of the form
+  const [sizeInput, setSizeInput] = useState('');
+  const [listedSizes, setListedSizes] = useState<string[]>([]);
+
+  const [quantity, setQuantity] = useState<number>(1);
+  const [selectedFabricId, setSelectedFabricId] = useState('');
   const [customFabricCode, setCustomFabricCode] = useState('');
   const [customFabricName, setCustomFabricName] = useState('');
-  const [requiredYards, setRequiredYards] = useState(3.0);
+  const [requiredYards, setRequiredYards] = useState<number>(1);
   const [priority, setPriority] = useState<SamplePriority>('normal');
   const [targetParcelDate, setTargetParcelDate] = useState(() => {
     const d = new Date();
@@ -71,17 +76,22 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     d.setDate(d.getDate() + 14);
     return d.toISOString().split('T')[0];
   });
-  const [washType, setWashType] = useState(options.washTypes[0] || 'Bio-Enzyme Stone Wash');
-  const [courier, setCourier] = useState(options.couriers[0] || 'DHL Express Worldwide');
+  const [washType, setWashType] = useState('');
+  const [courier, setCourier] = useState('');
+  const [requestedBy, setRequestedBy] = useState('');
   const [autoDeduct, setAutoDeduct] = useState(true);
   const [showSecondConfirmation, setShowSecondConfirmation] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // Style Picture state
-  const [thumbnail, setThumbnail] = useState<string>(PRESET_STYLE_IMAGES[1].url);
+  const [thumbnail, setThumbnail] = useState<string>('');
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [showCustomUrlInput, setShowCustomUrlInput] = useState(false);
+
+  // Notification / confirmation feedback
+  const [saveToast, setSaveToast] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -92,10 +102,46 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    if (fabrics.length > 0 && (!selectedFabricId || !fabrics.some((f) => f.id === selectedFabricId))) {
-      setSelectedFabricId(fabrics[0].id);
+    if (saveToast) {
+      const t = setTimeout(() => setSaveToast(null), 2800);
+      return () => clearTimeout(t);
     }
-  }, [fabrics, selectedFabricId]);
+  }, [saveToast]);
+
+  if (!isOpen) return null;
+
+  const selectedFabric = fabrics.find((f) => f.id === selectedFabricId);
+  const willTriggerLowStock =
+    selectedFabric && selectedFabric.availableYards - requiredYards <= 5;
+
+  const triggerSaveNotification = (msg: string) => {
+    setSaveToast(msg);
+  };
+
+  const resetFormFields = () => {
+    setStyleCode('');
+    setStyleName('');
+    setBuyer('');
+    setPoNumber('');
+    setLineCode('');
+    setSampleType('');
+    setColor('');
+    setSizeInput('');
+    setListedSizes([]);
+    setQuantity(1);
+    setSelectedFabricId('');
+    setCustomFabricCode('');
+    setCustomFabricName('');
+    setRequiredYards(1);
+    setPriority('normal');
+    setWashType('');
+    setCourier('');
+    setRequestedBy('');
+    setThumbnail('');
+    setUploadedImages([]);
+    setValidationError(null);
+    setShowSecondConfirmation(false);
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -113,7 +159,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       if (urls.length > 0) {
         setThumbnail(urls[0]);
         setUploadedImages((prev) => Array.from(new Set([...urls, ...prev])));
-        setSaveToast(`Uploaded ${urls.length} product photo${urls.length > 1 ? 's' : ''} to storage!`);
+        setSaveToast(`Uploaded ${urls.length} product photo${urls.length > 1 ? 's' : ''}!`);
       }
     } finally {
       setIsUploadingPhoto(false);
@@ -121,163 +167,219 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     }
   };
 
-  // Inline "Add New Option" Drawer States
-  const [addingField, setAddingField] = useState<
-    'buyer' | 'line' | 'sampleType' | 'color' | 'size' | 'wash' | 'courier' | null
-  >(null);
+  // ============================================================================
+  // ENTER-TO-LIST HANDLERS (Pressing Enter lists the item ONLY, never fills/submits form)
+  // ============================================================================
 
-  // Input states for new options
-  const [newBuyer, setNewBuyer] = useState('');
-  const [newLineCode, setNewLineCode] = useState('');
-  const [newLineDesc, setNewLineDesc] = useState('');
-  const [newSampleType, setNewSampleType] = useState('');
-  const [newColor, setNewColor] = useState('');
-  const [newSize, setNewSize] = useState('');
-  const [newWash, setNewWash] = useState('');
-  const [newCourier, setNewCourier] = useState('');
+  const handleAddSizeToList = (rawVal?: string) => {
+    const val = (rawVal !== undefined ? rawVal : sizeInput).trim().toUpperCase();
+    if (!val) return;
 
-  // Notification / confirmation feedback
-  const [saveToast, setSaveToast] = useState<string | null>(null);
+    // Support comma-separated sizes if user typed "S, M, L"
+    const parts = val
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
 
-  useEffect(() => {
-    if (saveToast) {
-      const t = setTimeout(() => setSaveToast(null), 3000);
-      return () => clearTimeout(t);
+    if (parts.length === 0) return;
+
+    setListedSizes((prev) => {
+      const next = Array.from(new Set([...prev, ...parts]));
+      return next;
+    });
+
+    // Also persist to saved options.sizes if new
+    const newSizesForDb = parts.filter((p) => !options.sizes.includes(p));
+    if (newSizesForDb.length > 0) {
+      const updated = {
+        ...options,
+        sizes: Array.from(new Set([...options.sizes, ...newSizesForDb])),
+      };
+      setOptions(updated);
+      saveRequisitionOptions(updated);
     }
-  }, [saveToast]);
 
-  if (!isOpen) return null;
-
-  const selectedFabric = fabrics.find((f) => f.id === selectedFabricId);
-  const willTriggerLowStock =
-    selectedFabric && selectedFabric.availableYards - requiredYards <= 5;
-
-  const triggerSaveNotification = (msg: string) => {
-    setSaveToast(msg);
+    setSizeInput('');
+    triggerSaveNotification(`Size "${parts.join(', ')}" listed!`);
   };
 
-  const handleSaveNewBuyer = () => {
-    const trimmed = newBuyer.trim();
+  const handleRemoveListedSize = (sizeToRemove: string) => {
+    setListedSizes((prev) => prev.filter((s) => s !== sizeToRemove));
+  };
+
+  const handleToggleSavedSize = (s: string) => {
+    if (listedSizes.includes(s)) {
+      setListedSizes((prev) => prev.filter((item) => item !== s));
+    } else {
+      setListedSizes((prev) => [...prev, s]);
+    }
+  };
+
+  const handleListBuyerOnEnter = () => {
+    const trimmed = buyer.trim();
     if (!trimmed) return;
     if (!options.buyers.includes(trimmed)) {
       const updated = { ...options, buyers: [...options.buyers, trimmed] };
       setOptions(updated);
       saveRequisitionOptions(updated);
-      triggerSaveNotification(`Buyer "${trimmed}" saved to database for future requisitions!`);
+      triggerSaveNotification(`Buyer "${trimmed}" listed & saved!`);
+    } else {
+      triggerSaveNotification(`Buyer "${trimmed}" selected!`);
     }
-    setBuyer(trimmed);
-    setNewBuyer('');
-    setAddingField(null);
   };
 
-  const handleSaveNewLine = () => {
-    const code = newLineCode.trim().toUpperCase();
+  const handleListLineOnEnter = () => {
+    const code = lineCode.trim().toUpperCase();
     if (!code) return;
-    const desc = newLineDesc.trim();
-    const label = desc ? `${code} (${desc})` : code;
+    setLineCode(code);
     const exists = options.lineCodes.some((c) => c.code === code);
     if (!exists) {
       const updated = {
         ...options,
-        lineCodes: [...options.lineCodes, { code, label }],
+        lineCodes: [...options.lineCodes, { code, label: code }],
       };
       setOptions(updated);
       saveRequisitionOptions(updated);
-      triggerSaveNotification(`Line "${code}" saved to database for future requisitions!`);
+      triggerSaveNotification(`Sewing Line "${code}" listed & saved!`);
+    } else {
+      triggerSaveNotification(`Sewing Line "${code}" selected!`);
     }
-    setLineCode(code);
-    setNewLineCode('');
-    setNewLineDesc('');
-    setAddingField(null);
   };
 
-  const handleSaveNewSampleType = () => {
-    const trimmed = newSampleType.trim();
+  const handleListSampleTypeOnEnter = () => {
+    const trimmed = sampleType.trim();
     if (!trimmed) return;
     if (!options.sampleTypes.includes(trimmed)) {
       const updated = { ...options, sampleTypes: [...options.sampleTypes, trimmed] };
       setOptions(updated);
       saveRequisitionOptions(updated);
-      triggerSaveNotification(`Sample Type "${trimmed}" saved to database for future requisitions!`);
+      triggerSaveNotification(`Sample Type "${trimmed}" listed & saved!`);
+    } else {
+      triggerSaveNotification(`Sample Type "${trimmed}" selected!`);
     }
-    setSampleType(trimmed as SampleType);
-    setNewSampleType('');
-    setAddingField(null);
   };
 
-  const handleSaveNewColor = () => {
-    const trimmed = newColor.trim();
+  const handleListColorOnEnter = () => {
+    const trimmed = color.trim();
     if (!trimmed) return;
     if (!options.colors.includes(trimmed)) {
       const updated = { ...options, colors: [...options.colors, trimmed] };
       setOptions(updated);
       saveRequisitionOptions(updated);
-      triggerSaveNotification(`Color "${trimmed}" saved to database for future requisitions!`);
+      triggerSaveNotification(`Color "${trimmed}" listed & saved!`);
+    } else {
+      triggerSaveNotification(`Color "${trimmed}" selected!`);
     }
-    setColor(trimmed);
-    setNewColor('');
-    setAddingField(null);
   };
 
-  const handleSaveNewSize = () => {
-    const trimmed = newSize.trim();
-    if (!trimmed) return;
-    if (!options.sizes.includes(trimmed)) {
-      const updated = { ...options, sizes: [...options.sizes, trimmed] };
-      setOptions(updated);
-      saveRequisitionOptions(updated);
-      triggerSaveNotification(`Size "${trimmed}" saved to database for future requisitions!`);
-    }
-    setSize(trimmed);
-    setNewSize('');
-    setAddingField(null);
-  };
-
-  const handleSaveNewWash = () => {
-    const trimmed = newWash.trim();
+  const handleListWashOnEnter = () => {
+    const trimmed = washType.trim();
     if (!trimmed) return;
     if (!options.washTypes.includes(trimmed)) {
       const updated = { ...options, washTypes: [...options.washTypes, trimmed] };
       setOptions(updated);
       saveRequisitionOptions(updated);
-      triggerSaveNotification(`Wash Recipe "${trimmed}" saved to database for future requisitions!`);
+      triggerSaveNotification(`Wash "${trimmed}" listed & saved!`);
+    } else {
+      triggerSaveNotification(`Wash "${trimmed}" selected!`);
     }
-    setWashType(trimmed);
-    setNewWash('');
-    setAddingField(null);
   };
 
-  const handleSaveNewCourier = () => {
-    const trimmed = newCourier.trim();
+  const handleListCourierOnEnter = () => {
+    const trimmed = courier.trim();
     if (!trimmed) return;
     if (!options.couriers.includes(trimmed)) {
       const updated = { ...options, couriers: [...options.couriers, trimmed] };
       setOptions(updated);
       saveRequisitionOptions(updated);
-      triggerSaveNotification(`Courier "${trimmed}" saved to database for future requisitions!`);
+      triggerSaveNotification(`Courier "${trimmed}" listed & saved!`);
+    } else {
+      triggerSaveNotification(`Courier "${trimmed}" selected!`);
     }
-    setCourier(trimmed);
-    setNewCourier('');
-    setAddingField(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!styleCode.trim() || !styleName.trim() || !shipmentDate) return;
-    // Trigger 2nd-time confirmation with Edit option or Save option
+  // Effective size string from listedSizes (or any pending text in sizeInput)
+  const effectiveSizeString = (() => {
+    const pending = sizeInput.trim().toUpperCase();
+    const combined = pending
+      ? Array.from(new Set([...listedSizes, pending]))
+      : listedSizes;
+    return combined.join(', ');
+  })();
+
+  const handleProceedToConfirmation = () => {
+    setValidationError(null);
+    if (!styleCode.trim()) {
+      setValidationError('Please enter the Style Code / Number.');
+      return;
+    }
+    if (!styleName.trim()) {
+      setValidationError('Please enter the Style Name & Description.');
+      return;
+    }
+    if (!shipmentDate) {
+      setValidationError('Please select the Order / Bulk Shipment Date.');
+      return;
+    }
+
+    // If user typed a size in the input box but didn't hit Enter yet, list it automatically
+    if (sizeInput.trim()) {
+      handleAddSizeToList(sizeInput);
+    }
+
+    // Save any newly typed options into the persistent lists for future use
+    const nextOptions: RequisitionOptions = {
+      buyers: buyer.trim()
+        ? Array.from(new Set([...options.buyers, buyer.trim()]))
+        : options.buyers,
+      lineCodes: lineCode.trim()
+        ? options.lineCodes.some((l) => l.code === lineCode.trim().toUpperCase())
+          ? options.lineCodes
+          : [
+              ...options.lineCodes,
+              { code: lineCode.trim().toUpperCase(), label: lineCode.trim().toUpperCase() },
+            ]
+        : options.lineCodes,
+      sampleTypes: sampleType.trim()
+        ? Array.from(new Set([...options.sampleTypes, sampleType.trim()]))
+        : options.sampleTypes,
+      sizes: options.sizes,
+      colors: color.trim()
+        ? Array.from(new Set([...options.colors, color.trim()]))
+        : options.colors,
+      washTypes: washType.trim()
+        ? Array.from(new Set([...options.washTypes, washType.trim()]))
+        : options.washTypes,
+      couriers: courier.trim()
+        ? Array.from(new Set([...options.couriers, courier.trim()]))
+        : options.couriers,
+    };
+    setOptions(nextOptions);
+    saveRequisitionOptions(nextOptions);
+
     setShowSecondConfirmation(true);
   };
 
   const handleFinalConfirmSave = () => {
     if (!styleCode.trim() || !styleName.trim() || !shipmentDate) return;
 
-    const finalFabricId = selectedFabric?.id || `fab-inline-${Date.now()}`;
+    const finalSize = effectiveSizeString || 'Standard';
+    const finalSampleType = (sampleType.trim() || 'Proto Sample') as SampleType;
+    const finalBuyer = buyer.trim() || 'Direct Buyer';
+    const finalLineCode = lineCode.trim().toUpperCase() || 'LINE-01';
+    const finalColor = color.trim() || 'Standard';
+    const finalWash = washType.trim() || 'Standard Wash';
+    const finalCourier = courier.trim() || '';
+
+    const finalFabricId = selectedFabric?.id || '';
     const finalFabricCode =
-      selectedFabric?.code || customFabricCode.trim().toUpperCase() || 'FAB-GEN-01';
+      selectedFabric?.code || customFabricCode.trim().toUpperCase() || '';
     const finalFabricName =
-      selectedFabric?.name || customFabricName.trim() || 'Standard Production Fabric';
-    const finalThumbnail = thumbnail || PRESET_STYLE_IMAGES[1].url;
-    const finalImages = Array.from(new Set([finalThumbnail, ...uploadedImages]));
+      selectedFabric?.name || customFabricName.trim() || '';
+    const finalThumbnail = thumbnail || PRESET_STYLE_IMAGES[0].url;
+    const finalImages = Array.from(
+      new Set([finalThumbnail, ...uploadedImages].filter(Boolean))
+    );
     const nowIso = new Date().toISOString();
 
     const formatVolarDate = (dateStr?: string) => {
@@ -292,14 +394,14 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     const newSample: Partial<SampleItem> = {
       styleCode: styleCode.trim().toUpperCase(),
       styleName: styleName.trim(),
-      buyer,
+      buyer: finalBuyer,
       thumbnail: finalThumbnail,
       images: finalImages,
-      poNumber: poNumber.trim() || `PO-${Math.floor(10000 + Math.random() * 90000)}`,
-      lineCode,
-      sampleType,
-      color,
-      size,
+      poNumber: poNumber.trim(),
+      lineCode: finalLineCode,
+      sampleType: finalSampleType,
+      color: finalColor,
+      size: finalSize,
       quantity,
       fabricId: finalFabricId,
       fabricCode: finalFabricCode,
@@ -316,29 +418,29 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         {
           stage: 'requisition',
           timestamp: nowIso,
-          note: `Requisition confirmed & permanently locked for ${sampleType}. Shipment Date: ${shipmentDate}. Required fabric: ${requiredYards} yds of ${finalFabricCode}`,
-          operator: 'Merchandiser',
+          note: `Requisition confirmed & permanently locked for ${finalSampleType}. Sizes: ${finalSize}. Shipment Date: ${shipmentDate}.`,
+          operator: requestedBy.trim() || 'Merchandiser',
         },
       ],
       washDetails: {
-        washType,
-        washTechnician: 'Anwar Hossain',
-        washFormula: 'Neutral enzyme bath + softening',
+        washType: finalWash,
+        washTechnician: '',
+        washFormula: finalWash,
       },
       finishingDetails: {
-        finishingLine: 'Finishing Line #1',
-        supervisor: 'Sunil Das',
+        finishingLine: '',
+        supervisor: '',
         ironingDone: false,
         threadTrimmingDone: false,
         taggingDone: false,
         qualityPassed: false,
       },
       parcelDetails: {
-        courier,
+        courier: finalCourier,
         trackingNumber: '',
         parcelDate: targetParcelDate,
-        recipient: `${buyer} Design Lab`,
-        destinationCountry: 'Global HQ',
+        recipient: finalBuyer,
+        destinationCountry: '',
         dispatchStatus: 'pending',
         workbookSent: false,
       },
@@ -360,22 +462,22 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         date: formatVolarDate(nowIso),
         requiredDate: formatVolarDate(targetParcelDate),
         shipmentDate,
-        buyer,
-        requestedBy: 'Zahid Anwar',
+        buyer: finalBuyer,
+        requestedBy: requestedBy.trim(),
         priorityType: priority === 'urgent' ? 'urgent' : 'normal',
-        sampleType,
+        sampleType: finalSampleType,
         descriptionCode: styleCode.trim().toUpperCase(),
         styleName: styleName.trim(),
-        sampleSizeLabel: `${sampleType}\n${quantity}x Size ${size}`,
-        colorWash: color,
+        sampleSizeLabel: `${finalSampleType}\nSize: ${finalSize} (${quantity} Pcs)`,
+        colorWash: finalColor,
         fabricCode: finalFabricCode,
-        fitting: 'As Tech Pack & comments',
-        threadInstruction: 'Same as Instructions',
+        fitting: '',
+        threadInstruction: '',
         quantityText: `${quantity} Pcs`,
-        block: 'as spec',
+        block: '',
         fabricComposition: finalFabricName,
-        supplier: selectedFabric?.supplier || 'Mill Partner / Volar Textile',
-        weight: selectedFabric?.gsm ? `${selectedFabric.gsm} GSM` : '11.5 OZ / 320 GSM',
+        supplier: selectedFabric?.supplier || '',
+        weight: selectedFabric?.gsm ? `${selectedFabric.gsm} GSM` : '',
         trims: {
           mainLabel: true,
           sizeLabel: true,
@@ -386,28 +488,28 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
           rivet: false,
           stud: false,
           thread: true,
-          threadNote: 'AS PER CHART',
-          interlining: true,
+          threadNote: '',
+          interlining: false,
           elastic: false,
-          zipper: true,
-          drawstring: true,
-          stopperEyelet: true,
+          zipper: false,
+          drawstring: false,
+          stopperEyelet: false,
           snap: false,
-          pocketing: true,
-          pocketingNote: 'TC POCKETING ( WHITE )',
+          pocketing: false,
+          pocketingNote: '',
           customTrims: [],
         },
-        specialInstructions: 'PLEASE FOLLOW THE DETAILS OF OUR PROVIDED SAMPLE',
-        samplingSectionNotes: 'Pattern checked. Sewing allocated to line in-charge.',
+        specialInstructions: '',
+        samplingSectionNotes: '',
         receivedBy: '',
-        merchandiserSignature: 'Zahid Anwar',
+        merchandiserSignature: requestedBy.trim(),
         isLocked: true,
         lockedAt: nowIso,
       },
     };
 
-    setShowSecondConfirmation(false);
-    onCreateSample(newSample, autoDeduct);
+    resetFormFields();
+    onCreateSample(newSample, autoDeduct && Boolean(selectedFabric));
     onClose();
   };
 
@@ -420,17 +522,25 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     return Math.round((t - today.getTime()) / (1000 * 60 * 60 * 24));
   })();
 
+  // Prevent accidental Enter key submission on any regular input field
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+      e.preventDefault();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[92vh] overflow-y-auto text-xs text-slate-300">
         {saveToast && (
-          <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl shadow-2xl shadow-emerald-950/60 border border-emerald-400 flex items-center gap-2 animate-bounce">
+          <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl shadow-2xl shadow-emerald-950/60 border border-emerald-400 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span className="text-xs">{saveToast}</span>
           </div>
         )}
 
         <button
+          type="button"
           onClick={onClose}
           className="absolute top-5 right-5 p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
         >
@@ -446,27 +556,50 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               <h2 className="text-lg font-black text-white">Create New Sample Requisition</h2>
               <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30 flex items-center gap-1">
                 <Database className="w-3 h-3" />
-                Persistent Options Database
+                Live Input Mode
               </span>
             </div>
             <p className="text-slate-400 text-xs">
-              Every option has an &ldquo;+ Add&rdquo; option saved directly to the database so you won&apos;t need to re-enter it in the future!
+              Type any field (like Size, Buyer, Line, Color, Wash) and press <strong className="text-indigo-300">Enter</strong> to list it immediately without filling or submitting the rest of the form.
             </p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {validationError && (
+          <div className="mb-4 p-3 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="font-bold">{validationError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setValidationError(null)}
+              className="text-rose-300 hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleProceedToConfirmation();
+          }}
+          onKeyDown={handleFormKeyDown}
+          className="space-y-4"
+        >
           {/* Style Picture & Techpack Sketch Section */}
           <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2.5">
             <div className="flex items-center justify-between">
               <label className="font-bold text-white flex items-center gap-1.5 text-xs">
                 <ImageIcon className="w-4 h-4 text-indigo-400" />
-                <span>Style Picture / Garment Spec Photo *</span>
+                <span>Style Picture / Garment Spec Photo (Optional)</span>
               </label>
               <div className="flex items-center gap-2">
                 <label className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-950/60 px-2 py-1 rounded border border-indigo-500/30 flex items-center gap-1 cursor-pointer transition-colors">
                   <Upload className={`w-3 h-3 ${isUploadingPhoto ? 'animate-bounce' : ''}`} />
-                  <span>{isUploadingPhoto ? 'Uploading to Storage...' : 'Upload Product Photo(s)'}</span>
+                  <span>{isUploadingPhoto ? 'Uploading...' : 'Upload Photo(s)'}</span>
                   <input
                     type="file"
                     accept="image/*"
@@ -478,7 +611,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowCustomUrlInput(!showCustomUrlInput)}
-                  className="text-[10px] text-slate-400 hover:text-white"
+                  className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
                 >
                   {showCustomUrlInput ? 'Hide URL' : 'Paste URL'}
                 </button>
@@ -492,6 +625,17 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                   placeholder="https://example.com/garment-photo.jpg"
                   value={customImageUrl}
                   onChange={(e) => setCustomImageUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (customImageUrl.trim()) {
+                        setThumbnail(customImageUrl.trim());
+                        setCustomImageUrl('');
+                        setShowCustomUrlInput(false);
+                      }
+                    }
+                  }}
                   className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white"
                 />
                 <button
@@ -503,51 +647,31 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                       setShowCustomUrlInput(false);
                     }
                   }}
-                  className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold"
+                  className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-xs font-bold cursor-pointer"
                 >
                   Apply
                 </button>
               </div>
             )}
 
-            <div className="flex items-center gap-3">
-              <div className="relative w-16 h-20 rounded-xl overflow-hidden bg-slate-900 border-2 border-indigo-500/50 shrink-0 shadow-lg group">
-                <img
-                  src={thumbnail}
-                  alt="Style Preview"
-                  className="w-full h-full object-cover"
-                />
-                <span className="absolute bottom-0 inset-x-0 bg-black/70 text-indigo-300 text-[8px] font-bold text-center py-0.5">
-                  Selected
-                </span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <span className="text-[10px] font-semibold text-slate-400 block mb-1">
-                  Or select preset style picture (1-click):
-                </span>
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-                  {PRESET_STYLE_IMAGES.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => setThumbnail(preset.url)}
-                      className={`relative w-11 h-14 rounded-lg overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${
-                        thumbnail === preset.url
-                          ? 'border-indigo-400 scale-105 shadow-md shadow-indigo-600/30'
-                          : 'border-slate-700 hover:border-slate-500 opacity-70 hover:opacity-100'
-                      }`}
-                      title={preset.label}
-                    >
-                      <img
-                        src={preset.url}
-                        alt={preset.label}
-                        className="w-full h-full object-cover"
-                      />
-                    </button>
-                  ))}
+            {thumbnail && (
+              <div className="flex items-center gap-3">
+                <div className="relative w-14 h-16 rounded-xl overflow-hidden bg-slate-900 border-2 border-indigo-500/50 shrink-0">
+                  <img
+                    src={thumbnail}
+                    alt="Style Preview"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setThumbnail('')}
+                  className="text-[11px] text-rose-400 hover:text-rose-300 cursor-pointer"
+                >
+                  Remove Photo
+                </button>
               </div>
-            </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -558,8 +682,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               </label>
               <input
                 type="text"
-                required
-                placeholder="e.g. ST-9040"
+                placeholder="Enter Style Code (e.g. ST-101)"
                 value={styleCode}
                 onChange={(e) => setStyleCode(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -569,91 +692,71 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
             {/* 2. Style Name */}
             <div>
               <label className="block font-semibold text-slate-300 mb-1">
-                Style Name & Description *
+                Style Name &amp; Description *
               </label>
               <input
                 type="text"
-                required
-                placeholder="e.g. Relaxed Carpenter Painter Pant"
+                placeholder="Enter Style Name"
                 value={styleName}
                 onChange={(e) => setStyleName(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
 
-            {/* 3. Buyer / Customer with + Add Option */}
+            {/* 3. Buyer / Customer (Type & Press Enter to List) */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="font-semibold text-slate-300">Buyer / Customer</label>
+                <span className="text-[10px] text-slate-400">Press Enter to list</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  list="buyer-datalist"
+                  placeholder="Type Buyer & press Enter..."
+                  value={buyer}
+                  onChange={(e) => setBuyer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleListBuyerOnEnter();
+                    }
+                  }}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
                 <button
                   type="button"
-                  onClick={() => setAddingField(addingField === 'buyer' ? null : 'buyer')}
-                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1 cursor-pointer transition-colors"
+                  onClick={handleListBuyerOnEnter}
+                  className="px-2.5 py-2.5 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 rounded-xl font-bold text-[11px] transition-colors cursor-pointer shrink-0"
+                  title="List Buyer"
                 >
-                  <Plus className="w-3 h-3" />
-                  <span>+ Add Buyer</span>
+                  List
                 </button>
               </div>
-
-              {addingField === 'buyer' && (
-                <div className="mb-2 p-2 bg-indigo-950/50 border border-indigo-500/40 rounded-xl space-y-2">
-                  <div className="flex items-center gap-1.5 text-indigo-300 font-bold text-[11px]">
-                    <Database className="w-3 h-3" />
-                    <span>Save New Buyer to Database:</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="e.g. Diesel Jeans / Italy"
-                      value={newBuyer}
-                      onChange={(e) => setNewBuyer(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleSaveNewBuyer();
-                        }
-                      }}
-                      className="flex-1 bg-slate-900 border border-indigo-500/50 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                      autoFocus
-                    />
+              <datalist id="buyer-datalist">
+                {options.buyers.map((b) => (
+                  <option key={b} value={b} />
+                ))}
+              </datalist>
+              {options.buyers.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {options.buyers.map((b) => (
                     <button
+                      key={b}
                       type="button"
-                      onClick={handleSaveNewBuyer}
-                      className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-[11px] shadow transition-colors cursor-pointer"
+                      onClick={() => setBuyer(b)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors cursor-pointer ${
+                        buyer === b
+                          ? 'bg-indigo-600 text-white border-indigo-400'
+                          : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-500'
+                      }`}
                     >
-                      Save
+                      {b}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setAddingField(null)}
-                      className="p-1.5 text-slate-400 hover:text-white"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  ))}
                 </div>
               )}
-
-              <select
-                value={buyer}
-                onChange={(e) => {
-                  if (e.target.value === '__ADD_NEW__') {
-                    setAddingField('buyer');
-                  } else {
-                    setBuyer(e.target.value);
-                  }
-                }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                {options.buyers.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-                <option value="__ADD_NEW__" className="text-indigo-400 font-bold">
-                  ➕ Add New Buyer to Database...
-                </option>
-              </select>
             </div>
 
             {/* 4. PO Number */}
@@ -663,170 +766,303 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               </label>
               <input
                 type="text"
-                placeholder="e.g. PO-LS-99210"
+                placeholder="Enter PO Number"
                 value={poNumber}
                 onChange={(e) => setPoNumber(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
 
-            {/* 5. Sewing Line Code with + Add Option */}
+            {/* 5. Sewing Line Code (Type & Press Enter to List) */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="font-semibold text-slate-300">Sewing Line Code</label>
+                <span className="text-[10px] text-slate-400">Press Enter to list</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  list="line-datalist"
+                  placeholder="Type Line Code & press Enter..."
+                  value={lineCode}
+                  onChange={(e) => setLineCode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleListLineOnEnter();
+                    }
+                  }}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
                 <button
                   type="button"
-                  onClick={() => setAddingField(addingField === 'line' ? null : 'line')}
-                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1 cursor-pointer transition-colors"
+                  onClick={handleListLineOnEnter}
+                  className="px-2.5 py-2.5 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 rounded-xl font-bold text-[11px] transition-colors cursor-pointer shrink-0"
                 >
-                  <Plus className="w-3 h-3" />
-                  <span>+ Add Line</span>
+                  List
                 </button>
               </div>
-
-              {addingField === 'line' && (
-                <div className="mb-2 p-2 bg-indigo-950/50 border border-indigo-500/40 rounded-xl space-y-2">
-                  <div className="flex items-center gap-1.5 text-indigo-300 font-bold text-[11px]">
-                    <Database className="w-3 h-3" />
-                    <span>Save New Sewing Line to Database:</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="Code (e.g. LINE-E01)"
-                      value={newLineCode}
-                      onChange={(e) => setNewLineCode(e.target.value)}
-                      className="bg-slate-900 border border-indigo-500/50 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500"
-                      autoFocus
-                    />
-                    <input
-                      type="text"
-                      placeholder="Description (e.g. Heavy Jackets)"
-                      value={newLineDesc}
-                      onChange={(e) => setNewLineDesc(e.target.value)}
-                      className="bg-slate-900 border border-indigo-500/50 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500"
-                    />
-                  </div>
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setAddingField(null)}
-                      className="px-2 py-1 text-slate-400 hover:text-white text-xs"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveNewLine}
-                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs"
-                    >
-                      Save Line to Database
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <select
-                value={lineCode}
-                onChange={(e) => {
-                  if (e.target.value === '__ADD_NEW__') {
-                    setAddingField('line');
-                  } else {
-                    setLineCode(e.target.value);
-                  }
-                }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
+              <datalist id="line-datalist">
                 {options.lineCodes.map((l) => (
                   <option key={l.code} value={l.code}>
                     {l.label}
                   </option>
                 ))}
-                <option value="__ADD_NEW__" className="text-indigo-400 font-bold">
-                  ➕ Add New Sewing Line to Database...
-                </option>
-              </select>
+              </datalist>
+              {options.lineCodes.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {options.lineCodes.map((l) => (
+                    <button
+                      key={l.code}
+                      type="button"
+                      onClick={() => setLineCode(l.code)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-mono border transition-colors cursor-pointer ${
+                        lineCode === l.code
+                          ? 'bg-indigo-600 text-white border-indigo-400'
+                          : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-500'
+                      }`}
+                    >
+                      {l.code}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* 6. Sample Type with + Add Option */}
+            {/* 6. Sample Type (Type & Press Enter to List) */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="font-semibold text-slate-300">Sample Type</label>
+                <span className="text-[10px] text-slate-400">Press Enter to list</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  list="sampletype-datalist"
+                  placeholder="e.g. Proto, Fit, Red Seal, SMS..."
+                  value={sampleType}
+                  onChange={(e) => setSampleType(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleListSampleTypeOnEnter();
+                    }
+                  }}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
                 <button
                   type="button"
-                  onClick={() => setAddingField(addingField === 'sampleType' ? null : 'sampleType')}
-                  className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-950/60 hover:bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-500/30 flex items-center gap-1 cursor-pointer transition-colors"
+                  onClick={handleListSampleTypeOnEnter}
+                  className="px-2.5 py-2.5 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 rounded-xl font-bold text-[11px] transition-colors cursor-pointer shrink-0"
                 >
-                  <Plus className="w-3 h-3" />
-                  <span>+ Add Type</span>
+                  List
                 </button>
               </div>
-
-              {addingField === 'sampleType' && (
-                <div className="mb-2 p-2 bg-indigo-950/50 border border-indigo-500/40 rounded-xl space-y-2">
-                  <div className="flex items-center gap-1.5 text-indigo-300 font-bold text-[11px]">
-                    <Database className="w-3 h-3" />
-                    <span>Save New Sample Type to Database:</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="e.g. Wearer Trial Sample"
-                      value={newSampleType}
-                      onChange={(e) => setNewSampleType(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleSaveNewSampleType();
-                        }
-                      }}
-                      className="flex-1 bg-slate-900 border border-indigo-500/50 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500"
-                      autoFocus
-                    />
+              <datalist id="sampletype-datalist">
+                {options.sampleTypes.map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
+              {options.sampleTypes.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {options.sampleTypes.map((t) => (
                     <button
+                      key={t}
                       type="button"
-                      onClick={handleSaveNewSampleType}
-                      className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-[11px]"
+                      onClick={() => setSampleType(t)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors cursor-pointer ${
+                        sampleType === t
+                          ? 'bg-indigo-600 text-white border-indigo-400'
+                          : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-500'
+                      }`}
                     >
-                      Save
+                      {t}
                     </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 7. SIZE SPEC — INTERACTIVE ENTER-TO-LIST BOX */}
+          <div className="p-3.5 rounded-xl bg-indigo-950/30 border border-indigo-500/40 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="font-bold text-white flex items-center gap-1.5 text-xs">
+                <Tag className="w-4 h-4 text-indigo-400" />
+                <span>Size Spec Input (Type Size &amp; Press Enter to List)</span>
+              </label>
+              <span className="text-[10px] text-indigo-300 font-mono">
+                Pressing Enter lists the size below without submitting the form
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Type size (e.g. S, M, L, XL, 30, 32) and press Enter..."
+                value={sizeInput}
+                onChange={(e) => setSizeInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddSizeToList();
+                  }
+                }}
+                className="flex-1 bg-slate-900 border border-indigo-500/50 rounded-xl p-2.5 text-white font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={() => handleAddSizeToList()}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add / List Size</span>
+              </button>
+            </div>
+
+            {/* Currently Listed Sizes for this Sample */}
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              <span className="text-[11px] font-semibold text-slate-400 mr-1">
+                Listed Sizes:
+              </span>
+              {listedSizes.length === 0 ? (
+                <span className="text-[11px] text-slate-500 italic">
+                  No sizes listed yet — type a size above and press Enter
+                </span>
+              ) : (
+                listedSizes.map((sz) => (
+                  <span
+                    key={sz}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-mono font-bold text-xs shadow-sm"
+                  >
+                    <span>{sz}</span>
                     <button
                       type="button"
-                      onClick={() => setAddingField(null)}
-                      className="p-1.5 text-slate-400 hover:text-white"
+                      onClick={() => handleRemoveListedSize(sz)}
+                      className="hover:text-rose-200 cursor-pointer"
+                      title="Remove size"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
-                  </div>
+                  </span>
+                ))
+              )}
+            </div>
+
+            {/* Previously Saved Sizes in Database (Quick Toggle) */}
+            {options.sizes.length > 0 && (
+              <div className="pt-1.5 border-t border-indigo-500/20 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-slate-400">Saved Sizes (click to toggle):</span>
+                {options.sizes.map((s) => {
+                  const isSelected = listedSizes.includes(s);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => handleToggleSavedSize(s)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-600/30 text-emerald-200 border-emerald-400'
+                          : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {isSelected ? `✓ ${s}` : `+ ${s}`}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 8. Color, Quantity, Priority, Requested By */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            {/* Color / Shade */}
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-300 font-semibold">Color / Shade</label>
+                <span className="text-[10px] text-slate-400">Press Enter to list</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  list="color-options-list"
+                  placeholder="Type Color & press Enter..."
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleListColorOnEnter();
+                    }
+                  }}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleListColorOnEnter}
+                  className="px-2.5 py-2 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 rounded-xl font-bold text-[11px] cursor-pointer"
+                >
+                  List
+                </button>
+              </div>
+              <datalist id="color-options-list">
+                {options.colors.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+              {options.colors.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {options.colors.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
+                        color === c
+                          ? 'bg-indigo-600 text-white border-indigo-400'
+                          : 'bg-slate-800 text-slate-300 border-slate-700'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
                 </div>
               )}
+            </div>
 
+            {/* Quantity */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Quantity (pcs)</label>
+              <input
+                type="number"
+                min="1"
+                max="500"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
+              />
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="block text-slate-300 font-semibold mb-1">Priority</label>
               <select
-                value={sampleType}
-                onChange={(e) => {
-                  if (e.target.value === '__ADD_NEW__') {
-                    setAddingField('sampleType');
-                  } else {
-                    setSampleType(e.target.value as SampleType);
-                  }
-                }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as SamplePriority)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-semibold"
               >
-                {options.sampleTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t === 'Red Seal Sample'
-                      ? 'Red Seal Sample (Pre-Production Approval)'
-                      : t}
-                  </option>
-                ))}
-                <option value="__ADD_NEW__" className="text-indigo-400 font-bold">
-                  ➕ Add New Sample Type to Database...
-                </option>
+                <option value="normal">🔵 Normal</option>
+                <option value="high">🟠 High</option>
+                <option value="urgent">🔴 Urgent</option>
               </select>
             </div>
           </div>
 
-          {/* 7. Fabric Linkage Section with + Add Fabric */}
+          {/* 9. Fabric Linkage Section */}
           <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-bold text-white flex items-center gap-1.5">
@@ -845,17 +1081,18 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {fabrics.length > 0 ? (
-                <div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {fabrics.length > 0 && (
+                <div className="sm:col-span-2">
                   <label className="block text-slate-400 mb-1">
-                    Select Fabric from Stock *
+                    Select Fabric from Stock (or enter custom below)
                   </label>
                   <select
                     value={selectedFabricId}
                     onChange={(e) => setSelectedFabricId(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
                   >
+                    <option value="">-- Enter Custom Fabric Below --</option>
                     {fabrics.map((f) => (
                       <option key={f.id} value={f.id}>
                         {f.code} - {f.name} ({f.availableYards.toFixed(1)} yds avail)
@@ -863,46 +1100,48 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                     ))}
                   </select>
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
+              )}
+
+              {!selectedFabricId && (
+                <>
                   <div>
                     <label className="block text-slate-400 mb-1">
-                      Fabric Code *
+                      Fabric Code
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. FAB-DNM-01"
+                      placeholder="e.g. FAB-01"
                       value={customFabricCode}
                       onChange={(e) => setCustomFabricCode(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono placeholder-slate-500"
                     />
                   </div>
                   <div>
                     <label className="block text-slate-400 mb-1">
-                      Fabric Description
+                      Fabric Description / Composition
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. 12oz Indigo Denim"
+                      placeholder="e.g. 100% Cotton Twill"
                       value={customFabricName}
                       onChange={(e) => setCustomFabricName(e.target.value)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
                     />
                   </div>
-                </div>
+                </>
               )}
 
               <div>
                 <label className="block text-slate-400 mb-1">
-                  Required Fabric Yards for this Sample
+                  Required Fabric Yards
                 </label>
                 <input
                   type="number"
                   step="0.1"
-                  min="0.5"
-                  max="100"
+                  min="0"
+                  max="500"
                   value={requiredYards}
-                  onChange={(e) => setRequiredYards(Number(e.target.value))}
+                  onChange={(e) => setRequiredYards(Math.max(0, Number(e.target.value)))}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
                 />
               </div>
@@ -921,146 +1160,22 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               </div>
             )}
 
-            <label className="flex items-center gap-2 cursor-pointer text-slate-300">
-              <input
-                type="checkbox"
-                checked={autoDeduct}
-                onChange={(e) => setAutoDeduct(e.target.checked)}
-                className="rounded text-indigo-600 focus:ring-0"
-              />
-              <span>
-                Automatically deduct {requiredYards} yds from available fabric inventory on requisition creation
-              </span>
-            </label>
+            {selectedFabric && (
+              <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={autoDeduct}
+                  onChange={(e) => setAutoDeduct(e.target.checked)}
+                  className="rounded text-indigo-600 focus:ring-0"
+                />
+                <span>
+                  Automatically deduct {requiredYards} yds from available fabric inventory on save
+                </span>
+              </label>
+            )}
           </div>
 
-          {/* 8. Color, Size, Qty, Priority with + Add Options */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* Color */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-slate-400">Color / Shade</label>
-                <button
-                  type="button"
-                  onClick={() => setAddingField(addingField === 'color' ? null : 'color')}
-                  className="text-[9px] font-bold text-indigo-400 hover:text-white cursor-pointer"
-                  title="Add new color to database"
-                >
-                  + Add
-                </button>
-              </div>
-              {addingField === 'color' && (
-                <div className="mb-1.5 p-1.5 bg-indigo-950/60 border border-indigo-500/40 rounded-lg flex items-center gap-1">
-                  <input
-                    type="text"
-                    placeholder="New color..."
-                    value={newColor}
-                    onChange={(e) => setNewColor(e.target.value)}
-                    className="flex-1 bg-slate-900 border border-indigo-500/40 rounded px-1.5 py-0.5 text-xs text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveNewColor}
-                    className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[10px] font-bold"
-                  >
-                    Save
-                  </button>
-                </div>
-              )}
-              <input
-                type="text"
-                list="color-options-list"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white"
-              />
-              <datalist id="color-options-list">
-                {options.colors.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </div>
-
-            {/* Size */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-slate-400">Size Spec</label>
-                <button
-                  type="button"
-                  onClick={() => setAddingField(addingField === 'size' ? null : 'size')}
-                  className="text-[9px] font-bold text-indigo-400 hover:text-white cursor-pointer"
-                  title="Add new size to database"
-                >
-                  + Add
-                </button>
-              </div>
-              {addingField === 'size' && (
-                <div className="mb-1.5 p-1.5 bg-indigo-950/60 border border-indigo-500/40 rounded-lg flex items-center gap-1">
-                  <input
-                    type="text"
-                    placeholder="New size..."
-                    value={newSize}
-                    onChange={(e) => setNewSize(e.target.value)}
-                    className="flex-1 bg-slate-900 border border-indigo-500/40 rounded px-1.5 py-0.5 text-xs text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveNewSize}
-                    className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[10px] font-bold"
-                  >
-                    Save
-                  </button>
-                </div>
-              )}
-              <select
-                value={size}
-                onChange={(e) => {
-                  if (e.target.value === '__ADD_NEW__') {
-                    setAddingField('size');
-                  } else {
-                    setSize(e.target.value);
-                  }
-                }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
-              >
-                {options.sizes.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-                <option value="__ADD_NEW__">➕ Add Size...</option>
-              </select>
-            </div>
-
-            {/* Quantity */}
-            <div>
-              <label className="block text-slate-400 mb-1">Quantity (pcs)</label>
-              <input
-                type="number"
-                min="1"
-                max="50"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
-              />
-            </div>
-
-            {/* Priority */}
-            <div>
-              <label className="block text-slate-400 mb-1">Priority</label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as SamplePriority)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-semibold"
-              >
-                <option value="normal">🔵 Normal</option>
-                <option value="high">🟠 High</option>
-                <option value="urgent">🔴 Urgent</option>
-              </select>
-            </div>
-          </div>
-
-          {/* 9. Shipment Date (Mandatory for Fast Approval Priority), Target Parcel Date, Wash Recipe (+ Add), Courier (+ Add) */}
+          {/* 10. Shipment Date (Mandatory for Fast Approval Priority) */}
           <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/40 space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="font-bold text-amber-300 flex items-center gap-1.5 text-xs">
@@ -1096,14 +1211,15 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                 className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               <p className="text-[11px] text-amber-200/80 leading-relaxed">
-                Every style is saved with its <strong>Shipment Date</strong> so earlier shipment styles missing approval for <strong>Button, Thread, Wash, Trims, or Accessories</strong> are prioritized on the Dashboard.
+                Every style is saved with its <strong>Shipment Date</strong> so earlier shipment styles awaiting <strong>Button, Thread, Wash, Trims, or Accessories</strong> approval are prioritized on the Dashboard.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* 11. Target Parcel Date, Wash Recipe, Courier, Requested By */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-400 mb-1">
+              <label className="block text-slate-300 font-semibold mb-1">
                 Target Parcel Date *
               </label>
               <input
@@ -1116,103 +1232,124 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-slate-400">Wash Recipe / Finish</label>
-                <button
-                  type="button"
-                  onClick={() => setAddingField(addingField === 'wash' ? null : 'wash')}
-                  className="text-[9px] font-bold text-indigo-400 hover:text-white cursor-pointer"
-                  title="Add new wash formula to database"
-                >
-                  + Add Wash
-                </button>
-              </div>
-              {addingField === 'wash' && (
-                <div className="mb-1.5 p-1.5 bg-indigo-950/60 border border-indigo-500/40 rounded-lg flex items-center gap-1">
-                  <input
-                    type="text"
-                    placeholder="New wash formula..."
-                    value={newWash}
-                    onChange={(e) => setNewWash(e.target.value)}
-                    className="flex-1 bg-slate-900 border border-indigo-500/40 rounded px-1.5 py-0.5 text-xs text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveNewWash}
-                    className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[10px] font-bold"
-                  >
-                    Save
-                  </button>
-                </div>
-              )}
-              <select
-                value={washType}
-                onChange={(e) => {
-                  if (e.target.value === '__ADD_NEW__') {
-                    setAddingField('wash');
-                  } else {
-                    setWashType(e.target.value);
-                  }
-                }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white"
-              >
-                {options.washTypes.map((w) => (
-                  <option key={w} value={w}>
-                    {w}
-                  </option>
-                ))}
-                <option value="__ADD_NEW__">➕ Add New Wash Recipe...</option>
-              </select>
+              <label className="block text-slate-300 font-semibold mb-1">
+                Requested By / Merchandiser
+              </label>
+              <input
+                type="text"
+                placeholder="Enter Merchandiser Name"
+                value={requestedBy}
+                onChange={(e) => setRequestedBy(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
+              />
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-slate-400">Courier / Service</label>
+                <label className="text-slate-300 font-semibold">Wash Recipe / Finish</label>
+                <span className="text-[10px] text-slate-400">Press Enter to list</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  list="wash-datalist"
+                  placeholder="Type Wash Recipe & press Enter..."
+                  value={washType}
+                  onChange={(e) => setWashType(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleListWashOnEnter();
+                    }
+                  }}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
+                />
                 <button
                   type="button"
-                  onClick={() => setAddingField(addingField === 'courier' ? null : 'courier')}
-                  className="text-[9px] font-bold text-indigo-400 hover:text-white cursor-pointer"
-                  title="Add courier service to database"
+                  onClick={handleListWashOnEnter}
+                  className="px-2.5 py-2 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 rounded-xl font-bold text-[11px] cursor-pointer"
                 >
-                  + Add Courier
+                  List
                 </button>
               </div>
-              {addingField === 'courier' && (
-                <div className="mb-1.5 p-1.5 bg-indigo-950/60 border border-indigo-500/40 rounded-lg flex items-center gap-1">
-                  <input
-                    type="text"
-                    placeholder="New courier..."
-                    value={newCourier}
-                    onChange={(e) => setNewCourier(e.target.value)}
-                    className="flex-1 bg-slate-900 border border-indigo-500/40 rounded px-1.5 py-0.5 text-xs text-white"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleSaveNewCourier}
-                    className="px-2 py-0.5 bg-indigo-600 text-white rounded text-[10px] font-bold"
-                  >
-                    Save
-                  </button>
+              <datalist id="wash-datalist">
+                {options.washTypes.map((w) => (
+                  <option key={w} value={w} />
+                ))}
+              </datalist>
+              {options.washTypes.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {options.washTypes.map((w) => (
+                    <button
+                      key={w}
+                      type="button"
+                      onClick={() => setWashType(w)}
+                      className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
+                        washType === w
+                          ? 'bg-indigo-600 text-white border-indigo-400'
+                          : 'bg-slate-800 text-slate-300 border-slate-700'
+                      }`}
+                    >
+                      {w}
+                    </button>
+                  ))}
                 </div>
               )}
-              <select
-                value={courier}
-                onChange={(e) => {
-                  if (e.target.value === '__ADD_NEW__') {
-                    setAddingField('courier');
-                  } else {
-                    setCourier(e.target.value);
-                  }
-                }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white"
-              >
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-300 font-semibold">Courier / Service</label>
+                <span className="text-[10px] text-slate-400">Press Enter to list</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  list="courier-datalist"
+                  placeholder="Type Courier & press Enter..."
+                  value={courier}
+                  onChange={(e) => setCourier(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleListCourierOnEnter();
+                    }
+                  }}
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleListCourierOnEnter}
+                  className="px-2.5 py-2 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 rounded-xl font-bold text-[11px] cursor-pointer"
+                >
+                  List
+                </button>
+              </div>
+              <datalist id="courier-datalist">
                 {options.couriers.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
+                  <option key={c} value={c} />
                 ))}
-                <option value="__ADD_NEW__">➕ Add New Courier...</option>
-              </select>
+              </datalist>
+              {options.couriers.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {options.couriers.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCourier(c)}
+                      className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
+                        courier === c
+                          ? 'bg-indigo-600 text-white border-indigo-400'
+                          : 'bg-slate-800 text-slate-300 border-slate-700'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1231,7 +1368,8 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                 Cancel
               </button>
               <button
-                type="submit"
+                type="button"
+                onClick={handleProceedToConfirmation}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-2"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
@@ -1246,7 +1384,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         {/* ============================================================ */}
         {showSecondConfirmation && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
-            <div className="bg-slate-900 border-2 border-amber-500/70 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-slate-900 border-2 border-amber-500/70 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 text-xs text-slate-200">
               <div className="flex items-start gap-3 pb-3 border-b border-slate-800">
                 <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
                   <ShieldAlert className="w-6 h-6" />
@@ -1265,7 +1403,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                     Confirm Requisition Before Permanent Save
                   </h3>
                   <p className="text-slate-400 text-xs mt-0.5 leading-relaxed">
-                    Please verify all style specifications and the <strong>Shipment Date</strong> below. You can click <strong>Edit Requisition</strong> to make changes now, or <strong>Confirm &amp; Save Requisition</strong> to lock and save it permanently.
+                    Please verify all style specifications and the <strong>Shipment Date</strong> below. Click <strong>Edit Requisition</strong> to make changes now, or <strong>Confirm &amp; Save Requisition</strong> to lock and save it permanently.
                   </p>
                 </div>
               </div>
@@ -1273,18 +1411,20 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               {/* Summary Card */}
               <div className="p-4 rounded-xl bg-slate-800/70 border border-slate-700 space-y-3">
                 <div className="flex items-center gap-3 pb-3 border-b border-slate-700/80">
-                  <img
-                    src={thumbnail || PRESET_STYLE_IMAGES[1].url}
-                    alt={styleName}
-                    className="w-14 h-16 rounded-lg object-cover border border-indigo-500/40 shrink-0"
-                  />
+                  {thumbnail && (
+                    <img
+                      src={thumbnail}
+                      alt={styleName}
+                      className="w-14 h-16 rounded-lg object-cover border border-indigo-500/40 shrink-0"
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono font-black text-sm text-indigo-300 px-2 py-0.5 rounded bg-indigo-950 border border-indigo-500/40">
                         {styleCode.trim().toUpperCase()}
                       </span>
                       <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-200 font-semibold text-[11px]">
-                        {sampleType}
+                        {sampleType.trim() || 'Proto Sample'}
                       </span>
                       <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold text-[11px]">
                         Shipment: {shipmentDate}
@@ -1294,7 +1434,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                       {styleName.trim()}
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                      Buyer: <strong className="text-slate-200">{buyer}</strong> • Line: <strong className="text-slate-200 font-mono">{lineCode}</strong> • Qty: <strong className="text-slate-200">{quantity} pcs ({size})</strong>
+                      Buyer: <strong className="text-slate-200">{buyer.trim() || 'N/A'}</strong> • Line: <strong className="text-slate-200 font-mono">{lineCode.trim() || 'N/A'}</strong> • Sizes: <strong className="text-indigo-300 font-mono">{effectiveSizeString || 'Standard'}</strong> ({quantity} pcs)
                     </div>
                   </div>
                 </div>
@@ -1311,16 +1451,16 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Fabric &amp; Required Yds</span>
                     <span className="font-mono font-bold text-indigo-300">
-                      {selectedFabric?.code || customFabricCode || 'FAB-GEN-01'} ({requiredYards} yds)
+                      {selectedFabric?.code || customFabricCode || 'N/A'} ({requiredYards} yds)
                     </span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Color / Shade</span>
-                    <span className="font-semibold text-white">{color}</span>
+                    <span className="font-semibold text-white">{color.trim() || 'N/A'}</span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Wash Recipe</span>
-                    <span className="font-semibold text-cyan-300 truncate block">{washType}</span>
+                    <span className="font-semibold text-cyan-300 truncate block">{washType.trim() || 'N/A'}</span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Priority Level</span>
@@ -1331,7 +1471,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                 <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-500/40 text-rose-200 text-[11px] flex items-center gap-2">
                   <Lock className="w-4 h-4 text-rose-400 shrink-0" />
                   <span>
-                    <strong>Permanent Lock Notice:</strong> Once you click <strong>Save Requisition</strong> below, this requisition cannot be edited anymore.
+                    <strong>Permanent Lock Notice:</strong> Once you click <strong>Confirm &amp; Save Requisition</strong> below, this requisition cannot be edited anymore.
                   </span>
                 </div>
               </div>

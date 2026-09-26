@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SampleItem } from '../types/sample';
 import { StyleProductImage } from './StyleProductImage';
 import {
@@ -41,37 +41,43 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
   onSaveFollowUp,
   onSendWhatsApp,
 }) => {
+  const [followUpDate, setFollowUpDate] = useState(
+    () => new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]
+  );
+  const [followUpTime, setFollowUpTime] = useState('14:00');
+  const [status, setStatus] = useState<'pending' | 'completed' | 'scheduled'>('pending');
+  const [whatsAppNumber, setWhatsAppNumber] = useState('');
+  const [notes, setNotes] = useState('');
+
+  // Workbook Sent confirmation state
+  const [workbookSent, setWorkbookSent] = useState<boolean>(false);
+  const [workbookSentDate, setWorkbookSentDate] = useState<string>(
+    () => new Date().toISOString().split('T')[0]
+  );
+  const [workbookNotes, setWorkbookNotes] = useState<string>('');
+  const [customMsg] = useState('');
+
+  useEffect(() => {
+    if (sample && isOpen) {
+      const p = sample.parcelDetails;
+      const initialFollowUp = p.followUp;
+      setFollowUpDate(
+        initialFollowUp?.followUpDate ||
+          new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]
+      );
+      setFollowUpTime(initialFollowUp?.followUpTime || '14:00');
+      setStatus(initialFollowUp?.status || 'pending');
+      setWhatsAppNumber(initialFollowUp?.whatsAppNumber || '');
+      setNotes(initialFollowUp?.notes || '');
+      setWorkbookSent(p.workbookSent ?? false);
+      setWorkbookSentDate(p.workbookSentDate || new Date().toISOString().split('T')[0]);
+      setWorkbookNotes(p.workbookNotes || '');
+    }
+  }, [sample, isOpen]);
+
   if (!isOpen || !sample) return null;
 
   const p = sample.parcelDetails;
-  const initialFollowUp = p.followUp;
-
-  const [followUpDate, setFollowUpDate] = useState(
-    initialFollowUp?.followUpDate ||
-      new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]
-  );
-  const [followUpTime, setFollowUpTime] = useState(initialFollowUp?.followUpTime || '14:00');
-  const [status, setStatus] = useState<'pending' | 'completed' | 'scheduled'>(
-    initialFollowUp?.status || 'pending'
-  );
-  const [whatsAppNumber, setWhatsAppNumber] = useState(
-    initialFollowUp?.whatsAppNumber || '+1 (215) 555-0199'
-  );
-  const [notes, setNotes] = useState(
-    initialFollowUp?.notes || `Follow up with ${sample.buyer} regarding sample reception & wash approval comments.`
-  );
-
-  // Workbook Sent confirmation state
-  const [workbookSent, setWorkbookSent] = useState<boolean>(p.workbookSent ?? false);
-  const [workbookSentDate, setWorkbookSentDate] = useState<string>(
-    p.workbookSentDate || new Date().toISOString().split('T')[0]
-  );
-  const [workbookNotes, setWorkbookNotes] = useState<string>(
-    p.workbookNotes || 'Spec measurement & accessories workbook'
-  );
-
-  // Custom WhatsApp message
-  const [customMsg] = useState('');
 
   const handleSave = () => {
     onSaveFollowUp(
@@ -80,30 +86,30 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
         followUpDate,
         followUpTime,
         status,
-        whatsAppNumber,
-        notes,
+        whatsAppNumber: whatsAppNumber.trim(),
+        notes: notes.trim(),
       },
       workbookSent,
       workbookSent ? workbookSentDate : undefined,
-      workbookNotes
+      workbookNotes.trim()
     );
     onClose();
   };
 
   const handleSendWhatsAppClick = () => {
-    onSendWhatsApp(sample, whatsAppNumber, customMsg || undefined);
+    onSendWhatsApp(sample, whatsAppNumber.trim(), customMsg || undefined);
     onSaveFollowUp(
       sample.id,
       {
         followUpDate,
         followUpTime,
         status: 'scheduled',
-        whatsAppNumber,
-        notes: notes + ` [WhatsApp sent ${new Date().toLocaleTimeString()}]`,
+        whatsAppNumber: whatsAppNumber.trim(),
+        notes: (notes.trim() ? notes.trim() + ' ' : '') + `[WhatsApp sent ${new Date().toLocaleTimeString()}]`,
       },
       workbookSent,
       workbookSent ? workbookSentDate : undefined,
-      workbookNotes
+      workbookNotes.trim()
     );
     onClose();
   };
@@ -112,6 +118,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative max-h-[92vh] overflow-y-auto text-xs text-slate-300">
         <button
+          type="button"
           onClick={onClose}
           className="absolute top-5 right-5 p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
         >
@@ -122,7 +129,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
           <StyleProductImage sample={sample} size="xs" />
           <div>
             <h2 className="text-base font-black text-white flex items-center gap-2">
-              Parcel Follow-Up & WhatsApp Notification
+              Parcel Follow-Up &amp; WhatsApp Notification
             </h2>
             <p className="text-slate-400 text-xs">
               Style: <strong className="text-indigo-400 font-mono">{sample.styleCode}</strong> • {sample.styleName} ({sample.buyer})
@@ -144,10 +151,6 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
                 Parcel Verification
               </span>
             </div>
-
-            <p className="text-slate-400 text-xs leading-relaxed">
-              Confirm whether the techpack specification, measurement, and trim workbook has been dispatched to the buyer alongside or prior to parcel delivery.
-            </p>
 
             <div className="flex items-center gap-3 pt-1">
               <button
@@ -177,7 +180,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
               </button>
             </div>
 
-            {workbookSent ? (
+            {workbookSent && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs">
                 <div>
                   <label className="block text-slate-400 text-[11px] mb-1">
@@ -198,17 +201,10 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
                     type="text"
                     value={workbookNotes}
                     onChange={(e) => setWorkbookNotes(e.target.value)}
-                    placeholder="e.g. Sent via PLM portal / Email attachment"
+                    placeholder="Enter Workbook Dispatch Notes"
                     className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white"
                   />
                 </div>
-              </div>
-            ) : (
-              <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>
-                  Reminder: Dispatch the measurement & trim workbook so buyer tech teams can review immediately upon parcel receipt!
-                </span>
               </div>
             )}
           </div>
@@ -219,11 +215,11 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
               <div className="flex items-center gap-2">
                 <MessageCircle className="w-4 h-4 text-emerald-400" />
                 <span className="font-bold text-white text-xs sm:text-sm">
-                  Parcel Follow-Up & Connected WhatsApp
+                  Parcel Follow-Up &amp; Connected WhatsApp
                 </span>
               </div>
               <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">
-                WhatsApp Connected
+                WhatsApp Ready
               </span>
             </div>
 
@@ -260,27 +256,15 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
             <div>
               <label className="block text-slate-400 text-[11px] mb-1 flex items-center gap-1 font-semibold">
                 <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                Connected WhatsApp Number (with Country Code) *
+                Connected WhatsApp Number (with Country Code)
               </label>
               <input
                 type="text"
-                placeholder="e.g. +12155550199 or +8801712345678"
+                placeholder="Enter WhatsApp Number (e.g. +88017...)"
                 value={whatsAppNumber}
                 onChange={(e) => setWhatsAppNumber(e.target.value)}
                 className="w-full bg-slate-800 border border-emerald-500/40 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
               />
-              <div className="flex gap-2 mt-1.5">
-                {['+1 (215) 555-0199', '+44 20 7946 0991', '+880 1711 002233'].map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => setWhatsAppNumber(preset)}
-                    className="text-[10px] text-slate-400 hover:text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700 cursor-pointer"
-                  >
-                    Preset: {preset.substring(0, 10)}...
-                  </button>
-                ))}
-              </div>
             </div>
 
             {/* Follow-up Status */}
@@ -307,7 +291,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="e.g. Call for wash comments"
+                  placeholder="Enter Follow-Up Notes"
                   className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white"
                 />
               </div>
@@ -320,16 +304,13 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
                   <Send className="w-3.5 h-3.5 text-emerald-400" />
                   Live WhatsApp Message Preview:
                 </span>
-                <span className="text-[10px] text-slate-400">
-                  Pre-formatted with Style, AWB & Workbook status
-                </span>
               </div>
 
               <div className="p-2.5 rounded bg-black/50 border border-emerald-500/20 text-emerald-100 font-mono text-[11px] whitespace-pre-wrap leading-relaxed">
 {`*GA SAMPLE TRACKING - PARCEL FOLLOW-UP*
 Style: ${sample.styleName} (${sample.styleCode})
 Buyer: ${sample.buyer} | PO: ${sample.poNumber}
-Courier: ${p.courier || 'DHL'} | AWB: ${p.trackingNumber || 'Pending'}
+Courier: ${p.courier || 'N/A'} | AWB: ${p.trackingNumber || 'Pending'}
 Parcel Date: ${p.parcelDate}
 Workbook Sent: ${workbookSent ? `YES (${workbookSentDate})` : 'NO (Pending)'}
 
@@ -357,7 +338,7 @@ Dear Team, the sample parcel for ${sample.styleName} has been dispatched. Please
         {/* Footer actions */}
         <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between">
           <div className="text-[11px] text-slate-500">
-            Parcel Date: {p.parcelDate} • {p.courier || 'DHL Express'}
+            Parcel Date: {p.parcelDate} • {p.courier || 'Courier Pending'}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -372,7 +353,7 @@ Dear Team, the sample parcel for ${sample.styleName} has been dispatched. Please
               onClick={handleSave}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
             >
-              Save Follow-Up & Workbook Settings
+              Save Follow-Up &amp; Workbook Settings
             </button>
           </div>
         </div>

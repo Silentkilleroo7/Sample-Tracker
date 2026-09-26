@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   CheckCircle2,
@@ -28,39 +28,35 @@ interface UpdateBVResultModalProps {
   ) => void;
 }
 
-const COMMON_FAIL_REASONS = [
-  'pH-Value fail: Measured pH outside tolerance (4.0 - 7.5). Alkaline wash residue.',
-  'Dimensional Stability / Shrinkage fail: Length shrinkage exceeded ±3.5% limit.',
-  'Colorfastness to Washing fail: Color staining on multi-fiber cotton strip grade < 4.0.',
-  'Colorfastness to Crocking / Rubbing fail: Wet rubbing transfer grade < 3.0.',
-  'Free Formaldehyde fail: Formaldehyde content exceeded 75 mg/kg skin contact threshold.',
-  'Tear / Tensile Strength fail: Warp/weft strength below buyer minimum requirement.',
-];
-
 export const UpdateBVResultModal: React.FC<UpdateBVResultModalProps> = ({
   isOpen,
   onClose,
   test,
   onSaveResult,
 }) => {
-  if (!isOpen || !test) return null;
-
-  const [reportNumber, setReportNumber] = useState<string>(
-    test.reportNumber?.replace(' (In Testing)', '') || `BV-(8826) ${Math.floor(100 + Math.random() * 900)}-${Math.floor(1000 + Math.random() * 9000)}`
-  );
-  const [resultDate, setResultDate] = useState<string>(
-    test.resultDate || new Date().toISOString().split('T')[0]
-  );
-  const [overallResult, setOverallResult] = useState<'PASS' | 'FAIL'>(
-    test.overallResult === 'FAIL' ? 'FAIL' : 'PASS'
-  );
-  const [failReason, setFailReason] = useState<string>(
-    test.failReason || COMMON_FAIL_REASONS[0]
-  );
+  const [reportNumber, setReportNumber] = useState<string>('');
+  const [resultDate, setResultDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [overallResult, setOverallResult] = useState<'PASS' | 'FAIL'>('PASS');
+  const [failReason, setFailReason] = useState<string>('');
   const [reTestRequired, setReTestRequired] = useState<boolean>(true);
-  const [inspectorNotes, setInspectorNotes] = useState<string>(
-    test.inspectorNotes || ''
-  );
+  const [inspectorNotes, setInspectorNotes] = useState<string>('');
+
+  useEffect(() => {
+    if (test && isOpen) {
+      const existingReport =
+        test.reportNumber && test.reportNumber !== 'Pending BV Report'
+          ? test.reportNumber.replace(' (In Testing)', '')
+          : '';
+      setReportNumber(existingReport);
+      setResultDate(test.resultDate || new Date().toISOString().split('T')[0]);
+      setOverallResult(test.overallResult === 'FAIL' ? 'FAIL' : 'PASS');
+      setFailReason(test.failReason || '');
+      setReTestRequired(true);
+      setInspectorNotes(test.inspectorNotes || '');
+    }
+  }, [test, isOpen]);
+
+  if (!isOpen || !test) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,20 +68,20 @@ export const UpdateBVResultModal: React.FC<UpdateBVResultModalProps> = ({
           parameter: failReason.split(':')[0] || 'Quality Parameter',
           standardValue: 'Per Buyer Quality Manual',
           actualValue: failReason.split(':')[1]?.trim() || 'Non-compliant',
-          reason: failReason,
+          reason: failReason.trim(),
         },
       ];
     }
 
     onSaveResult(test.id, {
-      reportNumber,
+      reportNumber: reportNumber.trim() || 'BV-REPORT',
       resultDate,
       overallResult,
       status: overallResult === 'PASS' ? 'passed' : 'failed',
-      failReason: overallResult === 'FAIL' ? failReason : undefined,
+      failReason: overallResult === 'FAIL' ? failReason.trim() : undefined,
       failedParameters,
       reTestRequired: overallResult === 'FAIL' ? reTestRequired : false,
-      inspectorNotes,
+      inspectorNotes: inspectorNotes.trim(),
     });
     onClose();
   };
@@ -106,6 +102,7 @@ export const UpdateBVResultModal: React.FC<UpdateBVResultModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
           >
@@ -152,13 +149,13 @@ export const UpdateBVResultModal: React.FC<UpdateBVResultModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-                BV Test Report Number
+                BV Test Report Number *
               </label>
               <input
                 type="text"
                 value={reportNumber}
                 onChange={(e) => setReportNumber(e.target.value)}
-                placeholder="e.g. BV-(8826) 249-0182"
+                placeholder="Enter BV Report Number"
                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono font-bold"
                 required
               />
@@ -183,34 +180,18 @@ export const UpdateBVResultModal: React.FC<UpdateBVResultModalProps> = ({
             <div className="p-3.5 rounded-xl bg-rose-950/40 border border-rose-500/40 space-y-3">
               <div className="flex items-center gap-2 text-rose-300 font-bold text-xs">
                 <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>Test Failure Reason & 24-Hour Re-Test Requirement</span>
+                <span>Test Failure Reason &amp; 24-Hour Re-Test Requirement</span>
               </div>
 
               <div>
                 <label className="block text-slate-300 font-semibold mb-1 text-[11px]">
-                  Select Failure Reason or Custom Description
+                  Failure Reason / Parameter Details *
                 </label>
-                <div className="space-y-1.5 mb-2">
-                  {COMMON_FAIL_REASONS.map((r, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setFailReason(r)}
-                      className={`w-full text-left p-1.5 rounded text-[11px] border transition-colors ${
-                        failReason === r
-                          ? 'bg-rose-600/30 text-rose-200 border-rose-400 font-medium'
-                          : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-slate-200'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
                 <textarea
                   rows={2}
                   value={failReason}
                   onChange={(e) => setFailReason(e.target.value)}
-                  placeholder="Specify exact failure reason (e.g. PH-Value fail, shrinkage tolerance exceeded...)"
+                  placeholder="Enter exact failure reason (e.g. pH value out of range, shrinkage exceeded...)"
                   className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs focus:ring-1 focus:ring-rose-500"
                   required
                 />
@@ -237,13 +218,13 @@ export const UpdateBVResultModal: React.FC<UpdateBVResultModalProps> = ({
           {/* Inspector Remarks */}
           <div>
             <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-              BV Technician Remarks & Action Plan
+              BV Technician Remarks &amp; Action Plan
             </label>
             <textarea
               rows={2}
               value={inspectorNotes}
               onChange={(e) => setInspectorNotes(e.target.value)}
-              placeholder="e.g. Neutralization rinse required in wash plant to adjust pH from 8.9 back to 5.5-6.5..."
+              placeholder="Enter technician remarks or action plan..."
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2 text-xs"
             />
           </div>
@@ -265,7 +246,7 @@ export const UpdateBVResultModal: React.FC<UpdateBVResultModalProps> = ({
               }`}
             >
               <FileText className="w-4 h-4" />
-              <span>Save BV Report & Decision</span>
+              <span>Save BV Report &amp; Decision</span>
             </button>
           </div>
         </form>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FabricItem } from '../types/fabric';
-import { X, ScrollText } from 'lucide-react';
+import { X, ScrollText, Plus } from 'lucide-react';
 
 interface AddFabricModalProps {
   isOpen: boolean;
@@ -13,44 +13,73 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
   onClose,
   onAddFabric,
 }) => {
-  if (!isOpen) return null;
-
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [composition, setComposition] = useState('100% Cotton');
-  const [color, setColor] = useState('Navy Blue');
-  const [gsm, setGsm] = useState(260);
-  const [widthInches, setWidthInches] = useState(58);
-  const [availableYards, setAvailableYards] = useState(40);
-  const [supplier, setSupplier] = useState('Pacific Textile Mills');
-  const [location, setLocation] = useState('Warehouse A - Bay 06');
-  const [linkedStylesInput, setLinkedStylesInput] = useState('');
+  const [composition, setComposition] = useState('');
+  const [color, setColor] = useState('');
+  const [gsm, setGsm] = useState<string>('');
+  const [widthInches, setWidthInches] = useState<string>('58');
+  const [availableYards, setAvailableYards] = useState<string>('');
+  const [supplier, setSupplier] = useState('');
+  const [location, setLocation] = useState('');
+  const [styleInput, setStyleInput] = useState('');
+  const [linkedStyles, setLinkedStyles] = useState<string[]>([]);
+
+  if (!isOpen) return null;
+
+  const handleAddStyleCode = () => {
+    const parts = styleInput
+      .split(',')
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    setLinkedStyles((prev) => Array.from(new Set([...prev, ...parts])));
+    setStyleInput('');
+  };
+
+  const handleRemoveStyleCode = (sc: string) => {
+    setLinkedStyles((prev) => prev.filter((item) => item !== sc));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim() || !name.trim()) return;
 
-    const linkedStyleCodes = linkedStylesInput
+    const pendingStyles = styleInput
       .split(',')
       .map((s) => s.trim().toUpperCase())
       .filter(Boolean);
+    const finalLinkedStyles = Array.from(new Set([...linkedStyles, ...pendingStyles]));
 
     const newFabric: FabricItem = {
       id: `fab-${Date.now()}`,
       code: code.trim().toUpperCase(),
       name: name.trim(),
-      composition,
-      color,
-      gsm,
-      widthInches,
-      availableYards,
+      composition: composition.trim(),
+      color: color.trim(),
+      gsm: Number(gsm) || 0,
+      widthInches: Number(widthInches) || 58,
+      availableYards: Number(availableYards) || 0,
       allocatedYards: 0,
       minimumThresholdYards: 5,
-      supplier,
-      location,
-      linkedStyleCodes,
+      supplier: supplier.trim(),
+      location: location.trim(),
+      linkedStyleCodes: finalLinkedStyles,
       lastReceivedDate: new Date().toISOString().split('T')[0],
     };
+
+    // Reset form
+    setCode('');
+    setName('');
+    setComposition('');
+    setColor('');
+    setGsm('');
+    setWidthInches('58');
+    setAvailableYards('');
+    setSupplier('');
+    setLocation('');
+    setStyleInput('');
+    setLinkedStyles([]);
 
     onAddFabric(newFabric);
     onClose();
@@ -60,6 +89,7 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-xs text-slate-300">
         <button
+          type="button"
           onClick={onClose}
           className="absolute top-5 right-5 p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
         >
@@ -80,7 +110,15 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+              e.preventDefault();
+            }
+          }}
+          className="space-y-4"
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block font-semibold text-slate-300 mb-1">
@@ -89,7 +127,7 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
               <input
                 type="text"
                 required
-                placeholder="e.g. FAB-TWL-90"
+                placeholder="Enter Fabric Code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono placeholder-slate-500 uppercase focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -98,12 +136,12 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
 
             <div>
               <label className="block font-semibold text-slate-300 mb-1">
-                Fabric Name & Weave *
+                Fabric Name &amp; Weave *
               </label>
               <input
                 type="text"
                 required
-                placeholder="e.g. 260 GSM Stretch Chino Twill"
+                placeholder="Enter Fabric Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -118,8 +156,8 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
                 type="text"
                 value={composition}
                 onChange={(e) => setComposition(e.target.value)}
-                placeholder="e.g. 98% Cotton 2% Spandex"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white"
+                placeholder="Enter Composition"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
               />
             </div>
 
@@ -131,28 +169,29 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
                 type="text"
                 value={color}
                 onChange={(e) => setColor(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white"
+                placeholder="Enter Color / Shade"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
               />
             </div>
 
             <div>
               <label className="block font-semibold text-slate-300 mb-1">
-                Weight (GSM) & Width
+                Weight (GSM) &amp; Width
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="number"
                   value={gsm}
-                  onChange={(e) => setGsm(Number(e.target.value))}
+                  onChange={(e) => setGsm(e.target.value)}
                   placeholder="GSM"
-                  className="bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
+                  className="bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono placeholder-slate-500"
                 />
                 <input
                   type="number"
                   value={widthInches}
-                  onChange={(e) => setWidthInches(Number(e.target.value))}
-                  placeholder="Width (inches)"
-                  className="bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
+                  onChange={(e) => setWidthInches(e.target.value)}
+                  placeholder="Width (in)"
+                  className="bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono placeholder-slate-500"
                 />
               </div>
             </div>
@@ -165,11 +204,12 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
                 type="number"
                 step="0.1"
                 required
+                placeholder="Enter Available Yards"
                 value={availableYards}
-                onChange={(e) => setAvailableYards(Number(e.target.value))}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
+                onChange={(e) => setAvailableYards(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono placeholder-slate-500"
               />
-              {availableYards <= 5 && (
+              {availableYards !== '' && Number(availableYards) <= 5 && (
                 <span className="text-[10px] text-rose-400 font-bold mt-1 block">
                   ⚠️ ≤5 yds will show Red on Dashboard Report!
                 </span>
@@ -182,9 +222,10 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
               </label>
               <input
                 type="text"
+                placeholder="Enter Supplier Name"
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
               />
             </div>
 
@@ -194,27 +235,64 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
               </label>
               <input
                 type="text"
+                placeholder="Enter Rack / Bin Location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block font-semibold text-slate-300 mb-1">
-              Link Style Codes (Comma separated)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. ST-8820, ST-8825"
-              value={linkedStylesInput}
-              onChange={(e) => setLinkedStylesInput(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono placeholder-slate-500 uppercase"
-            />
-            <p className="text-[10px] text-slate-400 mt-1">
-              Links this fabric to specific styles. If stock drops to 5 yds or less, these style codes will be flagged in Red.
-            </p>
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-semibold text-slate-300">
+                Link Style Codes (Type &amp; Press Enter to List)
+              </label>
+              <span className="text-[10px] text-slate-400">Press Enter to list style</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Type Style Code & press Enter..."
+                value={styleInput}
+                onChange={(e) => setStyleInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddStyleCode();
+                  }
+                }}
+                className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono placeholder-slate-500 uppercase"
+              />
+              <button
+                type="button"
+                onClick={handleAddStyleCode}
+                className="px-3 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>List</span>
+              </button>
+            </div>
+            {linkedStyles.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {linkedStyles.map((sc) => (
+                  <span
+                    key={sc}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 font-mono font-bold text-xs"
+                  >
+                    <span>{sc}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveStyleCode(sc)}
+                      className="hover:text-rose-300 cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">

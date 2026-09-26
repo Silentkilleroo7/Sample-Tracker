@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   RotateCcw,
@@ -28,33 +28,41 @@ export const ResubmitBVTestModal: React.FC<ResubmitBVTestModalProps> = ({
   test,
   onConfirmResubmit,
 }) => {
-  if (!isOpen || !test) return null;
-
-  const defaultExp = new Date();
-  defaultExp.setDate(defaultExp.getDate() + 3);
-
   const [resubmittedDate, setResubmittedDate] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    () => new Date().toISOString().split('T')[0]
   );
-  const [expectedDate, setExpectedDate] = useState<string>(
-    defaultExp.toISOString().split('T')[0]
-  );
-  const [retestReportNumber, setRetestReportNumber] = useState<string>(
-    test.reportNumber ? `${test.reportNumber}-R1` : `BV-(8826) ${Math.floor(100 + Math.random() * 900)}-RETEST`
-  );
-  const [resubmissionNotes, setResubmissionNotes] = useState<string>(
-    test.failReason?.includes('pH')
-      ? 'Neutralization acid rinse dosage calibrated and re-executed at wash plant. pH verified at factory lab at 6.0 prior to BV dispatch.'
-      : 'Corrective process re-executed per buyer QA manual. Fresh specimen prepared for BV verification.'
-  );
+  const [expectedDate, setExpectedDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 3);
+    return d.toISOString().split('T')[0];
+  });
+  const [retestReportNumber, setRetestReportNumber] = useState<string>('');
+  const [resubmissionNotes, setResubmissionNotes] = useState<string>('');
+
+  useEffect(() => {
+    if (test && isOpen) {
+      setResubmittedDate(new Date().toISOString().split('T')[0]);
+      const d = new Date();
+      d.setDate(d.getDate() + 3);
+      setExpectedDate(d.toISOString().split('T')[0]);
+      setRetestReportNumber(
+        test.reportNumber && test.reportNumber !== 'Pending BV Report'
+          ? `${test.reportNumber}-R1`
+          : ''
+      );
+      setResubmissionNotes('');
+    }
+  }, [test, isOpen]);
+
+  if (!isOpen || !test) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onConfirmResubmit(test.id, {
       resubmittedDate,
       expectedDate,
-      resubmissionNotes,
-      retestReportNumber,
+      resubmissionNotes: resubmissionNotes.trim(),
+      retestReportNumber: retestReportNumber.trim() || 'RETEST-PENDING',
     });
     onClose();
   };
@@ -75,6 +83,7 @@ export const ResubmitBVTestModal: React.FC<ResubmitBVTestModalProps> = ({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
           >
@@ -131,10 +140,11 @@ export const ResubmitBVTestModal: React.FC<ResubmitBVTestModalProps> = ({
           {/* Re-test Report # Reference */}
           <div>
             <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-              BV Re-Test Reference / Tracking Number
+              BV Re-Test Reference / Tracking Number *
             </label>
             <input
               type="text"
+              placeholder="Enter BV Re-Test Reference Number"
               value={retestReportNumber}
               onChange={(e) => setRetestReportNumber(e.target.value)}
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-mono font-bold"
@@ -145,13 +155,13 @@ export const ResubmitBVTestModal: React.FC<ResubmitBVTestModalProps> = ({
           {/* Corrective Action Taken */}
           <div>
             <label className="block text-slate-400 font-semibold mb-1 uppercase text-[10px]">
-              Corrective Action Taken & Notes for BV Lab
+              Corrective Action Taken &amp; Notes for BV Lab *
             </label>
             <textarea
               rows={3}
               value={resubmissionNotes}
               onChange={(e) => setResubmissionNotes(e.target.value)}
-              placeholder="Explain adjustments made (e.g. acid rinse neutralizing wash, relaxation stentering, etc.)"
+              placeholder="Enter corrective action taken before re-submitting to BV..."
               className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl p-2.5 text-xs focus:ring-1 focus:ring-amber-500"
               required
             />
