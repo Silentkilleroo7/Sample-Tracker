@@ -24,11 +24,17 @@ import {
   X,
   ScrollText,
   FlaskConical,
+  Lock,
+  Clock,
 } from 'lucide-react';
 import {
   SampleItem,
   STAGE_CONFIG,
   isParcelCompleted,
+  ApprovalDetails,
+  getEffectiveShipmentDate,
+  getDaysUntilShipment,
+  getGranularApprovalStatus,
 } from '../types/sample';
 import { FabricItem, isFabricLowStock } from '../types/fabric';
 import { BVTestItem } from '../types/test';
@@ -47,6 +53,7 @@ interface DashboardViewProps {
   onOpenFollowUp?: (sample: SampleItem) => void;
   onToggleWorkbookSent?: (sampleId: string) => void;
   onSendWhatsApp?: (sample: SampleItem, phone: string, customMessage?: string) => void;
+  onUpdateApprovalDetails?: (sampleId: string, details: ApprovalDetails) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -61,13 +68,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenFollowUp,
   onToggleWorkbookSent,
   onSendWhatsApp,
+  onUpdateApprovalDetails,
 }) => {
   // Dynamic Summary Controls State
   const [summaryFilter, setSummaryFilter] = useState<
     'all' | 'sewing' | 'wash' | 'finishing' | 'parcel' | 'approvals' | 'fabric' | 'followup'
   >('all');
   const [summarySearch, setSummarySearch] = useState('');
-  const [summarySort, setSummarySort] = useState<'parcelDate' | 'priority' | 'styleCode'>('parcelDate');
+  const [summarySort, setSummarySort] = useState<'shipmentDate' | 'parcelDate' | 'priority' | 'styleCode'>('shipmentDate');
+  const [fastApprovalFilter, setFastApprovalFilter] = useState<
+    'all' | 'button' | 'thread' | 'wash' | 'trims_accessories'
+  >('all');
 
   // Counts & Filtered lists
   const inSewing = samples.filter((s) => s.stage === 'sewing');
@@ -87,6 +98,77 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Low fabric items (availableYards <= 5)
   const lowFabrics = fabrics.filter(isFabricLowStock);
+
+  // Earlier Priority Samples Pending Approval for Trims / Accessories (Button, Thread, Wash, Trims, Accessories)
+  // Sorted by earliest Shipment Date first so merchandisers know which sample needs approval fast!
+  const allUnapprovedPrioritySamples = useMemo(() => {
+    return samples
+      .filter((s) => !getGranularApprovalStatus(s).isFullyApproved)
+      .sort((a, b) => {
+        const shipA = getEffectiveShipmentDate(a) || '9999-12-31';
+        const shipB = getEffectiveShipmentDate(b) || '9999-12-31';
+        if (shipA !== shipB) return shipA.localeCompare(shipB);
+        const pMap: Record<string, number> = { urgent: 3, high: 2, normal: 1 };
+        return (pMap[b.priority] || 0) - (pMap[a.priority] || 0);
+      });
+  }, [samples]);
+
+  const filteredPriorityApprovalSamples = useMemo(() => {
+    return allUnapprovedPrioritySamples.filter((s) => {
+      const status = getGranularApprovalStatus(s);
+      if (fastApprovalFilter === 'button') return !status.buttonApproved;
+      if (fastApprovalFilter === 'thread') return !status.threadApproved;
+      if (fastApprovalFilter === 'wash') return !status.washApproved;
+      if (fastApprovalFilter === 'trims_accessories')
+        return !status.trimsApproved || !status.accessoriesApproved;
+      return true;
+    });
+  }, [allUnapprovedPrioritySamples, fastApprovalFilter]);
+
+  const pendingButtonCount = allUnapprovedPrioritySamples.filter(
+    (s) => !getGranularApprovalStatus(s).buttonApproved
+  ).length;
+  const pendingThreadCount = allUnapprovedPrioritySamples.filter(
+    (s) => !getGranularApprovalStatus(s).threadApproved
+  ).length;
+  const pendingWashCount = allUnapprovedPrioritySamples.filter(
+    (s) => !getGranularApprovalStatus(s).washApproved
+  ).length;
+  const pendingTrimsAccCount = allUnapprovedPrioritySamples.filter((s) => {
+    const st = getGranularApprovalStatus(s);
+    return !st.trimsApproved || !st.accessoriesApproved;
+  }).length;
+
+  const handleQuickToggleGranularApproval = (
+    sample: SampleItem,
+    field: 'washApproved' | 'buttonApproved' | 'threadApproved' | 'trimsApproved' | 'accessoriesApproved'
+  ) => {
+    if (!onUpdateApprovalDetails) return;
+    const currentStatus = getGranularApprovalStatus(sample);
+    const nextVal = !currentStatus[field];
+    const updatedDetails: ApprovalDetails = {
+      ...sample.approvalDetails,
+      washApproved: field === 'washApproved' ? nextVal : currentStatus.washApproved,
+      buttonApproved: field === 'buttonApproved' ? nextVal : currentStatus.buttonApproved,
+      threadApproved: field === 'threadApproved' ? nextVal : currentStatus.threadApproved,
+      trimsApproved: field === 'trimsApproved' ? nextVal : currentStatus.trimsApproved,
+      accessoriesApproved:
+        field === 'accessoriesApproved' ? nextVal : currentStatus.accessoriesApproved,
+    };
+    const allNowApproved =
+      updatedDetails.washApproved &&
+      updatedDetails.buttonApproved &&
+      updatedDetails.threadApproved &&
+      updatedDetails.trimsApproved &&
+      updatedDetails.accessoriesApproved;
+    if (allNowApproved) {
+      updatedDetails.overallVerdict = 'approved';
+    } else if (updatedDetails.overallVerdict === 'approved') {
+      updatedDetails.overallVerdict = 'pending';
+    }
+    updatedDetails.reviewedAt = new Date().toISOString();
+    onUpdateApprovalDetails(sample.id, updatedDetails);
+  };
 
   // Dynamic Filtered Summary list
   const filteredSummarySamples = useMemo(() => {
@@ -111,6 +193,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
 
     return [...list].sort((a, b) => {
+      if (summarySort === 'shipmentDate') {
+        const shipA = getEffectiveShipmentDate(a) || '9999-12-31';
+        const shipB = getEffectiveShipmentDate(b) || '9999-12-31';
+        return shipA.localeCompare(shipB);
+      }
       if (summarySort === 'priority') {
         const pMap: Record<string, number> = { urgent: 4, high: 3, normal: 2, low: 1 };
         return (pMap[b.priority] || 0) - (pMap[a.priority] || 0);
@@ -248,7 +335,301 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* ============================================================ */}
-      {/* 1. CRITICAL DASHBOARD REPORT OPTION: RED ALERT FOR FABRIC <= 5 YDS */}
+      {/* 1. EARLIER PRIORITY SAMPLE FAST APPROVAL SUMMARY (BY SHIPMENT DATE) */}
+      {/*    Highlights Priority Samples Missing Approval for Button, Thread, Wash, Trims & Accessories */}
+      {/* ============================================================ */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-amber-950/70 via-slate-900 to-indigo-950/60 border-2 border-amber-500/60 shadow-2xl space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-amber-500/30">
+          <div className="flex items-start gap-3.5">
+            <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center shrink-0 shadow-lg shadow-amber-950/50">
+              <Clock className="w-6 h-6 stroke-[2.2]" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 font-mono text-[10px] font-black uppercase tracking-wider">
+                  Fast Approval Priority Queue
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono text-[10px] font-bold">
+                  {allUnapprovedPrioritySamples.length} Style{allUnapprovedPrioritySamples.length === 1 ? '' : 's'} Pending Trims / Accessories / Wash Approval
+                </span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black text-white mt-1">
+                Earlier Shipment Priority Samples — Pending Approval Summary (Button, Thread, Wash, Trims &amp; Accessories)
+              </h2>
+              <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+                Ranked automatically by earliest <strong>Order Shipment Date</strong> so merchandising teams can fast-track approvals for <strong>Button, Thread, Wash, Trims, and Accessories</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => onNavigateToView('approvals')}
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span>Open Approvals Workbench</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Granular Pending Approval Filter Pills (Button, Thread, Wash, Trims & Accessories) */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setFastApprovalFilter('all')}
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+              fastApprovalFilter === 'all'
+                ? 'bg-amber-500/25 border-amber-400 text-white ring-1 ring-amber-400/40'
+                : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-[10px] text-amber-300 uppercase font-bold">All Priority Pending</div>
+            <div className="text-base font-black font-mono text-white mt-0.5">
+              {allUnapprovedPrioritySamples.length} Styles
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFastApprovalFilter('button')}
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+              fastApprovalFilter === 'button'
+                ? 'bg-rose-500/25 border-rose-400 text-white ring-1 ring-rose-400/40'
+                : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-[10px] text-rose-300 uppercase font-bold">Pending Button</div>
+            <div className="text-base font-black font-mono text-rose-200 mt-0.5">
+              {pendingButtonCount} Unapproved
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFastApprovalFilter('thread')}
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+              fastApprovalFilter === 'thread'
+                ? 'bg-purple-500/25 border-purple-400 text-white ring-1 ring-purple-400/40'
+                : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-[10px] text-purple-300 uppercase font-bold">Pending Thread</div>
+            <div className="text-base font-black font-mono text-purple-200 mt-0.5">
+              {pendingThreadCount} Unapproved
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFastApprovalFilter('wash')}
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+              fastApprovalFilter === 'wash'
+                ? 'bg-cyan-500/25 border-cyan-400 text-white ring-1 ring-cyan-400/40'
+                : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-[10px] text-cyan-300 uppercase font-bold">Pending Wash</div>
+            <div className="text-base font-black font-mono text-cyan-200 mt-0.5">
+              {pendingWashCount} Unapproved
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFastApprovalFilter('trims_accessories')}
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+              fastApprovalFilter === 'trims_accessories'
+                ? 'bg-pink-500/25 border-pink-400 text-white ring-1 ring-pink-400/40'
+                : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-[10px] text-pink-300 uppercase font-bold">Trims &amp; Accessories</div>
+            <div className="text-base font-black font-mono text-pink-200 mt-0.5">
+              {pendingTrimsAccCount} Unapproved
+            </div>
+          </button>
+        </div>
+
+        {/* Ranked Priority Sample List */}
+        {filteredPriorityApprovalSamples.length > 0 ? (
+          <div className="space-y-2.5">
+            {filteredPriorityApprovalSamples.slice(0, 6).map((sample, idx) => {
+              const shipDate = getEffectiveShipmentDate(sample);
+              const daysLeft = getDaysUntilShipment(sample);
+              const status = getGranularApprovalStatus(sample);
+              const isUrgentShip = daysLeft !== null && daysLeft <= 14;
+
+              return (
+                <div
+                  key={sample.id}
+                  className={`p-3.5 rounded-xl border transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
+                    idx === 0
+                      ? 'bg-slate-900/95 border-amber-400/80 ring-1 ring-amber-400/30 shadow-lg'
+                      : 'bg-slate-900/75 border-slate-800 hover:border-amber-500/40'
+                  }`}
+                >
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                    <div className="flex flex-col items-center justify-center px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono font-black text-xs shrink-0">
+                      <span>#{idx + 1}</span>
+                      <span className="text-[8px] uppercase">Priority</span>
+                    </div>
+                    <StyleProductImage sample={sample} size="sm" />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          onClick={() => onSelectSample(sample)}
+                          className="font-mono font-black text-xs text-indigo-300 px-2 py-0.5 rounded bg-indigo-950 border border-indigo-500/40 cursor-pointer hover:bg-indigo-900"
+                        >
+                          {sample.styleCode}
+                        </span>
+                        <span
+                          onClick={() => onSelectSample(sample)}
+                          className="font-bold text-white text-xs sm:text-sm hover:text-amber-300 cursor-pointer truncate"
+                        >
+                          {sample.styleName}
+                        </span>
+                        {sample.isRequisitionLocked && (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono flex items-center gap-1">
+                            <Lock className="w-2.5 h-2.5 text-amber-400" />
+                            Req Locked
+                          </span>
+                        )}
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                            STAGE_CONFIG[sample.stage].badgeBg
+                          }`}
+                        >
+                          {STAGE_CONFIG[sample.stage].shortLabel}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2.5 mt-1 text-[11px] text-slate-400">
+                        <span>
+                          Buyer: <strong className="text-slate-200">{sample.buyer}</strong>
+                        </span>
+                        <span>•</span>
+                        <span className="font-mono text-amber-300 font-bold flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-amber-400" />
+                          Shipment Date: {shipDate || 'Not Set'}
+                        </span>
+                        {daysLeft !== null && (
+                          <span
+                            className={`px-2 py-0.2 rounded font-mono text-[10px] font-bold border ${
+                              daysLeft < 0
+                                ? 'bg-rose-600 text-white border-rose-400 animate-pulse'
+                                : isUrgentShip
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+                                : 'bg-slate-800 text-slate-300 border-slate-700'
+                            }`}
+                          >
+                            {daysLeft < 0
+                              ? `OVERDUE BY ${Math.abs(daysLeft)}D • FAST APPROVAL!`
+                              : daysLeft === 0
+                              ? 'SHIPS TODAY • FAST APPROVAL!'
+                              : `${daysLeft}d to Shipment${isUrgentShip ? ' • FAST APPROVAL' : ''}`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Interactive Approval Badges for Button, Thread, Wash, Trims, Accessories */}
+                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleQuickToggleGranularApproval(sample, 'buttonApproved')}
+                      title="Click to toggle Button Approval"
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                        status.buttonApproved
+                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
+                          : 'bg-rose-950/80 text-rose-200 border-rose-500/60 hover:bg-rose-900/80'
+                      }`}
+                    >
+                      <span>{status.buttonApproved ? '✅' : '⏳'} Button</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleQuickToggleGranularApproval(sample, 'threadApproved')}
+                      title="Click to toggle Thread Approval"
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                        status.threadApproved
+                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
+                          : 'bg-rose-950/80 text-rose-200 border-rose-500/60 hover:bg-rose-900/80'
+                      }`}
+                    >
+                      <span>{status.threadApproved ? '✅' : '⏳'} Thread</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleQuickToggleGranularApproval(sample, 'washApproved')}
+                      title="Click to toggle Wash Approval"
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                        status.washApproved
+                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
+                          : 'bg-rose-950/80 text-rose-200 border-rose-500/60 hover:bg-rose-900/80'
+                      }`}
+                    >
+                      <span>{status.washApproved ? '✅' : '⏳'} Wash</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleQuickToggleGranularApproval(sample, 'trimsApproved')}
+                      title="Click to toggle Trims Approval"
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                        status.trimsApproved
+                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
+                          : 'bg-amber-950/80 text-amber-200 border-amber-500/60 hover:bg-amber-900/80'
+                      }`}
+                    >
+                      <span>{status.trimsApproved ? '✅' : '⏳'} Trims</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleQuickToggleGranularApproval(sample, 'accessoriesApproved')}
+                      title="Click to toggle Accessories Approval"
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                        status.accessoriesApproved
+                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
+                          : 'bg-amber-950/80 text-amber-200 border-amber-500/60 hover:bg-amber-900/80'
+                      }`}
+                    >
+                      <span>{status.accessoriesApproved ? '✅' : '⏳'} Accessories</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-300">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <span>
+                {samples.length === 0
+                  ? 'No styles registered yet. Create a New Sample Requisition with a Shipment Date to track Earlier Priority Samples needing Button, Thread, Wash, Trims & Accessories approval.'
+                  : 'All earlier priority samples in this filter have received approval for Button, Thread, Wash, Trims & Accessories!'}
+              </span>
+            </div>
+            {samples.length === 0 && (
+              <button
+                type="button"
+                onClick={onNewRequisition}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shrink-0 cursor-pointer"
+              >
+                + Create First Style with Shipment Date
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ============================================================ */}
+      {/* 1B. CRITICAL DASHBOARD REPORT OPTION: RED ALERT FOR FABRIC <= 5 YDS */}
       {/* ============================================================ */}
       {lowFabrics.length > 0 && (
         <div className="p-5 rounded-2xl bg-gradient-to-r from-rose-950/90 via-red-950/70 to-rose-950/90 border-2 border-rose-500/80 shadow-2xl shadow-rose-950/60 ring-2 ring-rose-500/30 animate-pulse-slow">

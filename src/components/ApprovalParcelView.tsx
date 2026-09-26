@@ -5,6 +5,9 @@ import {
   ApprovalStatus,
   ApprovalDetails,
   ParcelDetails,
+  getEffectiveShipmentDate,
+  getDaysUntilShipment,
+  getGranularApprovalStatus,
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
@@ -48,38 +51,55 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
   onToggleWorkbookSent,
   onSendWhatsApp,
 }) => {
-  const [subTab, setSubTab] = useState<'all' | 'ready_for_parcel' | 'approval_comments'>('all');
+  const [subTab, setSubTab] = useState<'all' | 'priority_shipment' | 'ready_for_parcel' | 'approval_comments'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Editing state for remarks note
   const [editingSampleId, setEditingSampleId] = useState<string | null>(null);
   const [tempApproval, setTempApproval] = useState<ApprovalDetails | null>(null);
 
-  // Filter styles in ready_for_parcel or approval_comments
+  // Filter styles in ready_for_parcel, approval_comments, or priority shipment styles pending trims/accessories/wash approval
   const relevantSamples = samples.filter(
-    (s) => s.stage === 'ready_for_parcel' || s.stage === 'approval_comments'
+    (s) =>
+      s.stage === 'ready_for_parcel' ||
+      s.stage === 'approval_comments' ||
+      !getGranularApprovalStatus(s).isFullyApproved
   );
 
-  const filteredSamples = relevantSamples.filter((s) => {
-    if (subTab !== 'all' && s.stage !== subTab) return false;
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      s.styleCode.toLowerCase().includes(q) ||
-      s.styleName.toLowerCase().includes(q) ||
-      s.poNumber.toLowerCase().includes(q) ||
-      s.buyer.toLowerCase().includes(q) ||
-      s.parcelDetails.courier.toLowerCase().includes(q) ||
-      s.parcelDetails.trackingNumber.toLowerCase().includes(q)
-    );
-  });
+  const filteredSamples = relevantSamples
+    .filter((s) => {
+      if (subTab === 'ready_for_parcel' && s.stage !== 'ready_for_parcel') return false;
+      if (subTab === 'approval_comments' && s.stage !== 'approval_comments') return false;
+      if (subTab === 'priority_shipment' && getGranularApprovalStatus(s).isFullyApproved) return false;
+      if (!searchQuery.trim()) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        s.styleCode.toLowerCase().includes(q) ||
+        s.styleName.toLowerCase().includes(q) ||
+        s.poNumber.toLowerCase().includes(q) ||
+        s.buyer.toLowerCase().includes(q) ||
+        s.parcelDetails.courier.toLowerCase().includes(q) ||
+        s.parcelDetails.trackingNumber.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      const shipA = getEffectiveShipmentDate(a) || '9999-12-31';
+      const shipB = getEffectiveShipmentDate(b) || '9999-12-31';
+      return shipA.localeCompare(shipB);
+    });
 
   const readyCount = samples.filter((s) => s.stage === 'ready_for_parcel').length;
   const approvalCount = samples.filter((s) => s.stage === 'approval_comments').length;
+  const priorityPendingCount = samples.filter((s) => !getGranularApprovalStatus(s).isFullyApproved).length;
 
   const handleStartEdit = (sample: SampleItem) => {
+    const gran = getGranularApprovalStatus(sample);
     setEditingSampleId(sample.id);
-    setTempApproval({ ...sample.approvalDetails });
+    setTempApproval({
+      ...sample.approvalDetails,
+      buttonApproved: gran.buttonApproved,
+      threadApproved: gran.threadApproved,
+    });
   };
 
   const handleSaveApproval = (sampleId: string) => {
@@ -141,7 +161,7 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
 
       {/* Subtab selection & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setSubTab('all')}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
@@ -150,7 +170,17 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                 : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
           >
-            All Parcel & Approval ({relevantSamples.length})
+            All Sorted by Shipment Date ({relevantSamples.length})
+          </button>
+          <button
+            onClick={() => setSubTab('priority_shipment')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              subTab === 'priority_shipment'
+                ? 'bg-amber-500 text-slate-950 font-black shadow'
+                : 'bg-slate-800 text-amber-300 hover:text-white'
+            }`}
+          >
+            ⚡ Priority Pending Approval ({priorityPendingCount})
           </button>
           <button
             onClick={() => setSubTab('ready_for_parcel')}
@@ -235,12 +265,29 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Parcel Date & Courier Capsule */}
-                  <div className="flex items-center gap-3">
+                  {/* Shipment Date & Parcel Date Capsule */}
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <div className="p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/40 text-xs">
+                      <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                        <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Order Shipment Date:</span>
+                      </div>
+                      <div className="font-mono text-white font-black mt-0.5 flex items-center gap-1.5">
+                        <span>{getEffectiveShipmentDate(sample) || 'Not set'}</span>
+                        {getDaysUntilShipment(sample) !== null && (
+                          <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px]">
+                            {getDaysUntilShipment(sample)! < 0
+                              ? `${Math.abs(getDaysUntilShipment(sample)!)}d overdue`
+                              : `${getDaysUntilShipment(sample)}d left`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
                     <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/60 text-xs">
                       <div className="flex items-center gap-1.5 text-slate-400 font-semibold">
                         <Truck className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Courier & Dispatch Date:</span>
+                        <span>Courier &amp; Dispatch Date:</span>
                       </div>
                       <div className="font-mono text-emerald-300 font-bold mt-0.5 flex items-center gap-1.5">
                         <Calendar className="w-3 h-3" />
@@ -440,6 +487,73 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                           <FileCheck className="w-3.5 h-3.5" />
                           <span>{sample.approvalDetails.overallVerdict !== 'pending' ? 'Update Remarks' : 'Enter Buyer Remarks'}</span>
                         </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Fast Approval Checklist Bar: Button, Thread, Wash, Trims, Accessories */}
+                  <div className="mb-3 p-2.5 rounded-lg bg-slate-900/80 border border-slate-700/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-bold text-amber-300 text-[11px] uppercase tracking-wider">
+                      Fast Approval Status (Button, Thread, Wash, Trims &amp; Accessories):
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isEditing ? (
+                        <>
+                          <label className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 border border-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(aDetails.buttonApproved)}
+                              onChange={(e) =>
+                                setTempApproval((prev) =>
+                                  prev ? { ...prev, buttonApproved: e.target.checked } : null
+                                )
+                              }
+                            />
+                            <span className="font-bold text-rose-300">Button Approved</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 border border-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(aDetails.threadApproved)}
+                              onChange={(e) =>
+                                setTempApproval((prev) =>
+                                  prev ? { ...prev, threadApproved: e.target.checked } : null
+                                )
+                              }
+                            />
+                            <span className="font-bold text-purple-300">Thread Approved</span>
+                          </label>
+                        </>
+                      ) : (
+                        <>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              getGranularApprovalStatus(sample).buttonApproved
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                            }`}
+                          >
+                            Button: {getGranularApprovalStatus(sample).buttonApproved ? '✅ Approved' : '⏳ Pending'}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              getGranularApprovalStatus(sample).threadApproved
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                            }`}
+                          >
+                            Thread: {getGranularApprovalStatus(sample).threadApproved ? '✅ Approved' : '⏳ Pending'}
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              getGranularApprovalStatus(sample).washApproved
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                            }`}
+                          >
+                            Wash: {getGranularApprovalStatus(sample).washApproved ? '✅ Approved' : '⏳ Pending'}
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>

@@ -49,6 +49,8 @@ CREATE TABLE IF NOT EXISTS public.samples (
   stage TEXT NOT NULL DEFAULT 'requisition',
   priority TEXT NOT NULL DEFAULT 'normal',
   target_parcel_date TEXT NOT NULL DEFAULT '',
+  shipment_date TEXT NOT NULL DEFAULT '',
+  is_requisition_locked BOOLEAN NOT NULL DEFAULT TRUE,
   thumbnail TEXT,
   images JSONB NOT NULL DEFAULT '[]'::jsonb,
   stage_history JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -61,6 +63,10 @@ CREATE TABLE IF NOT EXISTS public.samples (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Safe migration for existing deployments
+ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS shipment_date TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS is_requisition_locked BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- =====================================================================================
 -- 3. BUREAU VERITAS (BV) LAB TESTS TABLE (Tracks Lab Tests & 24-Hour Re-Test Alerts)

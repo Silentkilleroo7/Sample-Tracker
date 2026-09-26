@@ -99,6 +99,24 @@ export const STYLE_PHOTOS_BUCKET = 'style-photos';
 // ============================================================================
 
 export function mapRowToSample(row: any): SampleItem {
+  const reqForm = row.requisition_form || undefined;
+  const pDetails = row.parcel_details || {};
+  const aDetails = row.approval_details || {};
+
+  const effectiveShipmentDate =
+    row.shipment_date ||
+    reqForm?.shipmentDate ||
+    pDetails?.shipmentDate ||
+    row.target_parcel_date ||
+    '';
+
+  const isLocked =
+    row.is_requisition_locked !== undefined
+      ? Boolean(row.is_requisition_locked)
+      : reqForm?.isLocked !== undefined
+      ? Boolean(reqForm.isLocked)
+      : Boolean(pDetails?.isRequisitionLocked);
+
   const sample: SampleItem = {
     id: row.id,
     styleCode: row.style_code || '',
@@ -117,6 +135,8 @@ export function mapRowToSample(row: any): SampleItem {
     stage: row.stage || 'requisition',
     priority: row.priority || 'normal',
     targetParcelDate: row.target_parcel_date || '',
+    shipmentDate: effectiveShipmentDate,
+    isRequisitionLocked: isLocked,
     createdAt: row.created_at || new Date().toISOString(),
     updatedAt: row.updated_at || new Date().toISOString(),
     thumbnail: row.thumbnail || undefined,
@@ -136,25 +156,54 @@ export function mapRowToSample(row: any): SampleItem {
       taggingDone: false,
       qualityPassed: false,
     },
-    parcelDetails: row.parcel_details || {
-      courier: 'DHL Express Worldwide',
-      trackingNumber: '',
-      parcelDate: row.target_parcel_date || '',
-      recipient: '',
-      destinationCountry: '',
-      dispatchStatus: 'pending',
-      workbookSent: false,
+    parcelDetails: {
+      courier: pDetails.courier || 'DHL Express Worldwide',
+      trackingNumber: pDetails.trackingNumber || '',
+      parcelDate: pDetails.parcelDate || row.target_parcel_date || '',
+      recipient: pDetails.recipient || '',
+      destinationCountry: pDetails.destinationCountry || '',
+      dispatchStatus: pDetails.dispatchStatus || 'pending',
+      workbookSent: Boolean(pDetails.workbookSent),
+      workbookSentDate: pDetails.workbookSentDate,
+      workbookSentBy: pDetails.workbookSentBy,
+      workbookNotes: pDetails.workbookNotes,
+      followUp: pDetails.followUp,
     },
-    approvalDetails: row.approval_details || {
-      washComments: '',
-      washApproved: false,
-      trimsComments: '',
-      trimsApproved: false,
-      accessoriesComments: '',
-      accessoriesApproved: false,
-      overallVerdict: 'pending',
+    approvalDetails: {
+      washComments: aDetails.washComments || '',
+      washApproved: Boolean(aDetails.washApproved),
+      trimsComments: aDetails.trimsComments || '',
+      trimsApproved: Boolean(aDetails.trimsApproved),
+      accessoriesComments: aDetails.accessoriesComments || '',
+      accessoriesApproved: Boolean(aDetails.accessoriesApproved),
+      buttonApproved:
+        aDetails.buttonApproved !== undefined
+          ? Boolean(aDetails.buttonApproved)
+          : Boolean(aDetails.accessoriesApproved),
+      threadApproved:
+        aDetails.threadApproved !== undefined
+          ? Boolean(aDetails.threadApproved)
+          : Boolean(aDetails.trimsApproved),
+      zipperApproved:
+        aDetails.zipperApproved !== undefined
+          ? Boolean(aDetails.zipperApproved)
+          : Boolean(aDetails.accessoriesApproved),
+      labelApproved:
+        aDetails.labelApproved !== undefined
+          ? Boolean(aDetails.labelApproved)
+          : Boolean(aDetails.trimsApproved),
+      overallVerdict: aDetails.overallVerdict || 'pending',
+      reviewedBy: aDetails.reviewedBy,
+      reviewedAt: aDetails.reviewedAt,
+      generalRemarks: aDetails.generalRemarks,
     },
-    requisitionForm: row.requisition_form || undefined,
+    requisitionForm: reqForm
+      ? {
+          ...reqForm,
+          shipmentDate: reqForm.shipmentDate || effectiveShipmentDate,
+          isLocked,
+        }
+      : undefined,
   };
 
   if (!sample.thumbnail) {
@@ -167,6 +216,32 @@ export function mapRowToSample(row: any): SampleItem {
 }
 
 export function mapSampleToRow(sample: SampleItem) {
+  const effectiveShipmentDate =
+    sample.shipmentDate ||
+    sample.requisitionForm?.shipmentDate ||
+    sample.targetParcelDate ||
+    '';
+  const isLocked = Boolean(
+    sample.isRequisitionLocked || sample.requisitionForm?.isLocked
+  );
+
+  const enrichedParcelDetails = {
+    ...(sample.parcelDetails || {}),
+    shipmentDate: effectiveShipmentDate,
+    isRequisitionLocked: isLocked,
+  };
+
+  const enrichedRequisitionForm = sample.requisitionForm
+    ? {
+        ...sample.requisitionForm,
+        shipmentDate: effectiveShipmentDate,
+        isLocked,
+      }
+    : {
+        shipmentDate: effectiveShipmentDate,
+        isLocked,
+      };
+
   return {
     id: sample.id,
     style_code: sample.styleCode,
@@ -191,9 +266,9 @@ export function mapSampleToRow(sample: SampleItem) {
     sewing_operator: sample.sewingOperator || null,
     wash_details: sample.washDetails || {},
     finishing_details: sample.finishingDetails || {},
-    parcel_details: sample.parcelDetails || {},
+    parcel_details: enrichedParcelDetails,
     approval_details: sample.approvalDetails || {},
-    requisition_form: sample.requisitionForm || null,
+    requisition_form: enrichedRequisitionForm,
     created_at: sample.createdAt || new Date().toISOString(),
     updated_at: sample.updatedAt || new Date().toISOString(),
   };

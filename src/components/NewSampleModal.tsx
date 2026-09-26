@@ -15,6 +15,10 @@ import {
   CheckCircle2,
   Upload,
   Image as ImageIcon,
+  Lock,
+  Edit3,
+  ShieldAlert,
+  Calendar,
 } from 'lucide-react';
 import {
   RequisitionOptions,
@@ -62,9 +66,15 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     d.setDate(d.getDate() + 7);
     return d.toISOString().split('T')[0];
   });
+  const [shipmentDate, setShipmentDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    return d.toISOString().split('T')[0];
+  });
   const [washType, setWashType] = useState(options.washTypes[0] || 'Bio-Enzyme Stone Wash');
   const [courier, setCourier] = useState(options.couriers[0] || 'DHL Express Worldwide');
   const [autoDeduct, setAutoDeduct] = useState(true);
+  const [showSecondConfirmation, setShowSecondConfirmation] = useState(false);
 
   // Style Picture state
   const [thumbnail, setThumbnail] = useState<string>(PRESET_STYLE_IMAGES[1].url);
@@ -253,7 +263,13 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!styleCode.trim() || !styleName.trim()) return;
+    if (!styleCode.trim() || !styleName.trim() || !shipmentDate) return;
+    // Trigger 2nd-time confirmation with Edit option or Save option
+    setShowSecondConfirmation(true);
+  };
+
+  const handleFinalConfirmSave = () => {
+    if (!styleCode.trim() || !styleName.trim() || !shipmentDate) return;
 
     const finalFabricId = selectedFabric?.id || `fab-inline-${Date.now()}`;
     const finalFabricCode =
@@ -262,6 +278,16 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       selectedFabric?.name || customFabricName.trim() || 'Standard Production Fabric';
     const finalThumbnail = thumbnail || PRESET_STYLE_IMAGES[1].url;
     const finalImages = Array.from(new Set([finalThumbnail, ...uploadedImages]));
+    const nowIso = new Date().toISOString();
+
+    const formatVolarDate = (dateStr?: string) => {
+      const d = dateStr ? new Date(dateStr) : new Date();
+      if (Number.isNaN(d.getTime())) return dateStr || '';
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = d.toLocaleString('en-US', { month: 'short' });
+      const year = String(d.getFullYear()).slice(-2);
+      return `${day}-${month}-${year}`;
+    };
 
     const newSample: Partial<SampleItem> = {
       styleCode: styleCode.trim().toUpperCase(),
@@ -282,13 +308,15 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       stage: 'requisition',
       priority,
       targetParcelDate,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      shipmentDate,
+      isRequisitionLocked: true,
+      createdAt: nowIso,
+      updatedAt: nowIso,
       stageHistory: [
         {
           stage: 'requisition',
-          timestamp: new Date().toISOString(),
-          note: `Requisition created for ${sampleType}. Required fabric: ${requiredYards} yds of ${finalFabricCode}`,
+          timestamp: nowIso,
+          note: `Requisition confirmed & permanently locked for ${sampleType}. Shipment Date: ${shipmentDate}. Required fabric: ${requiredYards} yds of ${finalFabricCode}`,
           operator: 'Merchandiser',
         },
       ],
@@ -321,13 +349,76 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         trimsApproved: false,
         accessoriesComments: '',
         accessoriesApproved: false,
+        buttonApproved: false,
+        threadApproved: false,
+        zipperApproved: false,
+        labelApproved: false,
         overallVerdict: 'pending',
+      },
+      requisitionForm: {
+        companyName: 'VOLAR FASHION PVT LTD',
+        date: formatVolarDate(nowIso),
+        requiredDate: formatVolarDate(targetParcelDate),
+        shipmentDate,
+        buyer,
+        requestedBy: 'Zahid Anwar',
+        priorityType: priority === 'urgent' ? 'urgent' : 'normal',
+        sampleType,
+        descriptionCode: styleCode.trim().toUpperCase(),
+        styleName: styleName.trim(),
+        sampleSizeLabel: `${sampleType}\n${quantity}x Size ${size}`,
+        colorWash: color,
+        fabricCode: finalFabricCode,
+        fitting: 'As Tech Pack & comments',
+        threadInstruction: 'Same as Instructions',
+        quantityText: `${quantity} Pcs`,
+        block: 'as spec',
+        fabricComposition: finalFabricName,
+        supplier: selectedFabric?.supplier || 'Mill Partner / Volar Textile',
+        weight: selectedFabric?.gsm ? `${selectedFabric.gsm} GSM` : '11.5 OZ / 320 GSM',
+        trims: {
+          mainLabel: true,
+          sizeLabel: true,
+          careOrigin: false,
+          button: true,
+          buckles: false,
+          velcro: false,
+          rivet: false,
+          stud: false,
+          thread: true,
+          threadNote: 'AS PER CHART',
+          interlining: true,
+          elastic: false,
+          zipper: true,
+          drawstring: true,
+          stopperEyelet: true,
+          snap: false,
+          pocketing: true,
+          pocketingNote: 'TC POCKETING ( WHITE )',
+          customTrims: [],
+        },
+        specialInstructions: 'PLEASE FOLLOW THE DETAILS OF OUR PROVIDED SAMPLE',
+        samplingSectionNotes: 'Pattern checked. Sewing allocated to line in-charge.',
+        receivedBy: '',
+        merchandiserSignature: 'Zahid Anwar',
+        isLocked: true,
+        lockedAt: nowIso,
       },
     };
 
+    setShowSecondConfirmation(false);
     onCreateSample(newSample, autoDeduct);
     onClose();
   };
+
+  const daysUntilShipment = (() => {
+    if (!shipmentDate) return null;
+    const t = new Date(shipmentDate + 'T00:00:00').getTime();
+    if (Number.isNaN(t)) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.round((t - today.getTime()) / (1000 * 60 * 60 * 24));
+  })();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
@@ -969,7 +1060,47 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
             </div>
           </div>
 
-          {/* 9. Target Date, Wash Recipe (+ Add), Courier (+ Add) */}
+          {/* 9. Shipment Date (Mandatory for Fast Approval Priority), Target Parcel Date, Wash Recipe (+ Add), Courier (+ Add) */}
+          <div className="p-3.5 rounded-xl bg-amber-950/30 border border-amber-500/40 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="font-bold text-amber-300 flex items-center gap-1.5 text-xs">
+                <Calendar className="w-4 h-4 text-amber-400" />
+                <span>Order / Bulk Shipment Date * (Determines Fast Approval Priority)</span>
+              </label>
+              {daysUntilShipment !== null && (
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                    daysUntilShipment <= 7
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      : daysUntilShipment <= 14
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  }`}
+                >
+                  {daysUntilShipment < 0
+                    ? `Overdue by ${Math.abs(daysUntilShipment)}d • Immediate Approval Priority`
+                    : daysUntilShipment === 0
+                    ? 'Ships Today • Urgent Fast Approval'
+                    : `Ships in ${daysUntilShipment} days • ${
+                        daysUntilShipment <= 14 ? 'Earlier Priority Sample' : 'Scheduled Shipment'
+                      }`}
+                </span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+              <input
+                type="date"
+                required
+                value={shipmentDate}
+                onChange={(e) => setShipmentDate(e.target.value)}
+                className="w-full bg-slate-900 border border-amber-500/50 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500"
+              />
+              <p className="text-[11px] text-amber-200/80 leading-relaxed">
+                Every style is saved with its <strong>Shipment Date</strong> so earlier shipment styles missing approval for <strong>Button, Thread, Wash, Trims, or Accessories</strong> are prioritized on the Dashboard.
+              </p>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-slate-400 mb-1">
@@ -1087,9 +1218,9 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
 
           {/* Submit Actions */}
           <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
-            <span className="text-[11px] text-slate-500 flex items-center gap-1">
-              <Database className="w-3.5 h-3.5 text-emerald-400" />
-              All newly added options are saved permanently in database
+            <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              Requires 2nd confirmation before permanent save (locked once saved)
             </span>
             <div className="flex items-center gap-3">
               <button
@@ -1104,11 +1235,129 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-2"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>Create Sample Requisition</span>
+                <span>Save Requisition (Proceed to Confirmation)</span>
               </button>
             </div>
           </div>
         </form>
+
+        {/* ============================================================ */}
+        {/* 2ND CONFIRMATION MODAL OVERLAY (Edit Option vs Save & Lock) */}
+        {/* ============================================================ */}
+        {showSecondConfirmation && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="bg-slate-900 border-2 border-amber-500/70 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 text-xs text-slate-200 animate-in fade-in zoom-in-95 duration-200">
+              <div className="flex items-start gap-3 pb-3 border-b border-slate-800">
+                <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono text-[10px] font-bold uppercase">
+                      2nd Confirmation Step
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 font-mono text-[10px] font-bold flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      Cannot Be Edited Once Saved
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-lg font-black text-white mt-1">
+                    Confirm Requisition Before Permanent Save
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-0.5 leading-relaxed">
+                    Please verify all style specifications and the <strong>Shipment Date</strong> below. You can click <strong>Edit Requisition</strong> to make changes now, or <strong>Confirm &amp; Save Requisition</strong> to lock and save it permanently.
+                  </p>
+                </div>
+              </div>
+
+              {/* Summary Card */}
+              <div className="p-4 rounded-xl bg-slate-800/70 border border-slate-700 space-y-3">
+                <div className="flex items-center gap-3 pb-3 border-b border-slate-700/80">
+                  <img
+                    src={thumbnail || PRESET_STYLE_IMAGES[1].url}
+                    alt={styleName}
+                    className="w-14 h-16 rounded-lg object-cover border border-indigo-500/40 shrink-0"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono font-black text-sm text-indigo-300 px-2 py-0.5 rounded bg-indigo-950 border border-indigo-500/40">
+                        {styleCode.trim().toUpperCase()}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-200 font-semibold text-[11px]">
+                        {sampleType}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold text-[11px]">
+                        Shipment: {shipmentDate}
+                      </span>
+                    </div>
+                    <div className="text-sm font-bold text-white mt-1 truncate">
+                      {styleName.trim()}
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-0.5">
+                      Buyer: <strong className="text-slate-200">{buyer}</strong> • Line: <strong className="text-slate-200 font-mono">{lineCode}</strong> • Qty: <strong className="text-slate-200">{quantity} pcs ({size})</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Order Shipment Date</span>
+                    <span className="font-mono font-bold text-amber-300">{shipmentDate}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Target Parcel Date</span>
+                    <span className="font-mono font-bold text-emerald-300">{targetParcelDate}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Fabric &amp; Required Yds</span>
+                    <span className="font-mono font-bold text-indigo-300">
+                      {selectedFabric?.code || customFabricCode || 'FAB-GEN-01'} ({requiredYards} yds)
+                    </span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Color / Shade</span>
+                    <span className="font-semibold text-white">{color}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Wash Recipe</span>
+                    <span className="font-semibold text-cyan-300 truncate block">{washType}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Priority Level</span>
+                    <span className="font-bold uppercase text-rose-300">{priority}</span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-rose-950/40 border border-rose-500/40 text-rose-200 text-[11px] flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>
+                    <strong>Permanent Lock Notice:</strong> Once you click <strong>Save Requisition</strong> below, this requisition cannot be edited anymore.
+                  </span>
+                </div>
+              </div>
+
+              {/* 2nd Confirmation Action Buttons: Edit Option OR Save Option */}
+              <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSecondConfirmation(false)}
+                  className="w-full sm:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Edit Requisition (Go Back &amp; Edit)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleFinalConfirmSave}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Confirm &amp; Save Requisition (Lock Permanently)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

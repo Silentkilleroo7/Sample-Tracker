@@ -4,6 +4,9 @@ import {
   STAGE_CONFIG,
   getSampleImage,
   PRESET_STYLE_IMAGES,
+  getEffectiveShipmentDate,
+  getDaysUntilShipment,
+  getGranularApprovalStatus,
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { useImageZoom } from './StyleProductImage';
@@ -23,6 +26,7 @@ import {
   Maximize2,
   Image as ImageIcon,
   Upload,
+  Lock,
 } from 'lucide-react';
 
 interface SampleDetailModalProps {
@@ -88,6 +92,12 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
               {sample.priority === 'urgent' && (
                 <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
                   URGENT
+                </span>
+              )}
+              {sample.isRequisitionLocked && (
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  Requisition Saved &amp; Locked
                 </span>
               )}
             </div>
@@ -303,8 +313,15 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
                 <span>{sample.color}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Size Spec & Qty:</span>
+                <span className="text-slate-400">Size Spec &amp; Qty:</span>
                 <span>Size {sample.size} • {sample.quantity} Piece{sample.quantity > 1 ? 's' : ''}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-amber-300 font-semibold">Order Shipment Date:</span>
+                <span className="font-mono font-bold text-amber-300">
+                  {getEffectiveShipmentDate(sample) || 'N/A'}
+                  {getDaysUntilShipment(sample) !== null && ` (${getDaysUntilShipment(sample)}d)`}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Target Parcel Date:</span>
@@ -401,10 +418,23 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
 
         {/* Approval Remarks Note Dossier */}
         <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-800 mb-5">
-          <h3 className="font-bold text-white flex items-center gap-1.5 text-xs mb-3">
-            <MessageSquare className="w-4 h-4 text-pink-400" />
-            Buyer Approval Remarks (Wash, Trims & Accessories)
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 className="font-bold text-white flex items-center gap-1.5 text-xs">
+              <MessageSquare className="w-4 h-4 text-pink-400" />
+              Buyer Approval Remarks (Button, Thread, Wash, Trims &amp; Accessories)
+            </h3>
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
+              <span className={`px-2 py-0.5 rounded border ${getGranularApprovalStatus(sample).buttonApproved ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'}`}>
+                Button: {getGranularApprovalStatus(sample).buttonApproved ? '✅' : '⏳'}
+              </span>
+              <span className={`px-2 py-0.5 rounded border ${getGranularApprovalStatus(sample).threadApproved ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'}`}>
+                Thread: {getGranularApprovalStatus(sample).threadApproved ? '✅' : '⏳'}
+              </span>
+              <span className={`px-2 py-0.5 rounded border ${getGranularApprovalStatus(sample).washApproved ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'}`}>
+                Wash: {getGranularApprovalStatus(sample).washApproved ? '✅' : '⏳'}
+              </span>
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs mb-3">
             <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
               <div className="flex items-center justify-between mb-1">

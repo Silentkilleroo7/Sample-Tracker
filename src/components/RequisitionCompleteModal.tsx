@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { SampleItem, VolarRequisitionForm, TrimsChecklist } from '../types/sample';
+import {
+  SampleItem,
+  VolarRequisitionForm,
+  TrimsChecklist,
+  getEffectiveShipmentDate,
+} from '../types/sample';
 import { StyleProductImage } from './StyleProductImage';
 import {
   Printer,
@@ -12,6 +17,8 @@ import {
   Copy,
   Check,
   Sparkles,
+  Lock,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface RequisitionCompleteModalProps {
@@ -54,6 +61,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
   const [isEditMode, setIsEditMode] = useState(false);
   const [copied, setCopied] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
 
   // Form State
   const [form, setForm] = useState<VolarRequisitionForm | null>(null);
@@ -61,6 +69,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
   // Helper to format date like "24-Sep-26"
   const formatVolarDate = (dateStr?: string) => {
     const d = dateStr ? new Date(dateStr) : new Date();
+    if (Number.isNaN(d.getTime())) return dateStr || '';
     const day = String(d.getDate()).padStart(2, '0');
     const month = d.toLocaleString('en-US', { month: 'short' });
     const year = String(d.getFullYear()).slice(-2);
@@ -70,13 +79,21 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
   // Populate or load form from sample
   useEffect(() => {
     if (!sample) return;
-    if (sample.requisitionForm) {
-      setForm(sample.requisitionForm);
+    setIsEditMode(false);
+    setShowSaveConfirmModal(false);
+    const effectiveShipDate = getEffectiveShipmentDate(sample);
+    if (sample.requisitionForm && sample.requisitionForm.companyName) {
+      setForm({
+        ...sample.requisitionForm,
+        shipmentDate: sample.requisitionForm.shipmentDate || effectiveShipDate,
+        isLocked: Boolean(sample.isRequisitionLocked || sample.requisitionForm.isLocked),
+      });
     } else {
       const initialForm: VolarRequisitionForm = {
         companyName: 'VOLAR FASHION PVT LTD',
         date: formatVolarDate(sample.createdAt),
         requiredDate: formatVolarDate(sample.targetParcelDate),
+        shipmentDate: effectiveShipDate,
         buyer: sample.buyer || 'MATALAN',
         requestedBy: 'Zahid Anwar',
         priorityType: sample.priority === 'urgent' ? 'urgent' : 'normal',
@@ -98,6 +115,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
         samplingSectionNotes: 'Pattern checked. Sewing allocated to line in-charge.',
         receivedBy: '',
         merchandiserSignature: 'Zahid Anwar',
+        isLocked: Boolean(sample.isRequisitionLocked),
       };
       setForm(initialForm);
     }
@@ -105,11 +123,14 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
 
   if (!isOpen || !sample || !form) return null;
 
+  const isRequisitionLocked = Boolean(sample.isRequisitionLocked || form.isLocked);
+
   const handlePrint = () => {
     window.print();
   };
 
   const handleToggleTrim = (key: keyof Omit<TrimsChecklist, 'threadNote' | 'pocketingNote' | 'customTrims'>) => {
+    if (isRequisitionLocked) return;
     setForm((prev) => {
       if (!prev) return prev;
       return {
@@ -122,9 +143,22 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
     });
   };
 
-  const handleSave = () => {
+  const handleRequestSave = () => {
+    if (isRequisitionLocked) return;
+    setShowSaveConfirmModal(true);
+  };
+
+  const handleConfirmFinalSave = () => {
     if (onSaveForm && form && sample) {
-      onSaveForm(sample.id, form);
+      const lockedForm: VolarRequisitionForm = {
+        ...form,
+        isLocked: true,
+        lockedAt: new Date().toISOString(),
+      };
+      setForm(lockedForm);
+      setIsEditMode(false);
+      setShowSaveConfirmModal(false);
+      onSaveForm(sample.id, lockedForm);
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     }
@@ -210,30 +244,39 @@ Special Instructions: ${form.specialInstructions}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setIsEditMode(!isEditMode)}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-colors cursor-pointer text-xs ${
-                isEditMode
-                  ? 'bg-amber-600 hover:bg-amber-500 text-white shadow'
-                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-              }`}
-              title="Toggle interactive form editing mode"
-            >
-              {isEditMode ? <Eye className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
-              <span>{isEditMode ? 'Finish Editing' : 'Dynamic Edit'}</span>
-            </button>
+            {isRequisitionLocked ? (
+              <span className="px-3 py-1.5 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 font-bold text-xs flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-rose-400" />
+                <span>Saved &amp; Locked (Cannot Be Edited)</span>
+              </span>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsEditMode(!isEditMode)}
+                  className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 transition-colors cursor-pointer text-xs ${
+                    isEditMode
+                      ? 'bg-amber-600 hover:bg-amber-500 text-white shadow'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                  }`}
+                  title="Toggle interactive form editing mode"
+                >
+                  {isEditMode ? <Eye className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
+                  <span>{isEditMode ? 'Preview Form' : 'Edit Requisition'}</span>
+                </button>
 
-            {onSaveForm && (
-              <button
-                type="button"
-                onClick={handleSave}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow transition-colors cursor-pointer text-xs flex items-center gap-1.5"
-                title="Save customized form fields"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save</span>
-              </button>
+                {onSaveForm && (
+                  <button
+                    type="button"
+                    onClick={handleRequestSave}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow transition-colors cursor-pointer text-xs flex items-center gap-1.5"
+                    title="Save & Permanently Lock Requisition (Requires 2nd Confirmation)"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Requisition</span>
+                  </button>
+                )}
+              </>
             )}
 
             <button
@@ -263,23 +306,37 @@ Special Instructions: ${form.specialInstructions}
           </div>
         </div>
 
-        {/* Dynamic Edit Bar Helper Notice */}
-        {isEditMode && (
-          <div className="mb-3 p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between print:hidden">
+        {/* Locked Banner or Dynamic Edit Bar Helper Notice */}
+        {isRequisitionLocked ? (
+          <div className="mb-3 p-2.5 rounded-xl bg-rose-950/40 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between print:hidden">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+              <Lock className="w-4 h-4 text-rose-400 shrink-0" />
               <span>
-                <strong>Dynamic Mode Active:</strong> You can edit any field, company header, notes, or toggle trim checkboxes directly on the form below!
+                <strong>Requisition Permanently Saved &amp; Locked:</strong> This requisition was confirmed and saved. Once saved, it cannot be edited. You can print or copy the official requisition slip below.
               </span>
             </div>
-            <button
-              onClick={handleResetToSample}
-              className="text-[11px] text-amber-400 underline hover:text-amber-200 flex items-center gap-1 ml-2 cursor-pointer shrink-0"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Reset from Sample Data
-            </button>
+            <span className="text-[11px] font-mono text-amber-300 font-bold shrink-0 ml-2">
+              Shipment Date: {form.shipmentDate || getEffectiveShipmentDate(sample)}
+            </span>
           </div>
+        ) : (
+          isEditMode && (
+            <div className="mb-3 p-2.5 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-200 text-xs flex items-center justify-between print:hidden">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong>Edit Mode Active:</strong> You can edit fields before saving. Once you confirm and save, this requisition will be permanently locked!
+                </span>
+              </div>
+              <button
+                onClick={handleResetToSample}
+                className="text-[11px] text-amber-400 underline hover:text-amber-200 flex items-center gap-1 ml-2 cursor-pointer shrink-0"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Reset from Sample Data
+              </button>
+            </div>
+          )
         )}
 
         {/* OFFICIAL VOLAR FASHION PVT LTD REQUISITION FORM */}
@@ -316,8 +373,8 @@ Special Instructions: ${form.specialInstructions}
               <div className="col-span-2 p-1.5 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
                 DATE:
               </div>
-              <div className="col-span-4 p-1.5 font-bold text-black border-r border-black flex items-center">
-                {isEditMode ? (
+              <div className="col-span-2 p-1.5 font-bold text-black border-r border-black flex items-center">
+                {isEditMode && !isRequisitionLocked ? (
                   <input
                     type="text"
                     value={form.date}
@@ -325,15 +382,15 @@ Special Instructions: ${form.specialInstructions}
                     className="w-full bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold"
                   />
                 ) : (
-                  <span className="font-bold text-black text-sm">{form.date}</span>
+                  <span className="font-bold text-black text-xs">{form.date}</span>
                 )}
               </div>
 
-              <div className="col-span-3 p-1.5 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
-                REQUIRED DATE ()
+              <div className="col-span-2 p-1.5 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
+                REQUIRED DATE:
               </div>
-              <div className="col-span-3 p-1.5 font-bold text-black flex items-center">
-                {isEditMode ? (
+              <div className="col-span-2 p-1.5 font-bold text-black border-r border-black flex items-center">
+                {isEditMode && !isRequisitionLocked ? (
                   <input
                     type="text"
                     value={form.requiredDate}
@@ -342,6 +399,24 @@ Special Instructions: ${form.specialInstructions}
                   />
                 ) : (
                   <span className="font-bold text-black">{form.requiredDate}</span>
+                )}
+              </div>
+
+              <div className="col-span-2 p-1.5 font-bold uppercase bg-amber-100 border-r border-black flex items-center">
+                SHIPMENT DATE:
+              </div>
+              <div className="col-span-2 p-1.5 font-black text-black bg-amber-50/60 flex items-center">
+                {isEditMode && !isRequisitionLocked ? (
+                  <input
+                    type="date"
+                    value={form.shipmentDate || getEffectiveShipmentDate(sample)}
+                    onChange={(e) => setForm({ ...form, shipmentDate: e.target.value })}
+                    className="w-full bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold"
+                  />
+                ) : (
+                  <span className="font-black text-black font-mono">
+                    {form.shipmentDate || getEffectiveShipmentDate(sample)}
+                  </span>
                 )}
               </div>
             </div>
@@ -387,8 +462,11 @@ Special Instructions: ${form.specialInstructions}
               <div className="col-span-4 p-1 border-r border-black flex items-center gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, priorityType: 'urgent' })}
-                  className={`px-2 py-1 border border-black font-bold text-[10px] flex items-center gap-1 cursor-pointer ${
+                  disabled={isRequisitionLocked}
+                  onClick={() => !isRequisitionLocked && setForm({ ...form, priorityType: 'urgent' })}
+                  className={`px-2 py-1 border border-black font-bold text-[10px] flex items-center gap-1 ${
+                    isRequisitionLocked ? 'cursor-default' : 'cursor-pointer'
+                  } ${
                     form.priorityType === 'urgent' ? 'bg-black text-white font-black' : 'bg-white text-black'
                   }`}
                 >
@@ -397,8 +475,11 @@ Special Instructions: ${form.specialInstructions}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setForm({ ...form, priorityType: 'normal' })}
-                  className={`px-2 py-1 border border-black font-bold text-[10px] flex items-center gap-1 cursor-pointer ${
+                  disabled={isRequisitionLocked}
+                  onClick={() => !isRequisitionLocked && setForm({ ...form, priorityType: 'normal' })}
+                  className={`px-2 py-1 border border-black font-bold text-[10px] flex items-center gap-1 ${
+                    isRequisitionLocked ? 'cursor-default' : 'cursor-pointer'
+                  } ${
                     form.priorityType === 'normal' ? 'bg-black text-white font-black' : 'bg-white text-black'
                   }`}
                 >
@@ -936,10 +1017,15 @@ Special Instructions: ${form.specialInstructions}
 
         {/* Modal Bottom Action Footer */}
         <div className="mt-4 pt-3 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 print:hidden">
-          <div className="text-slate-400 text-xs">
-            Dynamic Volar Requisition Form for Style{' '}
-            <strong className="text-white font-mono">{sample.styleCode}</strong> • Click any trim or
-            activate Dynamic Edit to customize before printing.
+          <div className="text-slate-400 text-xs flex items-center gap-1.5">
+            <Lock className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span>
+              Volar Requisition Form for Style{' '}
+              <strong className="text-white font-mono">{sample.styleCode}</strong> •{' '}
+              {isRequisitionLocked
+                ? 'Permanently Saved & Locked (Editing Disabled)'
+                : 'Click Save Requisition for 2nd confirmation & permanent lock'}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -948,7 +1034,7 @@ Special Instructions: ${form.specialInstructions}
               onClick={onClose}
               className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl transition-colors cursor-pointer text-xs font-semibold"
             >
-              Done & Close
+              Done &amp; Close
             </button>
             {onViewInPipeline && (
               <button
@@ -964,6 +1050,52 @@ Special Instructions: ${form.specialInstructions}
             )}
           </div>
         </div>
+
+        {/* 2nd Confirmation Modal for Saving Requisition Slip */}
+        {showSaveConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md print:hidden">
+            <div className="bg-slate-900 border-2 border-amber-500/70 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 text-xs text-slate-200">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono text-[10px] font-bold uppercase">
+                    2nd Confirmation Required
+                  </span>
+                  <h3 className="text-base font-black text-white mt-1">
+                    Save &amp; Lock Requisition Form?
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+                    Once saved, this requisition for <strong>{sample.styleCode}</strong> (Shipment Date: <strong>{form.shipmentDate || getEffectiveShipmentDate(sample)}</strong>) will be permanently locked and <strong>cannot be edited</strong> again.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSaveConfirmModal(false);
+                    setIsEditMode(true);
+                  }}
+                  className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-bold rounded-xl flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>Edit Option (Continue Editing)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmFinalSave}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black rounded-xl shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Save Option (Confirm &amp; Lock)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

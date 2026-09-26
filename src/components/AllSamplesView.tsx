@@ -6,6 +6,8 @@ import {
   SamplePriority,
   isParcelCompleted,
   getSampleImage,
+  getEffectiveShipmentDate,
+  getDaysUntilShipment,
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage, useImageZoom } from './StyleProductImage';
@@ -26,6 +28,7 @@ import {
   Phone,
   Printer,
   ZoomIn,
+  Lock,
 } from 'lucide-react';
 
 interface AllSamplesViewProps {
@@ -43,7 +46,7 @@ interface AllSamplesViewProps {
   onOpenRequisitionSlip?: (sample: SampleItem) => void;
 }
 
-type SortField = 'styleCode' | 'poNumber' | 'createdAt' | 'targetParcelDate' | 'priority' | 'stage';
+type SortField = 'styleCode' | 'poNumber' | 'createdAt' | 'targetParcelDate' | 'shipmentDate' | 'priority' | 'stage';
 type SortOrder = 'asc' | 'desc';
 
 export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
@@ -117,6 +120,10 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
         comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       } else if (sortField === 'targetParcelDate') {
         comparison = new Date(a.targetParcelDate).getTime() - new Date(b.targetParcelDate).getTime();
+      } else if (sortField === 'shipmentDate') {
+        const shipA = getEffectiveShipmentDate(a) || '9999-12-31';
+        const shipB = getEffectiveShipmentDate(b) || '9999-12-31';
+        comparison = shipA.localeCompare(shipB);
       } else if (sortField === 'priority') {
         const pOrder: Record<SamplePriority, number> = { urgent: 3, high: 2, normal: 1 };
         comparison = pOrder[a.priority] - pOrder[b.priority];
@@ -365,11 +372,11 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                     </div>
                   </th>
                   <th
-                    onClick={() => handleSort('targetParcelDate')}
+                    onClick={() => handleSort('shipmentDate')}
                     className="py-3 px-4 cursor-pointer hover:text-white transition-colors"
                   >
                     <div className="flex items-center gap-1">
-                      <span>Parcel Date</span>
+                      <span>Shipment &amp; Parcel Date</span>
                       <ArrowUpDown className="w-3 h-3" />
                     </div>
                   </th>
@@ -400,6 +407,15 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                               {sample.priority === 'urgent' && (
                                 <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
                                   URGENT
+                                </span>
+                              )}
+                              {sample.isRequisitionLocked && (
+                                <span
+                                  className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 border border-amber-500/30 flex items-center gap-0.5"
+                                  title="Requisition permanently saved & locked"
+                                >
+                                  <Lock className="w-2.5 h-2.5" />
+                                  Locked
                                 </span>
                               )}
                             </div>
@@ -475,12 +491,19 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                       </td>
 
                       <td className="py-3 px-4">
-                        <div className="flex items-center gap-1 font-mono text-slate-200">
-                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{sample.parcelDetails.parcelDate || sample.targetParcelDate}</span>
+                        <div className="flex items-center gap-1 font-mono text-amber-300 font-bold text-xs">
+                          <Calendar className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Ship: {getEffectiveShipmentDate(sample) || 'N/A'}</span>
                         </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[130px]">
-                          {sample.parcelDetails.courier || 'Courier pending'}
+                        {getDaysUntilShipment(sample) !== null && (
+                          <div className="text-[10px] font-mono text-amber-200/80 mt-0.5">
+                            {getDaysUntilShipment(sample)! < 0
+                              ? `${Math.abs(getDaysUntilShipment(sample)!)}d overdue`
+                              : `${getDaysUntilShipment(sample)}d to shipment`}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-slate-400 font-mono mt-1">
+                          Parcel: {sample.parcelDetails.parcelDate || sample.targetParcelDate}
                         </div>
                         {isParcelCompleted(sample) && (
                           <div className="mt-1.5">

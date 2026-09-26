@@ -363,10 +363,21 @@ export default function App() {
   };
 
   const handleSaveRequisitionForm = (sampleId: string, form: VolarRequisitionForm) => {
+    const lockedForm: VolarRequisitionForm = {
+      ...form,
+      isLocked: true,
+      lockedAt: form.lockedAt || new Date().toISOString(),
+    };
     setSamples((prev) =>
       prev.map((s) => {
         if (s.id === sampleId) {
-          const updated = { ...s, requisitionForm: form, updatedAt: new Date().toISOString() };
+          const updated: SampleItem = {
+            ...s,
+            shipmentDate: lockedForm.shipmentDate || s.shipmentDate || s.targetParcelDate,
+            isRequisitionLocked: true,
+            requisitionForm: lockedForm,
+            updatedAt: new Date().toISOString(),
+          };
           void upsertSampleInSupabase(updated);
           return updated;
         }
@@ -374,11 +385,35 @@ export default function App() {
       })
     );
     if (completedRequisitionSample && completedRequisitionSample.id === sampleId) {
-      setCompletedRequisitionSample((prev) => (prev ? { ...prev, requisitionForm: form } : null));
+      setCompletedRequisitionSample((prev) =>
+        prev
+          ? {
+              ...prev,
+              shipmentDate: lockedForm.shipmentDate || prev.shipmentDate,
+              isRequisitionLocked: true,
+              requisitionForm: lockedForm,
+            }
+          : null
+      );
     }
     if (selectedSampleForDetail && selectedSampleForDetail.id === sampleId) {
-      setSelectedSampleForDetail((prev) => (prev ? { ...prev, requisitionForm: form } : null));
+      setSelectedSampleForDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              shipmentDate: lockedForm.shipmentDate || prev.shipmentDate,
+              isRequisitionLocked: true,
+              requisitionForm: lockedForm,
+            }
+          : null
+      );
     }
+    sendPushNotification(
+      'Requisition Saved & Permanently Locked',
+      `Requisition for ${ lockedForm.descriptionCode || 'Style' } has been confirmed and permanently locked.`,
+      'success',
+      { sampleId }
+    );
   };
 
   const handleUpdateSampleThumbnail = (
@@ -960,6 +995,7 @@ export default function App() {
               onOpenFollowUp={handleOpenFollowUp}
               onToggleWorkbookSent={handleToggleWorkbookSent}
               onSendWhatsApp={handleSendWhatsAppNotification}
+              onUpdateApprovalDetails={handleUpdateApprovalDetails}
             />
           )}
 

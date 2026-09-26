@@ -96,6 +96,10 @@ export interface ApprovalDetails {
   trimsApproved: boolean;
   accessoriesComments: string;
   accessoriesApproved: boolean;
+  buttonApproved?: boolean;
+  threadApproved?: boolean;
+  zipperApproved?: boolean;
+  labelApproved?: boolean;
   overallVerdict: ApprovalStatus;
   reviewedBy?: string;
   reviewedAt?: string;
@@ -128,6 +132,7 @@ export interface VolarRequisitionForm {
   companyName: string;
   date: string;
   requiredDate: string;
+  shipmentDate?: string;
   buyer: string;
   requestedBy: string;
   priorityType: 'urgent' | 'normal';
@@ -149,6 +154,8 @@ export interface VolarRequisitionForm {
   samplingSectionNotes: string;
   receivedBy: string;
   merchandiserSignature: string;
+  isLocked?: boolean;
+  lockedAt?: string;
 }
 
 export interface SampleItem {
@@ -170,6 +177,8 @@ export interface SampleItem {
   stageHistory: StageHistoryEntry[];
   priority: SamplePriority;
   targetParcelDate: string;
+  shipmentDate?: string; // Bulk / Order Shipment Date (YYYY-MM-DD) for Fast Approval Priority
+  isRequisitionLocked?: boolean; // Once saved after 2nd confirmation, requisition cannot be edited
   createdAt: string;
   updatedAt: string;
   sewingOperator?: string;
@@ -180,6 +189,71 @@ export interface SampleItem {
   thumbnail?: string;
   images?: string[];
   requisitionForm?: VolarRequisitionForm;
+}
+
+/**
+ * Returns the effective Shipment Date for a sample (falls back to targetParcelDate if legacy record)
+ */
+export function getEffectiveShipmentDate(sample: SampleItem): string {
+  return (
+    sample.shipmentDate ||
+    sample.requisitionForm?.shipmentDate ||
+    sample.targetParcelDate ||
+    ''
+  );
+}
+
+/**
+ * Returns number of days until shipment date (negative if overdue)
+ */
+export function getDaysUntilShipment(sample: SampleItem): number | null {
+  const shipDateStr = getEffectiveShipmentDate(sample);
+  if (!shipDateStr) return null;
+  const shipTime = new Date(shipDateStr + 'T00:00:00').getTime();
+  if (Number.isNaN(shipTime)) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffMs = shipTime - today.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Returns granular approval statuses for Button, Thread, Wash, Trims, and Accessories
+ */
+export function getGranularApprovalStatus(sample: SampleItem) {
+  const a = sample.approvalDetails;
+  const washApproved = Boolean(a.washApproved);
+  const trimsApproved = Boolean(a.trimsApproved);
+  const accessoriesApproved = Boolean(a.accessoriesApproved);
+  const buttonApproved =
+    a.buttonApproved !== undefined ? Boolean(a.buttonApproved) : accessoriesApproved;
+  const threadApproved =
+    a.threadApproved !== undefined ? Boolean(a.threadApproved) : trimsApproved;
+
+  const pendingItems: string[] = [];
+  if (!washApproved) pendingItems.push('Wash');
+  if (!buttonApproved) pendingItems.push('Button');
+  if (!threadApproved) pendingItems.push('Thread');
+  if (!trimsApproved) pendingItems.push('Trims');
+  if (!accessoriesApproved) pendingItems.push('Accessories');
+
+  const isFullyApproved =
+    washApproved &&
+    buttonApproved &&
+    threadApproved &&
+    trimsApproved &&
+    accessoriesApproved &&
+    a.overallVerdict === 'approved';
+
+  return {
+    washApproved,
+    buttonApproved,
+    threadApproved,
+    trimsApproved,
+    accessoriesApproved,
+    pendingItems,
+    isFullyApproved,
+  };
 }
 
 export function getSampleImage(sample: Partial<SampleItem>): string {
