@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      /* Ensure window.fetch has both a getter and setter to prevent 'Cannot set property fetch of #<Window> which has only a getter' in restricted iframe environments */
+      (function() {
+        try {
+          var currentFetch = window.fetch ? window.fetch.bind(window) : undefined;
+          Object.defineProperty(window, 'fetch', {
+            get: function() {
+              return currentFetch;
+            },
+            set: function(val) {
+              currentFetch = val;
+            },
+            configurable: true,
+            enumerable: true
+          });
+        } catch (err) {
+          try {
+            var proto = Object.getPrototypeOf(window);
+            if (proto) {
+              var protoFetch = proto.fetch;
+              Object.defineProperty(proto, 'fetch', {
+                get: function() {
+                  return protoFetch;
+                },
+                set: function(val) {
+                  protoFetch = val;
+                },
+                configurable: true,
+                enumerable: true
+              });
+            }
+          } catch (e2) {}
+        }
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GA Sample Tracking Master</title>
+    <meta name="description" content="Comprehensive garment sample tracking pipeline covering Requisition, Sewing, Wash, Finishing, Parcel, Approvals, and low-fabric alerts." />
+    <meta property="og:title" content="GA Sample Tracking Master" />
+    <meta property="og:description" content="Comprehensive garment sample tracking pipeline covering Requisition, Sewing, Wash, Finishing, Parcel, Approvals, and low-fabric alerts." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

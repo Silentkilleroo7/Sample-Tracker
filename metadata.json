@@ -1,0 +1,6 @@
+{
+  "name": "ThreadTrack Apparel Sample Tracking System",
+  "description": "Comprehensive garment sample tracking pipeline covering Requisition, Sewing, Wash, Finishing, Parcel, Approvals, and low-fabric alerts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
