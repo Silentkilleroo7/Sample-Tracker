@@ -5,17 +5,92 @@ import { BVTestItem } from '../types/test';
 import { PushNotification } from '../types/notification';
 import { RequisitionOptions, INITIAL_REQUISITION_OPTIONS } from '../types/requisitionOptions';
 
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
-const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+const env = (import.meta.env || {}) as Record<string, string | undefined>;
+
+function sanitizeEnvValue(val?: string): string {
+  if (!val || typeof val !== 'string') return '';
+  return val
+    .trim()
+    .replace(/^['"`]+|['"`]+$/g, '')
+    .trim();
+}
+
+function normalizeSupabaseUrl(raw: string): string {
+  const cleaned = sanitizeEnvValue(raw).replace(/\/+$/, '');
+  if (
+    !cleaned ||
+    cleaned.includes('your-project-ref') ||
+    cleaned === 'undefined' ||
+    cleaned === 'null'
+  ) {
+    return '';
+  }
+
+  let candidate = cleaned;
+  if (!/^https?:\/\//i.test(candidate)) {
+    if (candidate.includes('.supabase.co') || candidate.includes('.supabase.in')) {
+      candidate = `https://${candidate}`;
+    } else if (/^[a-z0-9]{15,30}$/i.test(candidate)) {
+      candidate = `https://${candidate}.supabase.co`;
+    } else {
+      return '';
+    }
+  }
+
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return '';
+    }
+    return parsed.origin;
+  } catch {
+    return '';
+  }
+}
+
+const rawUrl =
+  env.VITE_SUPABASE_URL ||
+  env.NEXT_PUBLIC_SUPABASE_URL ||
+  env.SUPABASE_URL ||
+  '';
+
+const rawAnonKey =
+  env.VITE_SUPABASE_ANON_KEY ||
+  env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+  env.SUPABASE_ANON_KEY ||
+  env.SUPABASE_KEY ||
+  '';
+
+const supabaseUrl = normalizeSupabaseUrl(rawUrl);
+const supabaseAnonKey = sanitizeEnvValue(rawAnonKey);
 
 export const isSupabaseConfigured =
   Boolean(supabaseUrl && supabaseAnonKey) &&
-  !supabaseUrl.includes('your-project-ref') &&
-  !supabaseAnonKey.includes('your-supabase-anon');
+  !supabaseAnonKey.includes('your-supabase-anon') &&
+  supabaseAnonKey !== 'undefined' &&
+  supabaseAnonKey !== 'null';
 
-export const supabase: SupabaseClient | null = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
-  : null;
+function initSupabaseClient(): SupabaseClient | null {
+  if (!isSupabaseConfigured) return null;
+  try {
+    return createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+      global: {
+        fetch: (...args) => globalThis.fetch(...args),
+      },
+    });
+  } catch (err) {
+    console.error('Supabase client initialization failed safely:', err);
+    return null;
+  }
+}
+
+export const supabase: SupabaseClient | null = initSupabaseClient();
 
 export const STYLE_PHOTOS_BUCKET = 'style-photos';
 

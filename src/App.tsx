@@ -96,64 +96,73 @@ function playNotificationChime(type: 'critical' | 'success' | 'info' | 'warning'
 export default function App() {
   // Purge legacy demo localStorage keys on load so the live app starts 100% clean
   useEffect(() => {
-    localStorage.removeItem('threadtrack_samples');
-    localStorage.removeItem('threadtrack_fabrics');
-    localStorage.removeItem('threadtrack_notifs');
-    localStorage.removeItem('threadtrack_bv_tests');
+    try {
+      localStorage.removeItem('threadtrack_samples');
+      localStorage.removeItem('threadtrack_fabrics');
+      localStorage.removeItem('threadtrack_notifs');
+      localStorage.removeItem('threadtrack_bv_tests');
+    } catch {
+      // Ignore storage access errors in restricted browsers
+    }
   }, []);
 
   // 1. Persistence State (Fresh Live Keys + Cloud Sync with Supabase)
   const [samples, setSamples] = useState<SampleItem[]>(() => {
-    const saved = localStorage.getItem('threadtrack_live_samples_v1');
-    if (saved) {
-      try {
-        const parsed: SampleItem[] = JSON.parse(saved);
-        return parsed.map((s) => ({
-          ...s,
-          sampleType: (s.sampleType as string) === 'Pre-Production (PP)' ? 'Red Seal Sample' : s.sampleType,
-          thumbnail: s.thumbnail || getSampleImage(s),
-          images: s.images && s.images.length > 0 ? s.images : [s.thumbnail || getSampleImage(s)],
-        }));
-      } catch (e) {
-        return INITIAL_SAMPLES;
+    try {
+      const saved = localStorage.getItem('threadtrack_live_samples_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.map((s: SampleItem) => ({
+            ...s,
+            sampleType: (s.sampleType as string) === 'Pre-Production (PP)' ? 'Red Seal Sample' : s.sampleType,
+            thumbnail: s.thumbnail || getSampleImage(s),
+            images: s.images && s.images.length > 0 ? s.images : [s.thumbnail || getSampleImage(s)],
+          }));
+        }
       }
+    } catch {
+      // Ignore parse/storage error
     }
     return INITIAL_SAMPLES;
   });
 
   const [fabrics, setFabrics] = useState<FabricItem[]>(() => {
-    const saved = localStorage.getItem('threadtrack_live_fabrics_v1');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_FABRICS;
+    try {
+      const saved = localStorage.getItem('threadtrack_live_fabrics_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
+    } catch {
+      // Ignore parse/storage error
     }
     return INITIAL_FABRICS;
   });
 
   const [notifications, setNotifications] = useState<PushNotification[]>(() => {
-    const saved = localStorage.getItem('threadtrack_live_notifs_v1');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_NOTIFICATIONS;
+    try {
+      const saved = localStorage.getItem('threadtrack_live_notifs_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
+    } catch {
+      // Ignore parse/storage error
     }
     return INITIAL_NOTIFICATIONS;
   });
 
   // 1.4 Bureau Veritas (BV) Tests State
   const [tests, setTests] = useState<BVTestItem[]>(() => {
-    const saved = localStorage.getItem('threadtrack_live_bv_tests_v1');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_BV_TESTS;
+    try {
+      const saved = localStorage.getItem('threadtrack_live_bv_tests_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
       }
+    } catch {
+      // Ignore parse/storage error
     }
     return INITIAL_BV_TESTS;
   });
@@ -176,43 +185,70 @@ export default function App() {
     const client = supabase;
     if (!client) return;
 
-    const channel = client
-      .channel('threadtrack-live-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'samples' }, () => {
-        void loadCloudData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'fabrics' }, () => {
-        void loadCloudData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bv_tests' }, () => {
-        void loadCloudData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
-        void loadCloudData();
-      })
-      .subscribe();
+    let channel: ReturnType<typeof client.channel> | null = null;
+    try {
+      channel = client
+        .channel('threadtrack-live-sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'samples' }, () => {
+          void loadCloudData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fabrics' }, () => {
+          void loadCloudData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'bv_tests' }, () => {
+          void loadCloudData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+          void loadCloudData();
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('Realtime subscription warning:', err);
+    }
 
     return () => {
       isMounted = false;
-      void client.removeChannel(channel);
+      if (channel) {
+        try {
+          void client.removeChannel(channel);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
     };
   }, []);
 
   // Save to localStorage cache
   useEffect(() => {
-    localStorage.setItem('threadtrack_live_samples_v1', JSON.stringify(samples));
+    try {
+      localStorage.setItem('threadtrack_live_samples_v1', JSON.stringify(samples));
+    } catch {
+      // Ignore storage quota/access errors
+    }
   }, [samples]);
 
   useEffect(() => {
-    localStorage.setItem('threadtrack_live_fabrics_v1', JSON.stringify(fabrics));
+    try {
+      localStorage.setItem('threadtrack_live_fabrics_v1', JSON.stringify(fabrics));
+    } catch {
+      // Ignore storage quota/access errors
+    }
   }, [fabrics]);
 
   useEffect(() => {
-    localStorage.setItem('threadtrack_live_notifs_v1', JSON.stringify(notifications));
+    try {
+      localStorage.setItem('threadtrack_live_notifs_v1', JSON.stringify(notifications));
+    } catch {
+      // Ignore storage quota/access errors
+    }
   }, [notifications]);
 
   useEffect(() => {
-    localStorage.setItem('threadtrack_live_bv_tests_v1', JSON.stringify(tests));
+    try {
+      localStorage.setItem('threadtrack_live_bv_tests_v1', JSON.stringify(tests));
+    } catch {
+      // Ignore storage quota/access errors
+    }
   }, [tests]);
 
   // 2. Navigation & Search State
