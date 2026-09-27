@@ -4,10 +4,13 @@ import {
   SampleItem,
   SamplePriority,
   SampleType,
+  SizeBreakdownItem,
   PRESET_STYLE_IMAGES,
   CORE_SEAL_SAMPLE_TYPES,
+  GOLD_SEAL_SIZE_RUN_PRESETS,
   getSampleImage,
   getSampleTypeTone,
+  getEffectiveSizeBreakdown,
 } from '../types/sample';
 import { SampleTypeBadge } from './SampleTypeBadge';
 import {
@@ -70,9 +73,10 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const [sampleType, setSampleType] = useState<string>('');
   const [color, setColor] = useState('');
 
-  // Size input: type a size and press Enter to list it without submitting or filling the rest of the form
+  // Size input: type a size (or 10–12 sizes) and press Enter to list it in a single requisition
   const [sizeInput, setSizeInput] = useState('');
   const [listedSizes, setListedSizes] = useState<string[]>([]);
+  const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>({});
 
   const [quantity, setQuantity] = useState<number>(1);
   const [selectedFabricId, setSelectedFabricId] = useState('');
@@ -125,13 +129,26 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     setLineCode(stored.lineCode || '');
     setSampleType(stored.sampleType || '');
     setColor(stored.color || '');
-    const parsedSizes = (stored.size || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const breakdown = getEffectiveSizeBreakdown(stored);
+    const parsedSizes =
+      breakdown.length > 0
+        ? breakdown.map((b) => b.size)
+        : (stored.size || '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+    const qtyMap: Record<string, number> = {};
+    breakdown.forEach((b) => {
+      qtyMap[b.size] = b.quantity;
+    });
     setListedSizes(parsedSizes);
+    setSizeQuantities(qtyMap);
     setSizeInput('');
-    setQuantity(stored.quantity || 1);
+    setQuantity(
+      breakdown.length > 0
+        ? breakdown.reduce((sum, item) => sum + (item.quantity || 1), 0)
+        : stored.quantity || 1
+    );
     setSelectedFabricId(stored.fabricId || '');
     setCustomFabricCode(stored.fabricId ? '' : stored.fabricCode || '');
     setCustomFabricName(stored.fabricId ? '' : stored.fabricName || '');
@@ -226,6 +243,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     setColor('');
     setSizeInput('');
     setListedSizes([]);
+    setSizeQuantities({});
     setQuantity(1);
     setSelectedFabricId('');
     setCustomFabricCode('');
@@ -269,22 +287,38 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   // ENTER-TO-LIST HANDLERS (Pressing Enter lists the item ONLY, never fills/submits form)
   // ============================================================================
 
+  const syncTotalQuantityFromMap = (sizesList: string[], qtyMap: Record<string, number>) => {
+    if (sizesList.length === 0) return;
+    const total = sizesList.reduce((sum, sz) => sum + Math.max(1, Number(qtyMap[sz] ?? 1)), 0);
+    setQuantity(total);
+  };
+
   const handleAddSizeToList = (rawVal?: string) => {
     const val = (rawVal !== undefined ? rawVal : sizeInput).trim().toUpperCase();
     if (!val) return;
 
-    // Support comma-separated sizes if user typed "S, M, L"
+    // Support comma, slash, or space-separated sizes if user typed 10 or 12 sizes at once
     const parts = val
-      .split(',')
+      .split(/[,/]+|\s{2,}/)
+      .flatMap((chunk) =>
+        chunk.includes(',') ? chunk.split(',') : chunk.trim().split(/\s+/)
+      )
       .map((p) => p.trim())
       .filter(Boolean);
 
     if (parts.length === 0) return;
 
-    setListedSizes((prev) => {
-      const next = Array.from(new Set([...prev, ...parts]));
-      return next;
+    const nextSizes = Array.from(new Set([...listedSizes, ...parts]));
+    const nextQtyMap: Record<string, number> = { ...sizeQuantities };
+    nextSizes.forEach((sz) => {
+      if (!nextQtyMap[sz] || nextQtyMap[sz] < 1) {
+        nextQtyMap[sz] = 1;
+      }
     });
+
+    setListedSizes(nextSizes);
+    setSizeQuantities(nextQtyMap);
+    syncTotalQuantityFromMap(nextSizes, nextQtyMap);
 
     // Also persist to saved options.sizes if new
     const newSizesForDb = parts.filter((p) => !options.sizes.includes(p));
@@ -298,19 +332,81 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     }
 
     setSizeInput('');
-    triggerSaveNotification(`Size "${parts.join(', ')}" listed!`);
+    triggerSaveNotification(
+      `${parts.length > 1 ? `${parts.length} sizes` : `Size "${parts[0]}"`} listed in requisition (${nextSizes.length} total sizes)!`
+    );
   };
 
   const handleRemoveListedSize = (sizeToRemove: string) => {
-    setListedSizes((prev) => prev.filter((s) => s !== sizeToRemove));
+    const nextSizes = listedSizes.filter((s) => s !== sizeToRemove);
+    const nextQtyMap = { ...sizeQuantities };
+    delete nextQtyMap[sizeToRemove];
+    setListedSizes(nextSizes);
+    setSizeQuantities(nextQtyMap);
+    if (nextSizes.length > 0) {
+      syncTotalQuantityFromMap(nextSizes, nextQtyMap);
+    } else {
+      setQuantity(1);
+    }
   };
 
   const handleToggleSavedSize = (s: string) => {
     if (listedSizes.includes(s)) {
-      setListedSizes((prev) => prev.filter((item) => item !== s));
+      handleRemoveListedSize(s);
     } else {
-      setListedSizes((prev) => [...prev, s]);
+      const nextSizes = [...listedSizes, s];
+      const nextQtyMap = { ...sizeQuantities, [s]: sizeQuantities[s] || 1 };
+      setListedSizes(nextSizes);
+      setSizeQuantities(nextQtyMap);
+      syncTotalQuantityFromMap(nextSizes, nextQtyMap);
     }
+  };
+
+  const handleApplySizeRunPreset = (presetSizes: string[], label: string, pcsPerSize = 1) => {
+    const normalized = presetSizes.map((s) => s.trim().toUpperCase()).filter(Boolean);
+    const nextQtyMap: Record<string, number> = {};
+    normalized.forEach((sz) => {
+      nextQtyMap[sz] = pcsPerSize;
+    });
+    setListedSizes(normalized);
+    setSizeQuantities(nextQtyMap);
+    syncTotalQuantityFromMap(normalized, nextQtyMap);
+
+    // Also ensure all preset sizes are available in saved options
+    const newSizesForDb = normalized.filter((p) => !options.sizes.includes(p));
+    if (newSizesForDb.length > 0) {
+      const updated = {
+        ...options,
+        sizes: Array.from(new Set([...options.sizes, ...newSizesForDb])),
+      };
+      setOptions(updated);
+      saveRequisitionOptions(updated);
+    }
+
+    triggerSaveNotification(
+      `Loaded ${normalized.length} sizes (${label}) in single requisition!`
+    );
+  };
+
+  const handleUpdateSizeQuantity = (sz: string, newQty: number) => {
+    const clamped = Math.max(1, Math.min(500, Number(newQty) || 1));
+    const nextQtyMap = { ...sizeQuantities, [sz]: clamped };
+    setSizeQuantities(nextQtyMap);
+    syncTotalQuantityFromMap(listedSizes, nextQtyMap);
+  };
+
+  const handleSetAllSizesQuantity = (pcsPerSize: number) => {
+    if (listedSizes.length === 0) return;
+    const clamped = Math.max(1, Math.min(100, pcsPerSize));
+    const nextQtyMap: Record<string, number> = {};
+    listedSizes.forEach((sz) => {
+      nextQtyMap[sz] = clamped;
+    });
+    setSizeQuantities(nextQtyMap);
+    syncTotalQuantityFromMap(listedSizes, nextQtyMap);
+    triggerSaveNotification(
+      `Set ${clamped} pc(s) for all ${listedSizes.length} sizes (${listedSizes.length * clamped} pcs total)!`
+    );
   };
 
   const handleListBuyerOnEnter = () => {
@@ -396,14 +492,31 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     }
   };
 
-  // Effective size string from listedSizes (or any pending text in sizeInput)
-  const effectiveSizeString = (() => {
+  // Effective size breakdown & string from listedSizes (or any pending text in sizeInput)
+  const effectiveSizeBreakdown: SizeBreakdownItem[] = (() => {
     const pending = sizeInput.trim().toUpperCase();
-    const combined = pending
-      ? Array.from(new Set([...listedSizes, pending]))
-      : listedSizes;
-    return combined.join(', ');
+    const pendingParts = pending
+      ? pending
+          .split(/[,/]+|\s+/)
+          .map((p) => p.trim())
+          .filter(Boolean)
+      : [];
+    const combined =
+      pendingParts.length > 0
+        ? Array.from(new Set([...listedSizes, ...pendingParts]))
+        : listedSizes;
+    return combined.map((sz) => ({
+      size: sz,
+      quantity: Math.max(1, Number(sizeQuantities[sz] ?? 1)),
+    }));
   })();
+
+  const effectiveSizeString = effectiveSizeBreakdown.map((item) => item.size).join(', ');
+
+  const effectiveTotalQuantity =
+    effectiveSizeBreakdown.length > 0
+      ? effectiveSizeBreakdown.reduce((sum, item) => sum + item.quantity, 0)
+      : quantity;
 
   const handleProceedToConfirmation = (mode: 'create' | 'update' = 'create') => {
     setValidationError(null);
@@ -462,7 +575,14 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const handleFinalConfirmSave = () => {
     if (!styleCode.trim() || !styleName.trim() || !shipmentDate) return;
 
-    const finalSize = effectiveSizeString || 'Standard';
+    const finalSizeBreakdown: SizeBreakdownItem[] =
+      effectiveSizeBreakdown.length > 0
+        ? effectiveSizeBreakdown
+        : [{ size: 'Standard', quantity: Math.max(1, quantity) }];
+    const finalSize =
+      effectiveSizeString || finalSizeBreakdown.map((b) => b.size).join(', ') || 'Standard';
+    const finalQuantity =
+      effectiveSizeBreakdown.length > 0 ? effectiveTotalQuantity : Math.max(1, quantity);
     const finalSampleType = (sampleType.trim() || 'Initial Sample') as SampleType;
     const finalBuyer = buyer.trim() || 'Direct Buyer';
     const finalLineCode = lineCode.trim().toUpperCase() || 'LINE-01';
@@ -517,7 +637,8 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       sampleType: finalSampleType,
       color: finalColor,
       size: finalSize,
-      quantity,
+      sizeBreakdown: finalSizeBreakdown,
+      quantity: finalQuantity,
       fabricId: finalFabricId,
       fabricCode: finalFabricCode,
       fabricName: finalFabricName,
@@ -609,7 +730,13 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         sampleType: finalSampleType,
         descriptionCode: styleCode.trim().toUpperCase(),
         styleName: styleName.trim(),
-        sampleSizeLabel: `${finalSampleType}\nSize: ${finalSize} (${quantity} Pcs)`,
+        sampleSizeLabel:
+          finalSizeBreakdown.length > 1
+            ? `${finalSampleType} (${finalSizeBreakdown.length} Sizes)\n${finalSizeBreakdown
+                .map((b) => `${b.size}:${b.quantity}`)
+                .join(', ')} (${finalQuantity} Pcs)`
+            : `${finalSampleType}\nSize: ${finalSize} (${finalQuantity} Pcs)`,
+        sizeBreakdown: finalSizeBreakdown,
         colorWash: combinedColorWash,
         fabricCode: finalFabricCode,
         fitting: selectedStoredSample?.requisitionForm?.fitting || '',
@@ -617,7 +744,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         threadNote: finalThreadNote,
         zipperNote: finalZipperNote,
         buttonNote: finalButtonNote,
-        quantityText: `${quantity} Pcs`,
+        quantityText: `${finalQuantity} Pcs`,
         block: selectedStoredSample?.requisitionForm?.block || '',
         fabricComposition: finalFabricName,
         supplier: selectedFabric?.supplier || selectedStoredSample?.requisitionForm?.supplier || '',
@@ -1176,22 +1303,117 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
             </div>
           </div>
 
-          {/* 7. SIZE SPEC — INTERACTIVE ENTER-TO-LIST BOX */}
-          <div className="p-3.5 rounded-xl bg-indigo-950/30 border border-indigo-500/40 space-y-2.5">
+          {/* 7. SIZE SPEC — INTERACTIVE MULTI-SIZE (10 OR 12 SIZES IN SINGLE REQUISITION) */}
+          <div
+            className={`p-3.5 rounded-xl border space-y-3 transition-colors ${
+              getSampleTypeTone(sampleType).category === 'gold'
+                ? 'bg-amber-950/25 border-amber-500/50'
+                : 'bg-indigo-950/30 border-indigo-500/40'
+            }`}
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <label className="font-bold text-white flex items-center gap-1.5 text-xs">
-                <Tag className="w-4 h-4 text-indigo-400" />
-                <span>Size Spec Input (Type Size &amp; Press Enter to List)</span>
+                <Tag
+                  className={`w-4 h-4 ${
+                    getSampleTypeTone(sampleType).category === 'gold'
+                      ? 'text-amber-400'
+                      : 'text-indigo-400'
+                  }`}
+                />
+                <span>
+                  Size Spec &amp; Multi-Size Breakdown (Supports 10 or 12 Sizes in a Single Requisition)
+                </span>
               </label>
-              <span className="text-[10px] text-indigo-300 font-mono">
-                Pressing Enter lists the size below without submitting the form
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                    listedSizes.length >= 10
+                      ? 'bg-amber-500/20 text-amber-200 border-amber-400/60'
+                      : 'bg-indigo-500/20 text-indigo-200 border-indigo-400/40'
+                  }`}
+                >
+                  {listedSizes.length} {listedSizes.length === 1 ? 'Size' : 'Sizes'} Listed •{' '}
+                  {effectiveTotalQuantity} Pcs Total
+                </span>
+              </div>
+            </div>
+
+            {/* ONE-CLICK 10-SIZE & 12-SIZE RUN PRESETS (ESPECIALLY FOR GOLD SEAL REQUISITIONS) */}
+            <div className="p-2.5 rounded-xl bg-slate-900/90 border border-amber-500/30 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>
+                    Quick Load 10-Size or 12-Size Run in Single Requisition (Gold Seal / Full Size Set):
+                  </span>
+                </span>
+                {listedSizes.length > 0 && (
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleSetAllSizesQuantity(1)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-slate-950 border border-slate-700 text-[10px] font-mono font-bold cursor-pointer transition-colors"
+                    >
+                      All = 1 pc
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetAllSizesQuantity(2)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-amber-600 text-slate-300 hover:text-slate-950 border border-slate-700 text-[10px] font-mono font-bold cursor-pointer transition-colors"
+                    >
+                      All = 2 pcs
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setListedSizes([]);
+                        setSizeQuantities({});
+                        setQuantity(1);
+                      }}
+                      className="px-2 py-0.5 rounded bg-rose-950/60 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-[10px] font-bold cursor-pointer transition-colors"
+                    >
+                      Clear Sizes
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                {GOLD_SEAL_SIZE_RUN_PRESETS.map((preset) => {
+                  const isCurrentRun =
+                    listedSizes.length === preset.sizes.length &&
+                    preset.sizes.every((s) => listedSizes.includes(s));
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleApplySizeRunPreset(preset.sizes, preset.label, 1)}
+                      className={`px-2.5 py-1.5 rounded-lg text-left text-[10px] font-mono border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                        isCurrentRun
+                          ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black border-amber-300 shadow-sm'
+                          : 'bg-slate-800/90 hover:bg-slate-800 text-amber-200 border-amber-500/30 hover:border-amber-400'
+                      }`}
+                    >
+                      <span className="truncate font-bold">{preset.label}</span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[9px] font-black shrink-0 ${
+                          isCurrentRun
+                            ? 'bg-slate-950 text-amber-300'
+                            : 'bg-amber-500/20 text-amber-300'
+                        }`}
+                      >
+                        {preset.count} SIZES
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Type size (e.g. S, M, L, XL, 30, 32) and press Enter..."
+                placeholder="Type 1 size or paste 10–12 sizes (e.g. 28, 29, 30, 31, 32, 33, 34, 36, 38, 40, 42, 44) & press Enter..."
                 value={sizeInput}
                 onChange={(e) => setSizeInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -1209,36 +1431,82 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                 className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                <span>Add / List Size</span>
+                <span>Add Size(s)</span>
               </button>
             </div>
 
-            {/* Currently Listed Sizes for this Sample */}
-            <div className="flex flex-wrap items-center gap-1.5 pt-1">
-              <span className="text-[11px] font-semibold text-slate-400 mr-1">
-                Listed Sizes:
-              </span>
-              {listedSizes.length === 0 ? (
-                <span className="text-[11px] text-slate-500 italic">
-                  No sizes listed yet — type a size above and press Enter
+            {/* Interactive Per-Size Breakdown Grid (10 or 12 Sizes with individual Qty per size) */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-slate-300">
+                  Size &amp; Per-Size Quantity Breakdown ({listedSizes.length}{' '}
+                  {listedSizes.length === 1 ? 'size' : 'sizes'} in this requisition):
                 </span>
-              ) : (
-                listedSizes.map((sz) => (
-                  <span
-                    key={sz}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-mono font-bold text-xs shadow-sm"
-                  >
-                    <span>{sz}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveListedSize(sz)}
-                      className="hover:text-rose-200 cursor-pointer"
-                      title="Remove size"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                {listedSizes.length > 0 && (
+                  <span className="text-[10px] font-mono text-amber-300 font-bold">
+                    Total Requisition Qty: {effectiveTotalQuantity} Pcs
                   </span>
-                ))
+                )}
+              </div>
+
+              {listedSizes.length === 0 ? (
+                <div className="text-[11px] text-slate-500 italic py-1.5">
+                  No sizes listed yet — click a <strong>10 Sizes</strong> or <strong>12 Sizes</strong> preset above, or type sizes and press Enter
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 pt-1">
+                  {listedSizes.map((sz, idx) => {
+                    const szQty = sizeQuantities[sz] ?? 1;
+                    const isGold = getSampleTypeTone(sampleType).category === 'gold';
+                    return (
+                      <div
+                        key={sz}
+                        className={`p-2 rounded-xl border flex flex-col gap-1.5 shadow-sm ${
+                          isGold
+                            ? 'bg-amber-950/40 border-amber-500/50 text-amber-100'
+                            : 'bg-slate-900/90 border-indigo-500/40 text-white'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[9px] font-mono text-slate-400">
+                            #{idx + 1}
+                          </span>
+                          <span
+                            className={`font-mono font-black text-xs px-1.5 py-0.2 rounded ${
+                              isGold
+                                ? 'bg-amber-400 text-slate-950'
+                                : 'bg-indigo-600 text-white'
+                            }`}
+                          >
+                            {sz}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveListedSize(sz)}
+                            className="text-slate-400 hover:text-rose-400 cursor-pointer"
+                            title={`Remove size ${sz}`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-slate-400 font-semibold">Qty:</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="500"
+                            value={szQty}
+                            onChange={(e) =>
+                              handleUpdateSizeQuantity(sz, Number(e.target.value))
+                            }
+                            className="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-center font-mono font-bold text-xs text-white focus:outline-none focus:border-amber-400"
+                          />
+                          <span className="text-[9px] text-slate-400 font-mono">pcs</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -1326,15 +1594,25 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
 
             {/* Quantity */}
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">Quantity (pcs)</label>
+              <label className="block text-slate-300 font-semibold mb-1">
+                Total Quantity (pcs)
+              </label>
               <input
                 type="number"
                 min="1"
-                max="500"
-                value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
+                max="1000"
+                value={effectiveTotalQuantity}
+                onChange={(e) => {
+                  const val = Math.max(1, Number(e.target.value) || 1);
+                  setQuantity(val);
+                }}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
               />
+              {listedSizes.length > 1 && (
+                <span className="text-[9px] text-amber-300 font-mono block mt-0.5">
+                  Auto-summed across {listedSizes.length} sizes
+                </span>
+              )}
             </div>
 
             {/* Priority */}
@@ -1833,8 +2111,20 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                       {styleName.trim()}
                     </div>
                     <div className="text-[11px] text-slate-400 mt-0.5">
-                      Buyer: <strong className="text-slate-200">{buyer.trim() || 'N/A'}</strong> • Line: <strong className="text-slate-200 font-mono">{lineCode.trim() || 'N/A'}</strong> • Sizes: <strong className="text-indigo-300 font-mono">{effectiveSizeString || 'Standard'}</strong> ({quantity} pcs)
+                      Buyer: <strong className="text-slate-200">{buyer.trim() || 'N/A'}</strong> • Line: <strong className="text-slate-200 font-mono">{lineCode.trim() || 'N/A'}</strong> • Sizes ({effectiveSizeBreakdown.length || 1}): <strong className="text-amber-300 font-mono">{effectiveSizeString || 'Standard'}</strong> ({effectiveTotalQuantity} pcs total)
                     </div>
+                    {effectiveSizeBreakdown.length > 1 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {effectiveSizeBreakdown.map((item) => (
+                          <span
+                            key={item.size}
+                            className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-200 font-mono text-[10px] font-bold"
+                          >
+                            {item.size}: {item.quantity}pc
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 

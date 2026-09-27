@@ -132,6 +132,55 @@ export interface TrimsChecklist {
   customTrims?: { name: string; checked: boolean; note?: string }[];
 }
 
+export interface SizeBreakdownItem {
+  size: string;
+  quantity: number;
+}
+
+export const GOLD_SEAL_SIZE_RUN_PRESETS: {
+  id: string;
+  label: string;
+  count: number;
+  sizes: string[];
+}[] = [
+  {
+    id: '10-waist-denim',
+    label: '10 Sizes — Denim/Pant Waist (28–40)',
+    count: 10,
+    sizes: ['28', '29', '30', '31', '32', '33', '34', '36', '38', '40'],
+  },
+  {
+    id: '12-waist-denim',
+    label: '12 Sizes — Full Denim/Pant Waist (28–44)',
+    count: 12,
+    sizes: ['28', '29', '30', '31', '32', '33', '34', '36', '38', '40', '42', '44'],
+  },
+  {
+    id: '10-alpha-tops',
+    label: '10 Sizes — Alpha Range (XXS–5XL)',
+    count: 10,
+    sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL'],
+  },
+  {
+    id: '12-alpha-tops',
+    label: '12 Sizes — Full Alpha Range (3XS–6XL)',
+    count: 12,
+    sizes: ['3XS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'],
+  },
+  {
+    id: '10-numeric-uk-eu',
+    label: '10 Sizes — Numeric Dress/Trouser (6–24)',
+    count: 10,
+    sizes: ['6', '8', '10', '12', '14', '16', '18', '20', '22', '24'],
+  },
+  {
+    id: '12-kids-youth',
+    label: '12 Sizes — Kids/Youth Range (2Y–16Y)',
+    count: 12,
+    sizes: ['2Y', '3Y', '4Y', '5Y', '6Y', '7Y', '8Y', '9Y', '10Y', '12Y', '14Y', '16Y'],
+  },
+];
+
 export interface VolarRequisitionForm {
   companyName: string;
   date: string;
@@ -144,6 +193,7 @@ export interface VolarRequisitionForm {
   descriptionCode: string;
   styleName: string;
   sampleSizeLabel: string;
+  sizeBreakdown?: SizeBreakdownItem[];
   colorWash: string;
   fabricCode: string;
   fitting: string;
@@ -174,7 +224,8 @@ export interface SampleItem {
   lineCode: string; // e.g. "LINE-A04"
   sampleType: SampleType;
   color: string;
-  size: string; // e.g. "32/34", "M"
+  size: string; // e.g. "28, 29, 30, 31, 32, 33, 34, 36, 38, 40, 42, 44"
+  sizeBreakdown?: SizeBreakdownItem[]; // e.g. 10 or 12 sizes with individual quantities in a single requisition
   quantity: number;
   fabricId: string;
   fabricCode: string;
@@ -199,6 +250,32 @@ export interface SampleItem {
   thumbnail?: string;
   images?: string[];
   requisitionForm?: VolarRequisitionForm;
+}
+
+/**
+ * Returns the effective per-size breakdown list for a sample (parses comma-separated sizes if sizeBreakdown is not explicitly stored)
+ */
+export function getEffectiveSizeBreakdown(sample: Partial<SampleItem>): SizeBreakdownItem[] {
+  if (sample.sizeBreakdown && sample.sizeBreakdown.length > 0) {
+    return sample.sizeBreakdown;
+  }
+  if (
+    sample.requisitionForm?.sizeBreakdown &&
+    sample.requisitionForm.sizeBreakdown.length > 0
+  ) {
+    return sample.requisitionForm.sizeBreakdown;
+  }
+  const parsedSizes = (sample.size || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parsedSizes.length === 0) return [];
+  const totalQty = sample.quantity || parsedSizes.length;
+  const perSizeQty =
+    parsedSizes.length > 0 && totalQty >= parsedSizes.length
+      ? Math.max(1, Math.floor(totalQty / parsedSizes.length))
+      : 1;
+  return parsedSizes.map((sz) => ({ size: sz, quantity: perSizeQty }));
 }
 
 /**

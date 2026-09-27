@@ -1,5 +1,10 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { SampleItem, getSampleImage } from '../types/sample';
+import {
+  SampleItem,
+  getSampleImage,
+  getSampleTypeTone,
+  getEffectiveSizeBreakdown,
+} from '../types/sample';
 import { FabricItem } from '../types/fabric';
 import { BVTestItem } from '../types/test';
 import { PushNotification } from '../types/notification';
@@ -144,6 +149,11 @@ export function mapRowToSample(row: any): SampleItem {
     sampleType: row.sample_type || 'Red Seal Sample',
     color: row.color || '',
     size: row.size || '',
+    sizeBreakdown: Array.isArray(row.size_breakdown)
+      ? row.size_breakdown
+      : Array.isArray(reqForm?.sizeBreakdown)
+      ? reqForm.sizeBreakdown
+      : undefined,
     quantity: Number(row.quantity ?? 1),
     fabricId: row.fabric_id || '',
     fabricCode: row.fabric_code || '',
@@ -274,9 +284,16 @@ export function mapSampleToRow(sample: SampleItem) {
     isRequisitionLocked: isLocked,
   };
 
+  const effectiveSizeBreakdown = getEffectiveSizeBreakdown(sample);
+
   const enrichedRequisitionForm = sample.requisitionForm
     ? {
         ...sample.requisitionForm,
+        sizeBreakdown:
+          sample.requisitionForm.sizeBreakdown &&
+          sample.requisitionForm.sizeBreakdown.length > 0
+            ? sample.requisitionForm.sizeBreakdown
+            : effectiveSizeBreakdown,
         shipmentDate: effectiveShipmentDate,
         threadNote: effectiveThreadNote,
         zipperNote: effectiveZipperNote,
@@ -297,6 +314,16 @@ export function mapSampleToRow(sample: SampleItem) {
         isLocked,
       };
 
+  const toneCategory = getSampleTypeTone(sample.sampleType).category;
+  const sampleColorTone =
+    toneCategory === 'gold'
+      ? 'gold'
+      : toneCategory === 'red'
+      ? 'red'
+      : toneCategory === 'initial'
+      ? 'white'
+      : 'default';
+
   return {
     id: sample.id,
     style_code: sample.styleCode,
@@ -305,8 +332,10 @@ export function mapSampleToRow(sample: SampleItem) {
     po_number: sample.poNumber,
     line_code: sample.lineCode,
     sample_type: sample.sampleType,
+    sample_color_tone: sampleColorTone,
     color: sample.color,
     size: sample.size,
+    size_breakdown: effectiveSizeBreakdown,
     quantity: sample.quantity,
     fabric_id: sample.fabricId,
     fabric_code: sample.fabricCode,
@@ -522,6 +551,7 @@ export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> 
       button_note,
       shipment_date,
       is_requisition_locked,
+      sample_color_tone,
       ...legacyRow
     } = fullRow;
     const { error: fallbackErr } = await supabase.from('samples').upsert(legacyRow);

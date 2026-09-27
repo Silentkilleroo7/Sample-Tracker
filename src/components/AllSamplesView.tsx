@@ -9,6 +9,7 @@ import {
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getSampleTypeTone,
+  getEffectiveSizeBreakdown,
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage, useImageZoom } from './StyleProductImage';
@@ -426,8 +427,17 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                             <div className="font-semibold text-white mt-1 group-hover:text-indigo-300 transition-colors line-clamp-1">
                               {sample.styleName}
                             </div>
-                            <div className="text-[11px] text-slate-400 mt-0.5">
-                              Color: {sample.color} • Wash: {sample.washDetails?.washType || 'N/A'} • Size: {sample.size} • Qty: {sample.quantity}
+                            <div className="text-[11px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                              <span>
+                                Color: {sample.color} • Wash: {sample.washDetails?.washType || 'N/A'} • Size:{' '}
+                                <strong className="text-slate-200 font-mono">{sample.size}</strong>
+                              </span>
+                              {getEffectiveSizeBreakdown(sample).length > 1 && (
+                                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40 font-mono text-[9px] font-bold">
+                                  {getEffectiveSizeBreakdown(sample).length} Sizes Run
+                                </span>
+                              )}
+                              <span>• Qty: {sample.quantity}</span>
                             </div>
                           </div>
                         </div>

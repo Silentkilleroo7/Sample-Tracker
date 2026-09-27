@@ -41,9 +41,11 @@ CREATE TABLE IF NOT EXISTS public.samples (
   buyer TEXT NOT NULL,
   po_number TEXT NOT NULL DEFAULT '',
   line_code TEXT NOT NULL DEFAULT '',
-  sample_type TEXT NOT NULL DEFAULT 'Proto Sample',
+  sample_type TEXT NOT NULL DEFAULT 'Initial Sample',
+  sample_color_tone TEXT NOT NULL DEFAULT 'white',
   color TEXT NOT NULL DEFAULT '',
   size TEXT NOT NULL DEFAULT '',
+  size_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb,
   quantity INTEGER NOT NULL DEFAULT 1,
   fabric_id TEXT NOT NULL DEFAULT '',
   fabric_code TEXT NOT NULL DEFAULT '',
@@ -76,6 +78,42 @@ ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS is_requisition_locked BOOLEA
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS thread_note TEXT NOT NULL DEFAULT '';
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS zipper_note TEXT NOT NULL DEFAULT '';
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS button_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS sample_color_tone TEXT NOT NULL DEFAULT 'white';
+ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS size_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.samples ALTER COLUMN sample_type SET DEFAULT 'Initial Sample';
+
+-- Automatically assign sample_color_tone ('gold' for Gold Seal, 'red' for Red Seal, 'white' for Initial)
+CREATE OR REPLACE FUNCTION public.sync_sample_color_tone()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF LOWER(COALESCE(NEW.sample_type, '')) LIKE '%gold%' THEN
+    NEW.sample_color_tone := 'gold';
+  ELSIF LOWER(COALESCE(NEW.sample_type, '')) LIKE '%red%' THEN
+    NEW.sample_color_tone := 'red';
+  ELSIF LOWER(COALESCE(NEW.sample_type, '')) LIKE '%initial%' OR LOWER(COALESCE(NEW.sample_type, '')) = 'init' THEN
+    NEW.sample_color_tone := 'white';
+  ELSE
+    NEW.sample_color_tone := COALESCE(NULLIF(NEW.sample_color_tone, ''), 'default');
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_sample_color_tone ON public.samples;
+CREATE TRIGGER trg_sync_sample_color_tone
+  BEFORE INSERT OR UPDATE ON public.samples
+  FOR EACH ROW EXECUTE FUNCTION public.sync_sample_color_tone();
+
+-- Backfill existing rows in public.samples with their matching color tone (gold, red, white)
+UPDATE public.samples
+SET sample_color_tone = CASE
+  WHEN LOWER(sample_type) LIKE '%gold%' THEN 'gold'
+  WHEN LOWER(sample_type) LIKE '%red%' THEN 'red'
+  WHEN LOWER(sample_type) LIKE '%initial%' THEN 'white'
+  ELSE 'default'
+END;
 
 -- Index on style_code for fast lookup when selecting stored styles from database
 CREATE INDEX IF NOT EXISTS idx_samples_style_code ON public.samples (style_code);
@@ -154,12 +192,22 @@ INSERT INTO public.requisition_options (
   'default',
   '[]'::jsonb,
   '[]'::jsonb,
-  '[]'::jsonb,
+  '["Initial Sample", "Red Seal Sample", "Gold Seal Sample"]'::jsonb,
   '[]'::jsonb,
   '[]'::jsonb,
   '[]'::jsonb,
   '[]'::jsonb
 ) ON CONFLICT (id) DO NOTHING;
+
+-- Ensure Initial Sample, Red Seal Sample, and Gold Seal Sample are included in existing requisition_options without removing user-added types
+UPDATE public.requisition_options
+SET sample_types = (
+  SELECT jsonb_agg(DISTINCT elem)
+  FROM jsonb_array_elements_text(
+    COALESCE(sample_types, '[]'::jsonb) || '["Initial Sample", "Red Seal Sample", "Gold Seal Sample"]'::jsonb
+  ) AS t(elem)
+)
+WHERE id = 'default';
 
 -- =====================================================================================
 -- 6. STYLE PHOTOS METADATA TABLE (Logs Uploaded Product Pictures)

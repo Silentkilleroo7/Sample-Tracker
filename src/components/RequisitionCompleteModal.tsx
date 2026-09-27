@@ -3,8 +3,11 @@ import {
   SampleItem,
   VolarRequisitionForm,
   TrimsChecklist,
+  SizeBreakdownItem,
+  GOLD_SEAL_SIZE_RUN_PRESETS,
   getSampleImage,
   getSampleTypeTone,
+  getEffectiveSizeBreakdown,
 } from '../types/sample';
 import { StyleProductImage } from './StyleProductImage';
 import { SampleTypeBadge } from './SampleTypeBadge';
@@ -107,9 +110,16 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
         ? `${sample.color} / ${washStr}`
         : sample.color || '';
 
+    const effectiveBreakdown = getEffectiveSizeBreakdown(sample);
+
     if (sample.requisitionForm && sample.requisitionForm.companyName) {
       setForm({
         ...sample.requisitionForm,
+        sizeBreakdown:
+          sample.requisitionForm.sizeBreakdown &&
+          sample.requisitionForm.sizeBreakdown.length > 0
+            ? sample.requisitionForm.sizeBreakdown
+            : effectiveBreakdown,
         colorWash: sample.requisitionForm.colorWash || defaultColorWash,
         sampleSizeLabel:
           sample.requisitionForm.sampleSizeLabel ||
@@ -139,7 +149,13 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
         sampleType: sample.sampleType || '',
         descriptionCode: sample.styleCode || '',
         styleName: sample.styleName || '',
-        sampleSizeLabel: `${sample.sampleType}\nSize: ${sample.size} (${sample.quantity} Pcs)`,
+        sampleSizeLabel:
+          effectiveBreakdown.length > 1
+            ? `${sample.sampleType} (${effectiveBreakdown.length} Sizes)\n${effectiveBreakdown
+                .map((b) => `${b.size}:${b.quantity}`)
+                .join(', ')} (${sample.quantity} Pcs)`
+            : `${sample.sampleType}\nSize: ${sample.size} (${sample.quantity} Pcs)`,
+        sizeBreakdown: effectiveBreakdown,
         colorWash: defaultColorWash,
         fabricCode: sample.fabricCode || '',
         fitting: '',
@@ -647,6 +663,15 @@ Special Instructions: ${form.specialInstructions}
                     onChange={(e) => setForm({ ...form, sampleSizeLabel: e.target.value })}
                     className="w-full text-center bg-indigo-50/50 p-1 border border-indigo-300 font-bold"
                   />
+                ) : form.sizeBreakdown && form.sizeBreakdown.length > 1 ? (
+                  <div className="w-full text-center space-y-0.5">
+                    <div className="font-black text-[10px] uppercase underline text-black">
+                      {form.sizeBreakdown.length} SIZES RUN
+                    </div>
+                    <div className="font-mono font-bold text-[10px] text-black leading-tight break-words">
+                      {form.sizeBreakdown.map((b) => b.size).join(', ')}
+                    </div>
+                  </div>
                 ) : (
                   <span className="font-bold text-black leading-tight whitespace-pre-line">
                     {form.sampleSizeLabel}
@@ -768,6 +793,106 @@ Special Instructions: ${form.specialInstructions}
                 )}
               </div>
             </div>
+
+            {/* MULTI-SIZE BREAKDOWN MATRIX (10 OR 12 SIZES IN A SINGLE REQUISITION) */}
+            {((form.sizeBreakdown && form.sizeBreakdown.length > 1) || isEditMode) && (
+              <div className="border-b border-black bg-white text-[10px] sm:text-[11px]">
+                <div className="px-2 py-1 bg-amber-50 border-b border-black flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-black uppercase text-black tracking-wide">
+                    SIZE-WISE REQUISITION BREAKDOWN ({form.sizeBreakdown?.length || 1} SIZES IN SINGLE REQUISITION)
+                  </span>
+                  {isEditMode && !isRequisitionLocked && (
+                    <div className="flex flex-wrap items-center gap-1 print:hidden">
+                      {GOLD_SEAL_SIZE_RUN_PRESETS.slice(0, 4).map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            const nextBreakdown: SizeBreakdownItem[] = preset.sizes.map((s) => ({
+                              size: s,
+                              quantity: 1,
+                            }));
+                            const totalQty = nextBreakdown.length;
+                            setForm({
+                              ...form,
+                              sizeBreakdown: nextBreakdown,
+                              quantityText: `${totalQty} Pcs`,
+                              sampleSizeLabel: `${form.sampleType} (${nextBreakdown.length} Sizes)\n${nextBreakdown
+                                .map((b) => `${b.size}:${b.quantity}`)
+                                .join(', ')} (${totalQty} Pcs)`,
+                            });
+                          }}
+                          className="px-1.5 py-0.5 bg-amber-200 hover:bg-amber-300 text-black border border-black font-mono font-bold text-[9px] cursor-pointer"
+                        >
+                          Load {preset.count} Sizes ({preset.sizes[0]}–{preset.sizes[preset.sizes.length - 1]})
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <span className="font-mono font-black text-black">
+                    TOTAL QTY: {form.quantityText}
+                  </span>
+                </div>
+
+                {form.sizeBreakdown && form.sizeBreakdown.length > 0 && (
+                  <div
+                    className="grid divide-x divide-black border-b-0"
+                    style={{
+                      gridTemplateColumns: `repeat(${Math.min(
+                        12,
+                        Math.max(1, form.sizeBreakdown.length)
+                      )}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    {form.sizeBreakdown.map((item, idx) => (
+                      <div key={`${item.size}-${idx}`} className="text-center flex flex-col">
+                        <div className="py-1 px-0.5 bg-slate-100 border-b border-black font-mono font-black text-black text-[10px]">
+                          {isEditMode && !isRequisitionLocked ? (
+                            <input
+                              type="text"
+                              value={item.size}
+                              onChange={(e) => {
+                                const updated = [...(form.sizeBreakdown || [])];
+                                updated[idx] = { ...updated[idx], size: e.target.value.toUpperCase() };
+                                setForm({ ...form, sizeBreakdown: updated });
+                              }}
+                              className="w-full text-center bg-white border border-indigo-300 font-mono font-bold text-[10px]"
+                            />
+                          ) : (
+                            <span>{item.size}</span>
+                          )}
+                        </div>
+                        <div className="py-1 px-0.5 bg-white font-mono font-bold text-black text-[11px]">
+                          {isEditMode && !isRequisitionLocked ? (
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const updated = [...(form.sizeBreakdown || [])];
+                                updated[idx] = {
+                                  ...updated[idx],
+                                  quantity: Math.max(1, Number(e.target.value) || 1),
+                                };
+                                const total = updated.reduce((s, b) => s + b.quantity, 0);
+                                setForm({
+                                  ...form,
+                                  sizeBreakdown: updated,
+                                  quantityText: `${total} Pcs`,
+                                });
+                              }}
+                              className="w-full text-center bg-indigo-50 border border-indigo-300 font-mono font-bold text-[10px]"
+                            />
+                          ) : (
+                            <span>{item.quantity} Pc</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* DEDICATED THREAD, ZIPPER & BUTTON NOTES ROW INCLUDED IN REQUISITION FORM */}
             <div className="grid grid-cols-12 bg-slate-50 text-[10px] sm:text-[11px]">

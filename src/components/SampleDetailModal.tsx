@@ -6,6 +6,7 @@ import {
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getGranularApprovalStatus,
+  getEffectiveSizeBreakdown,
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { useImageZoom } from './StyleProductImage';
@@ -278,9 +279,27 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
                 <span className="text-slate-400">Garment Color / Wash:</span>
                 <span>{sample.color} • {sample.washDetails?.washType || 'N/A'}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Size Spec &amp; Qty:</span>
-                <span>Size {sample.size} • {sample.quantity} Piece{sample.quantity > 1 ? 's' : ''}</span>
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Size Spec &amp; Qty:</span>
+                  <span className="font-mono font-semibold text-white">
+                    {getEffectiveSizeBreakdown(sample).length > 1
+                      ? `${getEffectiveSizeBreakdown(sample).length} Sizes • ${sample.quantity} Pcs`
+                      : `Size ${sample.size} • ${sample.quantity} Piece${sample.quantity > 1 ? 's' : ''}`}
+                  </span>
+                </div>
+                {getEffectiveSizeBreakdown(sample).length > 1 && (
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {getEffectiveSizeBreakdown(sample).map((b, idx) => (
+                      <span
+                        key={`${b.size}-${idx}`}
+                        className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-400/40 text-amber-200 font-mono text-[10px] font-bold"
+                      >
+                        {b.size}: {b.quantity}pc
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="flex justify-between">
                 <span className="text-indigo-300 font-semibold">Thread Note:</span>
