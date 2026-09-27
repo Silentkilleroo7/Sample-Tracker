@@ -58,13 +58,9 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
             <Check className="w-3.5 h-3.5" />
             Mark all read
           </button>
-          <button
-            onClick={onClearNotifications}
-            className="text-slate-400 hover:text-rose-400 flex items-center gap-1 cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear all
-          </button>
+          <span className="text-[11px] text-slate-500 font-mono">
+            Permanent Audit Log ({notifications.length})
+          </span>
         </div>
 
         {/* List of Notifications */}

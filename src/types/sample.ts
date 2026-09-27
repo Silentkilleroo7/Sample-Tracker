@@ -258,19 +258,12 @@ export function getGranularApprovalStatus(sample: SampleItem) {
 
 export function getSampleImage(sample: Partial<SampleItem>): string {
   if (sample.thumbnail && sample.thumbnail.trim() !== '') {
-    return sample.thumbnail;
+    return sample.thumbnail.trim();
   }
-  if (sample.images && sample.images.length > 0) {
-    return sample.images[0];
+  if (sample.images && sample.images.length > 0 && sample.images[0]?.trim()) {
+    return sample.images[0].trim();
   }
-  // Deterministic fallback based on styleCode or id so every style always has a product picture
-  const key = sample.styleCode || sample.id || 'default';
-  let hash = 0;
-  for (let i = 0; i < key.length; i++) {
-    hash = key.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % PRESET_STYLE_IMAGES.length;
-  return PRESET_STYLE_IMAGES[index].url;
+  return '';
 }
 
 export interface StylePresetImage {

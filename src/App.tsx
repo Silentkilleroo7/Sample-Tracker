@@ -114,12 +114,15 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((s: SampleItem) => ({
-            ...s,
-            sampleType: (s.sampleType as string) === 'Pre-Production (PP)' ? 'Red Seal Sample' : s.sampleType,
-            thumbnail: s.thumbnail || getSampleImage(s),
-            images: s.images && s.images.length > 0 ? s.images : [s.thumbnail || getSampleImage(s)],
-          }));
+          return parsed.map((s: SampleItem) => {
+            const selectedImg = s.thumbnail?.trim() || (s.images && s.images[0]?.trim()) || '';
+            return {
+              ...s,
+              sampleType: (s.sampleType as string) === 'Pre-Production (PP)' ? 'Red Seal Sample' : s.sampleType,
+              thumbnail: selectedImg || undefined,
+              images: selectedImg ? [selectedImg] : [],
+            };
+          });
         }
       }
     } catch {
@@ -175,10 +178,35 @@ export default function App() {
     async function loadCloudData() {
       const data = await fetchAllSupabaseData();
       if (!data || !isMounted) return;
-      setSamples(data.samples);
-      setFabrics(data.fabrics);
-      setTests(data.tests);
-      setNotifications(data.notifications);
+
+      // Merge cloud and local state by ID so inputted data is never deleted or lost
+      setSamples((prev) => {
+        const map = new Map<string, SampleItem>();
+        prev.forEach((item) => map.set(item.id, item));
+        data.samples.forEach((item) => map.set(item.id, item));
+        return Array.from(map.values());
+      });
+
+      setFabrics((prev) => {
+        const map = new Map<string, FabricItem>();
+        prev.forEach((item) => map.set(item.id, item));
+        data.fabrics.forEach((item) => map.set(item.id, item));
+        return Array.from(map.values());
+      });
+
+      setTests((prev) => {
+        const map = new Map<string, BVTestItem>();
+        prev.forEach((item) => map.set(item.id, item));
+        data.tests.forEach((item) => map.set(item.id, item));
+        return Array.from(map.values());
+      });
+
+      setNotifications((prev) => {
+        const map = new Map<string, PushNotification>();
+        prev.forEach((item) => map.set(item.id, item));
+        data.notifications.forEach((item) => map.set(item.id, item));
+        return Array.from(map.values());
+      });
     }
 
     void loadCloudData();
@@ -419,16 +447,17 @@ export default function App() {
 
   const handleUpdateSampleThumbnail = (
     sampleId: string,
-    newThumbnail: string,
-    additionalImages?: string[]
+    newThumbnail: string
   ) => {
+    const cleanThumb = newThumbnail.trim();
+    const singleImageList = cleanThumb ? [cleanThumb] : [];
     setSamples((prev) =>
       prev.map((s) => {
         if (s.id === sampleId) {
           const updated = {
             ...s,
-            thumbnail: newThumbnail,
-            images: additionalImages || [newThumbnail, ...(s.images || [])],
+            thumbnail: cleanThumb || undefined,
+            images: singleImageList,
             updatedAt: new Date().toISOString(),
           };
           void upsertSampleInSupabase(updated);
@@ -442,8 +471,19 @@ export default function App() {
         prev
           ? {
               ...prev,
-              thumbnail: newThumbnail,
-              images: additionalImages || [newThumbnail, ...(prev.images || [])],
+              thumbnail: cleanThumb || undefined,
+              images: singleImageList,
+            }
+          : null
+      );
+    }
+    if (completedRequisitionSample && completedRequisitionSample.id === sampleId) {
+      setCompletedRequisitionSample((prev) =>
+        prev
+          ? {
+              ...prev,
+              thumbnail: cleanThumb || undefined,
+              images: singleImageList,
             }
           : null
       );
@@ -878,10 +918,12 @@ export default function App() {
     );
   };
 
-  const handleDeleteBVTest = (testId: string) => {
-    setTests((prev) => prev.filter((t) => t.id !== testId));
-    void deleteBVTestFromSupabase(testId);
-    sendPushNotification('Test Record Removed', 'BV test item removed from registry.', 'info');
+  const handleDeleteBVTest = (_testId: string) => {
+    sendPushNotification(
+      'Permanent Record Protected',
+      'Once data is inputted into the system, direct deletion from the frontend is disabled.',
+      'warning'
+    );
   };
 
   // 24-Hour Overdue Re-test Check & Notification Dispatcher
@@ -904,13 +946,15 @@ export default function App() {
     }
   }, [tests]);
 
-  const handleDeleteSample = (sampleId: string) => {
-    setSamples((prev) => prev.filter((s) => s.id !== sampleId));
-    void deleteSampleFromSupabase(sampleId);
-    sendPushNotification('Sample Removed', 'Sample has been removed from tracking.', 'info');
+  const handleDeleteSample = (_sampleId: string) => {
+    sendPushNotification(
+      'Permanent Record Protected',
+      'Once data is inputted into the system, direct deletion from the frontend is disabled.',
+      'warning'
+    );
   };
 
-  // Export & Reset
+  // Export (Direct Reset / Deletion Disabled)
   const handleExportData = () => {
     const dataStr =
       'data:text/json;charset=utf-8,' +
@@ -924,16 +968,11 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    localStorage.removeItem('threadtrack_live_samples_v1');
-    localStorage.removeItem('threadtrack_live_fabrics_v1');
-    localStorage.removeItem('threadtrack_live_notifs_v1');
-    localStorage.removeItem('threadtrack_live_bv_tests_v1');
-    localStorage.removeItem('threadtrack_clean_req_options_v2');
-    void clearAllDatabaseTablesInSupabase();
-    setSamples(INITIAL_SAMPLES);
-    setFabrics(INITIAL_FABRICS);
-    setNotifications(INITIAL_NOTIFICATIONS);
-    setTests(INITIAL_BV_TESTS);
+    sendPushNotification(
+      'Permanent Record Protected',
+      'Direct data deletion or reset from the frontend system is disabled.',
+      'warning'
+    );
   };
 
   // Counts for sidebar & badges
@@ -1150,7 +1189,7 @@ export default function App() {
           void markAllNotificationsReadInSupabase();
         }}
         onClearNotifications={() => {
-          setNotifications([]);
+          setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
           void clearAllNotificationsInSupabase();
         }}
         onNotificationClick={(notif) => {

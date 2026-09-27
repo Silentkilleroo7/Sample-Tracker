@@ -83,9 +83,8 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const [showSecondConfirmation, setShowSecondConfirmation] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Style Picture state
+  // Style Picture state (only the single selected image is connected to the style)
   const [thumbnail, setThumbnail] = useState<string>('');
-  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [customImageUrl, setCustomImageUrl] = useState('');
   const [showCustomUrlInput, setShowCustomUrlInput] = useState(false);
@@ -138,7 +137,6 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     setCourier('');
     setRequestedBy('');
     setThumbnail('');
-    setUploadedImages([]);
     setValidationError(null);
     setShowSecondConfirmation(false);
   };
@@ -149,17 +147,12 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
 
     setIsUploadingPhoto(true);
     try {
-      const urls: string[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const res = await uploadStylePhoto(files[i], {
-          styleCode: styleCode.trim() || 'STYLE_UPLOAD',
-        });
-        if (res.url) urls.push(res.url);
-      }
-      if (urls.length > 0) {
-        setThumbnail(urls[0]);
-        setUploadedImages((prev) => Array.from(new Set([...urls, ...prev])));
-        setSaveToast(`Uploaded ${urls.length} product photo${urls.length > 1 ? 's' : ''}!`);
+      const res = await uploadStylePhoto(files[0], {
+        styleCode: styleCode.trim() || 'STYLE_UPLOAD',
+      });
+      if (res.url) {
+        setThumbnail(res.url);
+        setSaveToast('Selected product photo connected to this style!');
       }
     } finally {
       setIsUploadingPhoto(false);
@@ -376,10 +369,9 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       selectedFabric?.code || customFabricCode.trim().toUpperCase() || '';
     const finalFabricName =
       selectedFabric?.name || customFabricName.trim() || '';
-    const finalThumbnail = thumbnail || PRESET_STYLE_IMAGES[0].url;
-    const finalImages = Array.from(
-      new Set([finalThumbnail, ...uploadedImages].filter(Boolean))
-    );
+    // Connect ONLY the selected image with this style
+    const finalThumbnail = thumbnail.trim();
+    const finalImages = finalThumbnail ? [finalThumbnail] : [];
     const nowIso = new Date().toISOString();
 
     const formatVolarDate = (dateStr?: string) => {
@@ -395,7 +387,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       styleCode: styleCode.trim().toUpperCase(),
       styleName: styleName.trim(),
       buyer: finalBuyer,
-      thumbnail: finalThumbnail,
+      thumbnail: finalThumbnail || undefined,
       images: finalImages,
       poNumber: poNumber.trim(),
       lineCode: finalLineCode,
@@ -599,11 +591,10 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               <div className="flex items-center gap-2">
                 <label className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-950/60 px-2 py-1 rounded border border-indigo-500/30 flex items-center gap-1 cursor-pointer transition-colors">
                   <Upload className={`w-3 h-3 ${isUploadingPhoto ? 'animate-bounce' : ''}`} />
-                  <span>{isUploadingPhoto ? 'Uploading...' : 'Upload Photo(s)'}</span>
+                  <span>{isUploadingPhoto ? 'Uploading...' : 'Select / Upload Photo'}</span>
                   <input
                     type="file"
                     accept="image/*"
-                    multiple
                     onChange={handleFileUpload}
                     className="hidden"
                   />
@@ -654,24 +645,63 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               </div>
             )}
 
-            {thumbnail && (
-              <div className="flex items-center gap-3">
-                <div className="relative w-14 h-16 rounded-xl overflow-hidden bg-slate-900 border-2 border-indigo-500/50 shrink-0">
+            <div className="flex items-center gap-3">
+              {thumbnail ? (
+                <div className="relative w-16 h-20 rounded-xl overflow-hidden bg-slate-900 border-2 border-emerald-500 shrink-0 shadow-lg">
                   <img
                     src={thumbnail}
-                    alt="Style Preview"
+                    alt="Selected Style"
                     className="w-full h-full object-cover"
                   />
+                  <span className="absolute bottom-0 inset-x-0 bg-emerald-600/90 text-white text-[8px] font-bold text-center py-0.5">
+                    Selected
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setThumbnail('')}
-                  className="text-[11px] text-rose-400 hover:text-rose-300 cursor-pointer"
-                >
-                  Remove Photo
-                </button>
+              ) : (
+                <div className="w-16 h-20 rounded-xl bg-slate-900 border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500 text-[9px] text-center p-1 shrink-0">
+                  <ImageIcon className="w-4 h-4 mb-0.5 opacity-60" />
+                  <span>No Image</span>
+                </div>
+              )}
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-semibold text-slate-400">
+                    Or click a style image below to select (only the selected image will be connected):
+                  </span>
+                  {thumbnail && (
+                    <button
+                      type="button"
+                      onClick={() => setThumbnail('')}
+                      className="text-[10px] text-rose-400 hover:text-rose-300 font-bold cursor-pointer"
+                    >
+                      Clear Image
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                  {PRESET_STYLE_IMAGES.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setThumbnail(preset.url)}
+                      className={`relative w-11 h-14 rounded-lg overflow-hidden shrink-0 border-2 transition-all cursor-pointer ${
+                        thumbnail === preset.url
+                          ? 'border-emerald-400 scale-105 shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400/40'
+                          : 'border-slate-700 hover:border-slate-500 opacity-65 hover:opacity-100'
+                      }`}
+                      title={preset.label}
+                    >
+                      <img
+                        src={preset.url}
+                        alt={preset.label}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -4,15 +4,18 @@
   body {
     background-color: #ffffff !important;
     color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide navigation, buttons, modals backdrops during print */
+  /* Hide all main app views, navigation, headers, footers, and non-printable UI so ONLY the requisition form prints */
   nav,
   header,
   aside,
   footer,
+  main,
   .print\:hidden {
     display: none !important;
   }

@@ -1,5 +1,7 @@
 -- =====================================================================================
--- GA SAMPLE TRACKING MASTER (THREADTRACK PRO 4.0) - SINGLE COMPLETE SUPABASE SQL SCRIPT
+-- GA SAMPLE TRACKING MASTER (THREADTRACK PRO 4.0) - UPDATED SUPABASE SQL SCRIPT
+-- PERMANENT RECORD PROTECTION: Once data is inputted into the system, it CANNOT be
+-- deleted from the frontend system directly (SELECT, INSERT, UPDATE only; DELETE blocked).
 -- Copy & Run this single SQL command in Supabase Dashboard -> SQL Editor -> New Query
 -- =====================================================================================
 
@@ -135,7 +137,7 @@ CREATE TABLE IF NOT EXISTS public.requisition_options (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Initialize clean empty options row (no mock data)
+-- Initialize default row ONLY if it does not exist yet (NEVER overwrite existing inputted options!)
 INSERT INTO public.requisition_options (
   id, buyers, line_codes, sample_types, sizes, colors, wash_types, couriers
 ) VALUES (
@@ -147,14 +149,7 @@ INSERT INTO public.requisition_options (
   '[]'::jsonb,
   '[]'::jsonb,
   '[]'::jsonb
-) ON CONFLICT (id) DO UPDATE SET
-  buyers = '[]'::jsonb,
-  line_codes = '[]'::jsonb,
-  sample_types = '[]'::jsonb,
-  sizes = '[]'::jsonb,
-  colors = '[]'::jsonb,
-  wash_types = '[]'::jsonb,
-  couriers = '[]'::jsonb;
+) ON CONFLICT (id) DO NOTHING;
 
 -- =====================================================================================
 -- 6. STYLE PHOTOS METADATA TABLE (Logs Uploaded Product Pictures)
@@ -188,7 +183,53 @@ ON CONFLICT (id) DO UPDATE SET
   allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 -- =====================================================================================
--- 8. ROW LEVEL SECURITY (RLS) & POLICIES FOR PUBLIC/ANON VERCEL CLIENT ACCESS
+-- 8. DATABASE TRIGGER: BLOCK DIRECT DELETION FROM FRONTEND SYSTEM (anon / authenticated)
+-- =====================================================================================
+CREATE OR REPLACE FUNCTION public.prevent_frontend_delete()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF current_user IN ('anon', 'authenticated')
+     OR COALESCE(current_setting('request.jwt.claim.role', true), '') IN ('anon', 'authenticated') THEN
+    RAISE EXCEPTION 'Permanent Record Protection: Once data has been inputted into the system, it cannot be deleted from the frontend system directly.';
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_no_frontend_delete_fabrics ON public.fabrics;
+CREATE TRIGGER trg_no_frontend_delete_fabrics
+  BEFORE DELETE ON public.fabrics
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_frontend_delete();
+
+DROP TRIGGER IF EXISTS trg_no_frontend_delete_samples ON public.samples;
+CREATE TRIGGER trg_no_frontend_delete_samples
+  BEFORE DELETE ON public.samples
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_frontend_delete();
+
+DROP TRIGGER IF EXISTS trg_no_frontend_delete_bv_tests ON public.bv_tests;
+CREATE TRIGGER trg_no_frontend_delete_bv_tests
+  BEFORE DELETE ON public.bv_tests
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_frontend_delete();
+
+DROP TRIGGER IF EXISTS trg_no_frontend_delete_notifications ON public.notifications;
+CREATE TRIGGER trg_no_frontend_delete_notifications
+  BEFORE DELETE ON public.notifications
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_frontend_delete();
+
+DROP TRIGGER IF EXISTS trg_no_frontend_delete_req_options ON public.requisition_options;
+CREATE TRIGGER trg_no_frontend_delete_req_options
+  BEFORE DELETE ON public.requisition_options
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_frontend_delete();
+
+DROP TRIGGER IF EXISTS trg_no_frontend_delete_style_photos ON public.style_photos;
+CREATE TRIGGER trg_no_frontend_delete_style_photos
+  BEFORE DELETE ON public.style_photos
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_frontend_delete();
+
+-- =====================================================================================
+-- 9. ROW LEVEL SECURITY (RLS) POLICIES: SELECT, INSERT, UPDATE ONLY (NO FRONTEND DELETE)
 -- =====================================================================================
 ALTER TABLE public.fabrics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.samples ENABLE ROW LEVEL SECURITY;
@@ -197,6 +238,7 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.requisition_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.style_photos ENABLE ROW LEVEL SECURITY;
 
+-- Drop legacy FOR ALL policies that allowed DELETE
 DROP POLICY IF EXISTS "Allow full access to fabrics" ON public.fabrics;
 DROP POLICY IF EXISTS "Allow full access to samples" ON public.samples;
 DROP POLICY IF EXISTS "Allow full access to bv_tests" ON public.bv_tests;
@@ -204,25 +246,50 @@ DROP POLICY IF EXISTS "Allow full access to notifications" ON public.notificatio
 DROP POLICY IF EXISTS "Allow full access to requisition_options" ON public.requisition_options;
 DROP POLICY IF EXISTS "Allow full access to style_photos" ON public.style_photos;
 
-CREATE POLICY "Allow full access to fabrics"
-  ON public.fabrics FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+-- Drop and recreate explicit SELECT, INSERT, UPDATE policies (Zero DELETE policies for frontend)
+DROP POLICY IF EXISTS "Frontend select fabrics" ON public.fabrics;
+DROP POLICY IF EXISTS "Frontend insert fabrics" ON public.fabrics;
+DROP POLICY IF EXISTS "Frontend update fabrics" ON public.fabrics;
+CREATE POLICY "Frontend select fabrics" ON public.fabrics FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Frontend insert fabrics" ON public.fabrics FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Frontend update fabrics" ON public.fabrics FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow full access to samples"
-  ON public.samples FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Frontend select samples" ON public.samples;
+DROP POLICY IF EXISTS "Frontend insert samples" ON public.samples;
+DROP POLICY IF EXISTS "Frontend update samples" ON public.samples;
+CREATE POLICY "Frontend select samples" ON public.samples FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Frontend insert samples" ON public.samples FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Frontend update samples" ON public.samples FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow full access to bv_tests"
-  ON public.bv_tests FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Frontend select bv_tests" ON public.bv_tests;
+DROP POLICY IF EXISTS "Frontend insert bv_tests" ON public.bv_tests;
+DROP POLICY IF EXISTS "Frontend update bv_tests" ON public.bv_tests;
+CREATE POLICY "Frontend select bv_tests" ON public.bv_tests FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Frontend insert bv_tests" ON public.bv_tests FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Frontend update bv_tests" ON public.bv_tests FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow full access to notifications"
-  ON public.notifications FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Frontend select notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Frontend insert notifications" ON public.notifications;
+DROP POLICY IF EXISTS "Frontend update notifications" ON public.notifications;
+CREATE POLICY "Frontend select notifications" ON public.notifications FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Frontend insert notifications" ON public.notifications FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Frontend update notifications" ON public.notifications FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow full access to requisition_options"
-  ON public.requisition_options FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Frontend select requisition_options" ON public.requisition_options;
+DROP POLICY IF EXISTS "Frontend insert requisition_options" ON public.requisition_options;
+DROP POLICY IF EXISTS "Frontend update requisition_options" ON public.requisition_options;
+CREATE POLICY "Frontend select requisition_options" ON public.requisition_options FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Frontend insert requisition_options" ON public.requisition_options FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Frontend update requisition_options" ON public.requisition_options FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow full access to style_photos"
-  ON public.style_photos FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Frontend select style_photos" ON public.style_photos;
+DROP POLICY IF EXISTS "Frontend insert style_photos" ON public.style_photos;
+DROP POLICY IF EXISTS "Frontend update style_photos" ON public.style_photos;
+CREATE POLICY "Frontend select style_photos" ON public.style_photos FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Frontend insert style_photos" ON public.style_photos FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Frontend update style_photos" ON public.style_photos FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
 
--- Storage Bucket Policies for 'style-photos'
+-- Storage Bucket Policies for 'style-photos' (View, Upload, Update ONLY - No Frontend Delete)
 DROP POLICY IF EXISTS "Public View Style Photos" ON storage.objects;
 DROP POLICY IF EXISTS "Public Upload Style Photos" ON storage.objects;
 DROP POLICY IF EXISTS "Public Update Style Photos" ON storage.objects;
@@ -240,12 +307,8 @@ CREATE POLICY "Public Update Style Photos"
   ON storage.objects FOR UPDATE TO anon, authenticated
   USING (bucket_id = 'style-photos');
 
-CREATE POLICY "Public Delete Style Photos"
-  ON storage.objects FOR DELETE TO anon, authenticated
-  USING (bucket_id = 'style-photos');
-
 -- =====================================================================================
--- 9. ENABLE REALTIME SUBSCRIPTIONS FOR LIVE MULTI-USER SYNC
+-- 10. ENABLE REALTIME SUBSCRIPTIONS FOR LIVE MULTI-USER SYNC
 -- =====================================================================================
 DO $$
 BEGIN

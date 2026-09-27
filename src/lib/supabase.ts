@@ -206,12 +206,9 @@ export function mapRowToSample(row: any): SampleItem {
       : undefined,
   };
 
-  if (!sample.thumbnail) {
-    sample.thumbnail = getSampleImage(sample);
-  }
-  if (!sample.images || sample.images.length === 0) {
-    sample.images = [sample.thumbnail];
-  }
+  const selectedImg = sample.thumbnail?.trim() || (sample.images && sample.images[0]?.trim()) || '';
+  sample.thumbnail = selectedImg || undefined;
+  sample.images = selectedImg ? [selectedImg] : [];
   return sample;
 }
 
@@ -260,8 +257,8 @@ export function mapSampleToRow(sample: SampleItem) {
     stage: sample.stage,
     priority: sample.priority,
     target_parcel_date: sample.targetParcelDate,
-    thumbnail: sample.thumbnail || getSampleImage(sample),
-    images: sample.images && sample.images.length > 0 ? sample.images : [sample.thumbnail || getSampleImage(sample)],
+    thumbnail: sample.thumbnail || null,
+    images: sample.thumbnail ? [sample.thumbnail] : [],
     stage_history: sample.stageHistory || [],
     sewing_operator: sample.sewingOperator || null,
     wash_details: sample.washDetails || {},
@@ -456,10 +453,12 @@ export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> 
   if (error) console.error('Supabase upsert sample error:', error);
 }
 
-export async function deleteSampleFromSupabase(sampleId: string): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.from('samples').delete().eq('id', sampleId);
-  if (error) console.error('Supabase delete sample error:', error);
+/**
+ * Direct deletion from the frontend system is disabled by policy.
+ * Once data is inputted into the system, it is permanently retained.
+ */
+export async function deleteSampleFromSupabase(_sampleId: string): Promise<void> {
+  console.warn('Direct deletion from the frontend system is disabled. Records are permanently retained.');
 }
 
 export async function upsertFabricInSupabase(fabric: FabricItem): Promise<void> {
@@ -468,10 +467,8 @@ export async function upsertFabricInSupabase(fabric: FabricItem): Promise<void> 
   if (error) console.error('Supabase upsert fabric error:', error);
 }
 
-export async function deleteFabricFromSupabase(fabricId: string): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.from('fabrics').delete().eq('id', fabricId);
-  if (error) console.error('Supabase delete fabric error:', error);
+export async function deleteFabricFromSupabase(_fabricId: string): Promise<void> {
+  console.warn('Direct deletion from the frontend system is disabled. Records are permanently retained.');
 }
 
 export async function upsertBVTestInSupabase(test: BVTestItem): Promise<void> {
@@ -480,10 +477,8 @@ export async function upsertBVTestInSupabase(test: BVTestItem): Promise<void> {
   if (error) console.error('Supabase upsert bv_test error:', error);
 }
 
-export async function deleteBVTestFromSupabase(testId: string): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.from('bv_tests').delete().eq('id', testId);
-  if (error) console.error('Supabase delete bv_test error:', error);
+export async function deleteBVTestFromSupabase(_testId: string): Promise<void> {
+  console.warn('Direct deletion from the frontend system is disabled. Records are permanently retained.');
 }
 
 export async function insertNotificationInSupabase(notif: PushNotification): Promise<void> {
@@ -506,18 +501,13 @@ export async function markAllNotificationsReadInSupabase(): Promise<void> {
 
 export async function clearAllNotificationsInSupabase(): Promise<void> {
   if (!supabase) return;
-  const { error } = await supabase.from('notifications').delete().neq('id', '');
-  if (error) console.error('Supabase clear notifications error:', error);
+  // Instead of deleting records, mark all notifications as read so audit logs are preserved
+  const { error } = await supabase.from('notifications').update({ read: true }).eq('read', false);
+  if (error) console.error('Supabase mark notifications read error:', error);
 }
 
 export async function clearAllDatabaseTablesInSupabase(): Promise<void> {
-  if (!supabase) return;
-  await Promise.all([
-    supabase.from('samples').delete().neq('id', ''),
-    supabase.from('fabrics').delete().neq('id', ''),
-    supabase.from('bv_tests').delete().neq('id', ''),
-    supabase.from('notifications').delete().neq('id', ''),
-  ]);
+  console.warn('Direct database deletion from the frontend system is permanently disabled.');
 }
 
 // ============================================================================

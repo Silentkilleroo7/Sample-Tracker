@@ -137,13 +137,31 @@ export function loadRequisitionOptions(): RequisitionOptions {
 }
 
 export async function syncRequisitionOptionsFromCloud(): Promise<RequisitionOptions> {
+  const localOptions = loadRequisitionOptions();
   const cloudOptions = await fetchRequisitionOptionsFromSupabase();
   if (cloudOptions) {
-    const clean = sanitizeOptions(cloudOptions);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
-    return clean;
+    const cleanCloud = sanitizeOptions(cloudOptions);
+    const mergedLineCodesMap = new Map<string, LineCodeOption>();
+    [...cleanCloud.lineCodes, ...localOptions.lineCodes].forEach((lc) => {
+      if (lc && lc.code) {
+        mergedLineCodesMap.set(lc.code, lc);
+      }
+    });
+
+    const merged: RequisitionOptions = {
+      buyers: Array.from(new Set([...cleanCloud.buyers, ...localOptions.buyers])),
+      lineCodes: Array.from(mergedLineCodesMap.values()),
+      sampleTypes: Array.from(new Set([...cleanCloud.sampleTypes, ...localOptions.sampleTypes])),
+      sizes: Array.from(new Set([...cleanCloud.sizes, ...localOptions.sizes])),
+      colors: Array.from(new Set([...cleanCloud.colors, ...localOptions.colors])),
+      washTypes: Array.from(new Set([...cleanCloud.washTypes, ...localOptions.washTypes])),
+      couriers: Array.from(new Set([...cleanCloud.couriers, ...localOptions.couriers])),
+    };
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    return merged;
   }
-  return loadRequisitionOptions();
+  return localOptions;
 }
 
 export function saveRequisitionOptions(options: RequisitionOptions): void {

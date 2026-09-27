@@ -3,7 +3,6 @@ import {
   SampleItem,
   STAGE_CONFIG,
   getSampleImage,
-  PRESET_STYLE_IMAGES,
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getGranularApprovalStatus,
@@ -53,25 +52,19 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
   onUpdateSampleThumbnail,
 }) => {
   const { openZoom } = useImageZoom();
-  const [selectedPhotoIdx, setSelectedPhotoIdx] = useState(0);
   const [inlineZoomed, setInlineZoomed] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   if (!isOpen || !sample) return null;
 
   const currentStageConfig = STAGE_CONFIG[sample.stage];
-  const primaryPhoto = getSampleImage(sample);
-  const galleryPhotos = Array.from(
-    new Set([
-      primaryPhoto,
-      ...(sample.images || []),
-      PRESET_STYLE_IMAGES.find((p) => p.url !== primaryPhoto)?.url || PRESET_STYLE_IMAGES[0].url,
-    ].filter(Boolean))
-  );
-  const activePhoto = galleryPhotos[selectedPhotoIdx % galleryPhotos.length] || primaryPhoto;
+  // Connect ONLY the single selected image with this style
+  const selectedPhoto = getSampleImage(sample);
 
   const handlePrint = () => {
-    window.print();
+    if (onOpenRequisitionSlip) {
+      onOpenRequisitionSlip(sample);
+    }
   };
 
   return (
@@ -149,42 +142,32 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Product Picture Showcase & Double-Click Zoom Inspector */}
+        {/* Selected Style Product Picture Section */}
         <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/80 mb-5">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <h3 className="font-bold text-white flex items-center gap-1.5 text-xs">
               <ImageIcon className="w-4 h-4 text-indigo-400" />
-              <span>Style Product Pictures & Spec Gallery</span>
-              <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-mono">
-                Double-click picture to zoom
-              </span>
+              <span>Selected Style Image Connected to {sample.styleCode}</span>
             </h3>
             <div className="flex flex-wrap items-center gap-2">
               {onUpdateSampleThumbnail && (
                 <label className="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors">
                   <Upload className={`w-3.5 h-3.5 ${isUploading ? 'animate-bounce' : ''}`} />
-                  <span>{isUploading ? 'Uploading...' : 'Upload Photo'}</span>
+                  <span>{isUploading ? 'Uploading...' : selectedPhoto ? 'Replace Selected Photo' : 'Select / Upload Photo'}</span>
                   <input
                     type="file"
                     accept="image/*"
-                    multiple
                     onChange={async (e) => {
                       const files = e.target.files;
                       if (!files || files.length === 0) return;
                       setIsUploading(true);
                       try {
-                        const uploadedUrls: string[] = [];
-                        for (let i = 0; i < files.length; i++) {
-                          const res = await uploadStylePhoto(files[i], {
-                            sampleId: sample.id,
-                            styleCode: sample.styleCode,
-                          });
-                          if (res.url) uploadedUrls.push(res.url);
-                        }
-                        if (uploadedUrls.length > 0) {
-                          const nextGallery = Array.from(new Set([...uploadedUrls, ...galleryPhotos]));
-                          onUpdateSampleThumbnail(sample.id, uploadedUrls[0], nextGallery);
-                          setSelectedPhotoIdx(0);
+                        const res = await uploadStylePhoto(files[0], {
+                          sampleId: sample.id,
+                          styleCode: sample.styleCode,
+                        });
+                        if (res.url) {
+                          onUpdateSampleThumbnail(sample.id, res.url, [res.url]);
                         }
                       } finally {
                         setIsUploading(false);
@@ -195,38 +178,41 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
                   />
                 </label>
               )}
-              <button
-                type="button"
-                onClick={() => setInlineZoomed((z) => !z)}
-                className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-              >
-                <ZoomIn className="w-3.5 h-3.5 text-indigo-400" />
-                <span>{inlineZoomed ? 'Reset Inline Zoom' : 'Inline 2× Zoom'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => openZoom(sample, activePhoto, true)}
-                className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center gap-1 shadow cursor-pointer transition-colors"
-              >
-                <Maximize2 className="w-3.5 h-3.5" />
-                <span>Full-Screen Zoom Inspector</span>
-              </button>
+              {selectedPhoto && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setInlineZoomed((z) => !z)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{inlineZoomed ? 'Reset Inline Zoom' : 'Inline 2× Zoom'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openZoom(sample, selectedPhoto, true)}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center gap-1 shadow cursor-pointer transition-colors"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span>Full-Screen Zoom Inspector</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
-            {/* Main Interactive Product Picture */}
+          {selectedPhoto ? (
             <div
               onDoubleClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                openZoom(sample, activePhoto, true);
+                openZoom(sample, selectedPhoto, true);
               }}
               title="Double-click product picture to open High-Resolution Zoom Inspector"
-              className="md:col-span-3 relative h-64 sm:h-72 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 hover:border-indigo-400 flex items-center justify-center cursor-zoom-in group/detailimg select-none"
+              className="relative h-64 sm:h-72 rounded-xl overflow-hidden bg-slate-950 border border-slate-700 hover:border-indigo-400 flex items-center justify-center cursor-zoom-in group/detailimg select-none"
             >
               <img
-                src={activePhoto}
+                src={selectedPhoto}
                 alt={sample.styleName}
                 draggable={false}
                 className={`max-h-full max-w-full object-contain transition-transform duration-300 ${
@@ -238,40 +224,12 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
                 <span>Double-click picture to zoom</span>
               </div>
             </div>
-
-            {/* Multi-Angle Thumbnails */}
-            <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-visible">
-              {galleryPhotos.map((photoUrl, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    setSelectedPhotoIdx(idx);
-                    setInlineZoomed(false);
-                  }}
-                  onDoubleClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    openZoom(sample, photoUrl, true);
-                  }}
-                  title="Click to switch view • Double-click to zoom"
-                  className={`relative h-20 md:h-22 w-20 md:w-full rounded-xl overflow-hidden border-2 cursor-pointer transition-all shrink-0 ${
-                    selectedPhotoIdx % galleryPhotos.length === idx
-                      ? 'border-indigo-500 ring-2 ring-indigo-500/30'
-                      : 'border-slate-700 opacity-65 hover:opacity-100'
-                  }`}
-                >
-                  <img
-                    src={photoUrl}
-                    alt={`${sample.styleName} view ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  <span className="absolute bottom-1 left-1 px-1.5 py-0.2 rounded bg-black/75 text-[9px] font-mono text-white font-bold">
-                    View #{idx + 1}
-                  </span>
-                </div>
-              ))}
+          ) : (
+            <div className="h-32 rounded-xl bg-slate-950/60 border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500 gap-1">
+              <ImageIcon className="w-6 h-6 opacity-50" />
+              <span className="text-xs">No image selected for this style</span>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Visual Progress Bar Section */}

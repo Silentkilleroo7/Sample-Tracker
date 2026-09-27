@@ -12,6 +12,7 @@ import {
   Building2,
   FileText,
   ShieldAlert,
+  Lock,
 } from 'lucide-react';
 import {
   BVTestItem,
@@ -29,7 +30,7 @@ interface TestSectionViewProps {
   onOpenNewTestModal: () => void;
   onOpenUpdateResultModal: (test: BVTestItem) => void;
   onOpenResubmitModal: (test: BVTestItem) => void;
-  onDeleteTest: (testId: string) => void;
+  onDeleteTest?: (testId: string) => void;
 }
 
 export const TestSectionView: React.FC<TestSectionViewProps> = ({
@@ -38,7 +39,6 @@ export const TestSectionView: React.FC<TestSectionViewProps> = ({
   onOpenNewTestModal,
   onOpenUpdateResultModal,
   onOpenResubmitModal,
-  onDeleteTest,
 }) => {
   const [filterTab, setFilterTab] = useState<
     'all' | 'pending' | 'passed' | 'failed' | 'retest_submitted' | 'garment' | 'fabric'
@@ -558,14 +558,13 @@ export const TestSectionView: React.FC<TestSectionViewProps> = ({
                     </button>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => onDeleteTest(test.id)}
-                    className="px-2 py-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                    title="Remove Test"
+                  <span
+                    className="px-2.5 py-1.5 text-emerald-400/80 bg-slate-800/60 border border-slate-700/60 rounded-lg flex items-center gap-1 text-[10px] font-semibold"
+                    title="Permanent Record: Saved BV test records cannot be deleted directly from the frontend system"
                   >
-                    Remove
-                  </button>
+                    <Lock className="w-3 h-3" />
+                    <span>Permanent Record</span>
+                  </span>
                 </div>
               </div>
             </div>

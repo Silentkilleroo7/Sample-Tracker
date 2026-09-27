@@ -3,7 +3,7 @@ import {
   SampleItem,
   VolarRequisitionForm,
   TrimsChecklist,
-  getEffectiveShipmentDate,
+  getSampleImage,
 } from '../types/sample';
 import { StyleProductImage } from './StyleProductImage';
 import {
@@ -81,11 +81,9 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
     if (!sample) return;
     setIsEditMode(false);
     setShowSaveConfirmModal(false);
-    const effectiveShipDate = getEffectiveShipmentDate(sample);
     if (sample.requisitionForm && sample.requisitionForm.companyName) {
       setForm({
         ...sample.requisitionForm,
-        shipmentDate: sample.requisitionForm.shipmentDate || effectiveShipDate,
         isLocked: Boolean(sample.isRequisitionLocked || sample.requisitionForm.isLocked),
       });
     } else {
@@ -93,7 +91,6 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
         companyName: 'VOLAR FASHION PVT LTD',
         date: formatVolarDate(sample.createdAt),
         requiredDate: formatVolarDate(sample.targetParcelDate),
-        shipmentDate: effectiveShipDate,
         buyer: sample.buyer || '',
         requestedBy: '',
         priorityType: sample.priority === 'urgent' ? 'urgent' : 'normal',
@@ -170,7 +167,6 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
       companyName: 'VOLAR FASHION PVT LTD',
       date: formatVolarDate(sample.createdAt),
       requiredDate: formatVolarDate(sample.targetParcelDate),
-      shipmentDate: getEffectiveShipmentDate(sample),
       buyer: sample.buyer || '',
       requestedBy: '',
       priorityType: sample.priority === 'urgent' ? 'urgent' : 'normal',
@@ -316,9 +312,6 @@ Special Instructions: ${form.specialInstructions}
                 <strong>Requisition Permanently Saved &amp; Locked:</strong> This requisition was confirmed and saved. Once saved, it cannot be edited. You can print or copy the official requisition slip below.
               </span>
             </div>
-            <span className="text-[11px] font-mono text-amber-300 font-bold shrink-0 ml-2">
-              Shipment Date: {form.shipmentDate || getEffectiveShipmentDate(sample)}
-            </span>
           </div>
         ) : (
           isEditMode && (
@@ -368,13 +361,13 @@ Special Instructions: ${form.specialInstructions}
             </div>
           </div>
 
-          {/* Top Metadata Grid */}
+          {/* Top Metadata Grid (Shipment Date intentionally excluded from Requisition Form) */}
           <div className="border border-black text-[11px] sm:text-xs">
             <div className="grid grid-cols-12 border-b border-black">
               <div className="col-span-2 p-1.5 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
                 DATE:
               </div>
-              <div className="col-span-2 p-1.5 font-bold text-black border-r border-black flex items-center">
+              <div className="col-span-4 p-1.5 font-bold text-black border-r border-black flex items-center">
                 {isEditMode && !isRequisitionLocked ? (
                   <input
                     type="text"
@@ -387,10 +380,10 @@ Special Instructions: ${form.specialInstructions}
                 )}
               </div>
 
-              <div className="col-span-2 p-1.5 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
+              <div className="col-span-3 p-1.5 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
                 REQUIRED DATE:
               </div>
-              <div className="col-span-2 p-1.5 font-bold text-black border-r border-black flex items-center">
+              <div className="col-span-3 p-1.5 font-bold text-black flex items-center">
                 {isEditMode && !isRequisitionLocked ? (
                   <input
                     type="text"
@@ -400,24 +393,6 @@ Special Instructions: ${form.specialInstructions}
                   />
                 ) : (
                   <span className="font-bold text-black">{form.requiredDate}</span>
-                )}
-              </div>
-
-              <div className="col-span-2 p-1.5 font-bold uppercase bg-amber-100 border-r border-black flex items-center">
-                SHIPMENT DATE:
-              </div>
-              <div className="col-span-2 p-1.5 font-black text-black bg-amber-50/60 flex items-center">
-                {isEditMode && !isRequisitionLocked ? (
-                  <input
-                    type="date"
-                    value={form.shipmentDate || getEffectiveShipmentDate(sample)}
-                    onChange={(e) => setForm({ ...form, shipmentDate: e.target.value })}
-                    className="w-full bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold"
-                  />
-                ) : (
-                  <span className="font-black text-black font-mono">
-                    {form.shipmentDate || getEffectiveShipmentDate(sample)}
-                  </span>
                 )}
               </div>
             </div>
@@ -513,7 +488,7 @@ Special Instructions: ${form.specialInstructions}
               <div className="col-span-2 p-2 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
                 DESCRIPTION:
               </div>
-              <div className="col-span-10 p-2 font-black text-base sm:text-lg tracking-wider text-black flex items-center">
+              <div className={`${getSampleImage(sample) ? 'col-span-8 border-r border-black' : 'col-span-10'} p-2 font-black text-base sm:text-lg tracking-wider text-black flex items-center`}>
                 {isEditMode ? (
                   <input
                     type="text"
@@ -525,6 +500,18 @@ Special Instructions: ${form.specialInstructions}
                   <span>{form.descriptionCode}</span>
                 )}
               </div>
+              {getSampleImage(sample) && (
+                <div className="col-span-2 p-1.5 flex flex-col items-center justify-center bg-white">
+                  <img
+                    src={getSampleImage(sample)}
+                    alt={sample.styleCode}
+                    className="h-12 w-12 object-cover rounded border border-black"
+                  />
+                  <span className="text-[8px] font-bold uppercase text-black mt-0.5">
+                    Selected Image
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-12 border-b border-black bg-slate-100 font-bold text-center">
@@ -988,7 +975,7 @@ Special Instructions: ${form.specialInstructions}
                 />
               ) : (
                 <span className="text-black italic">
-                  {form.samplingSectionNotes || 'Pattern check complete. Trims matched to spec.'}
+                  {form.samplingSectionNotes}
                 </span>
               )}
             </div>
@@ -1068,7 +1055,7 @@ Special Instructions: ${form.specialInstructions}
                     Save &amp; Lock Requisition Form?
                   </h3>
                   <p className="text-slate-400 text-xs mt-1 leading-relaxed">
-                    Once saved, this requisition for <strong>{sample.styleCode}</strong> (Shipment Date: <strong>{form.shipmentDate || getEffectiveShipmentDate(sample)}</strong>) will be permanently locked and <strong>cannot be edited</strong> again.
+                    Once saved, this requisition for <strong>{sample.styleCode}</strong> will be permanently locked and <strong>cannot be edited</strong> again.
                   </p>
                 </div>
               </div>

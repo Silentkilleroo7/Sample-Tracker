@@ -23,7 +23,6 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  Trash2,
   MessageCircle,
   Phone,
   Printer,
@@ -38,7 +37,7 @@ interface AllSamplesViewProps {
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
   onNewRequisition: () => void;
-  onDeleteSample: (id: string) => void;
+  onDeleteSample?: (id: string) => void;
   initialStageFilter?: SampleStage | 'all';
   onOpenFollowUp?: (sample: SampleItem) => void;
   onToggleWorkbookSent?: (sampleId: string) => void;
@@ -56,7 +55,6 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
   onSelectSample,
   onAdvanceStage,
   onNewRequisition,
-  onDeleteSample,
   initialStageFilter = 'all',
   onOpenFollowUp,
   onToggleWorkbookSent,
@@ -548,7 +546,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                                   onSendWhatsApp &&
                                     onSendWhatsApp(
                                       sample,
-                                      sample.parcelDetails.followUp?.whatsAppNumber || '+1 (215) 555-0199'
+                                      sample.parcelDetails.followUp?.whatsAppNumber || ''
                                     );
                                 }}
                                 className="p-1.5 text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow transition-colors cursor-pointer"
@@ -571,7 +569,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                           <button
                             onClick={() => onOpenRequisitionSlip && onOpenRequisitionSlip(sample)}
                             className="p-1.5 text-slate-400 hover:text-indigo-300 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                            title="Print Sample Requisition Slip & Summary Docket"
+                            title="Open & Print Sample Requisition Form"
                           >
                             <Printer className="w-4 h-4" />
                           </button>
@@ -582,13 +580,12 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => onDeleteSample(sample.id)}
-                            className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                            title="Delete Sample"
+                          <span
+                            className="p-1.5 text-emerald-400/70 bg-slate-800/60 rounded-lg border border-slate-700/60"
+                            title="Permanent Record: Saved data cannot be deleted directly from the frontend system"
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                            <Lock className="w-3.5 h-3.5" />
+                          </span>
                         </div>
                       </td>
                     </tr>
@@ -713,34 +710,47 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                       onClick={() => onSelectSample(sample)}
                       className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 transition-all cursor-pointer shadow-md group"
                     >
-                      <div
-                        onDoubleClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          openZoom(sample, getSampleImage(sample), true);
-                        }}
-                        title="Double-click product picture to zoom"
-                        className="w-full h-28 rounded-lg overflow-hidden mb-2 bg-slate-900 border border-slate-700/60 hover:border-indigo-400 relative cursor-zoom-in group/kimg"
-                      >
-                        <img
-                          src={getSampleImage(sample)}
-                          alt={sample.styleName}
-                          draggable={false}
-                          className="w-full h-full object-cover group-hover/kimg:scale-110 transition-transform duration-300"
-                        />
-                        <div className="absolute top-1.5 left-1.5 font-mono font-black text-indigo-300 text-[10px] px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-xs border border-indigo-500/30">
-                          {sample.styleCode}
-                        </div>
-                        {sample.priority === 'urgent' && (
-                          <div className="absolute top-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-600/90 text-white shadow">
-                            URGENT
+                      {getSampleImage(sample) ? (
+                        <div
+                          onDoubleClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openZoom(sample, getSampleImage(sample), true);
+                          }}
+                          title="Double-click product picture to zoom"
+                          className="w-full h-28 rounded-lg overflow-hidden mb-2 bg-slate-900 border border-slate-700/60 hover:border-indigo-400 relative cursor-zoom-in group/kimg"
+                        >
+                          <img
+                            src={getSampleImage(sample)}
+                            alt={sample.styleName}
+                            draggable={false}
+                            className="w-full h-full object-cover group-hover/kimg:scale-110 transition-transform duration-300"
+                          />
+                          <div className="absolute top-1.5 left-1.5 font-mono font-black text-indigo-300 text-[10px] px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-xs border border-indigo-500/30">
+                            {sample.styleCode}
                           </div>
-                        )}
-                        <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-indigo-200 text-[9px] font-bold flex items-center gap-1 opacity-85 group-hover/kimg:opacity-100 group-hover/kimg:bg-indigo-600 group-hover/kimg:text-white transition-all">
-                          <ZoomIn className="w-2.5 h-2.5" />
-                          <span>Double-click zoom</span>
+                          {sample.priority === 'urgent' && (
+                            <div className="absolute top-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-600/90 text-white shadow">
+                              URGENT
+                            </div>
+                          )}
+                          <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-indigo-200 text-[9px] font-bold flex items-center gap-1 opacity-85 group-hover/kimg:opacity-100 group-hover/kimg:bg-indigo-600 group-hover/kimg:text-white transition-all">
+                            <ZoomIn className="w-2.5 h-2.5" />
+                            <span>Double-click zoom</span>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-mono font-black text-indigo-300 text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-indigo-500/30">
+                            {sample.styleCode}
+                          </span>
+                          {sample.priority === 'urgent' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-600/90 text-white shadow">
+                              URGENT
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <h4 className="font-bold text-white text-xs line-clamp-2 group-hover:text-indigo-300 transition-colors">
                         {sample.styleName}
                       </h4>
@@ -793,7 +803,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                                 onSendWhatsApp &&
                                   onSendWhatsApp(
                                     sample,
-                                    sample.parcelDetails.followUp?.whatsAppNumber || '+1 (215) 555-0199'
+                                    sample.parcelDetails.followUp?.whatsAppNumber || ''
                                   );
                               }}
                               className="p-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded shadow"

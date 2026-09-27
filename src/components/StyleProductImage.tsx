@@ -3,7 +3,6 @@ import {
   SampleItem,
   STAGE_CONFIG,
   getSampleImage,
-  PRESET_STYLE_IMAGES,
 } from '../types/sample';
 import { uploadStylePhoto } from '../lib/supabase';
 import {
@@ -12,13 +11,11 @@ import {
   RotateCcw,
   X,
   Maximize2,
-  ChevronLeft,
-  ChevronRight,
   Upload,
   Sparkles,
   Move,
   Check,
-  Layers,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 interface ImageZoomContextValue {
@@ -43,8 +40,7 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
   onUpdateSampleThumbnail,
 }) => {
   const [activeSample, setActiveSample] = useState<SampleItem | null>(null);
-  const [gallery, setGallery] = useState<string[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState<number>(0);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string>('');
   const [scale, setScale] = useState<number>(1);
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -55,33 +51,22 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const openZoom = (sample: SampleItem, initialImageUrl?: string, startZoomed = true) => {
-    const primary = getSampleImage(sample);
-    const extra = sample.images || [];
-    // Build unique gallery of images for this style
-    const uniqueUrls = Array.from(new Set([primary, ...extra].filter(Boolean)));
-    // Ensure at least 2 angles in the gallery so the user can inspect multiple views
-    if (uniqueUrls.length === 1) {
-      const altPreset =
-        PRESET_STYLE_IMAGES.find((p) => p.url !== uniqueUrls[0])?.url ||
-        PRESET_STYLE_IMAGES[0].url;
-      uniqueUrls.push(altPreset);
-    }
+    const connectedImage = initialImageUrl || getSampleImage(sample);
+    if (!connectedImage) return;
 
-    const startIdx = initialImageUrl ? Math.max(0, uniqueUrls.indexOf(initialImageUrl)) : 0;
     setActiveSample(sample);
-    setGallery(uniqueUrls);
-    setSelectedIndex(startIdx);
+    setSelectedImageUrl(connectedImage);
     setScale(startZoomed ? 2.2 : 1);
     setPosition({ x: 0, y: 0 });
   };
 
   const closeZoom = () => {
     setActiveSample(null);
+    setSelectedImageUrl('');
     setScale(1);
     setPosition({ x: 0, y: 0 });
   };
 
-  // Keyboard shortcuts (Escape, +, -, ArrowLeft, ArrowRight)
   useEffect(() => {
     if (!activeSample) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -100,22 +85,11 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
         setScale(1);
         setPosition({ x: 0, y: 0 });
       }
-      if (e.key === 'ArrowRight') {
-        setSelectedIndex((idx) => (idx + 1) % gallery.length);
-        setScale(1);
-        setPosition({ x: 0, y: 0 });
-      }
-      if (e.key === 'ArrowLeft') {
-        setSelectedIndex((idx) => (idx - 1 + gallery.length) % gallery.length);
-        setScale(1);
-        setPosition({ x: 0, y: 0 });
-      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeSample, gallery.length]);
+  }, [activeSample]);
 
-  // Double-click inside the zoom viewer cycles zoom levels centered on cursor!
   const handleCanvasDoubleClick = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (!containerRef.current) return;
@@ -171,24 +145,16 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
 
     setIsUploadingPhoto(true);
     try {
-      const uploadedUrls: string[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const result = await uploadStylePhoto(files[i], {
-          sampleId: activeSample.id,
-          styleCode: activeSample.styleCode,
-        });
-        if (result.url) {
-          uploadedUrls.push(result.url);
-        }
-      }
+      const result = await uploadStylePhoto(files[0], {
+        sampleId: activeSample.id,
+        styleCode: activeSample.styleCode,
+      });
 
-      if (uploadedUrls.length > 0) {
-        const nextGallery = Array.from(new Set([...uploadedUrls, ...gallery]));
-        setGallery(nextGallery);
-        setSelectedIndex(0);
+      if (result.url) {
+        setSelectedImageUrl(result.url);
         setScale(1);
         setPosition({ x: 0, y: 0 });
-        onUpdateSampleThumbnail?.(activeSample.id, uploadedUrls[0], nextGallery);
+        onUpdateSampleThumbnail?.(activeSample.id, result.url, [result.url]);
         setJustUpdatedPhoto(true);
         setTimeout(() => setJustUpdatedPhoto(false), 2500);
       }
@@ -202,8 +168,8 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
     <ImageZoomContext.Provider value={{ openZoom, closeZoom }}>
       {children}
 
-      {/* Full-Screen High-Resolution Product Zoom Modal */}
-      {activeSample && (
+      {/* Full-Screen High-Resolution Product Zoom Modal (Shows ONLY the Selected Image connected to the style) */}
+      {activeSample && selectedImageUrl && (
         <div
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex flex-col select-none animate-in fade-in duration-150 print:hidden"
           onClick={closeZoom}
@@ -244,7 +210,6 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
                 <span>Double-click picture to toggle zoom (1x → 2.25x → 3.5x)</span>
               </div>
 
-              {/* Zoom Out */}
               <button
                 type="button"
                 onClick={() => {
@@ -261,7 +226,6 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
                 <ZoomOut className="w-4 h-4" />
               </button>
 
-              {/* Zoom Level Indicator / Quick Cycle */}
               <button
                 type="button"
                 onClick={() => {
@@ -278,7 +242,6 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
                 {Math.round(scale * 100)}%
               </button>
 
-              {/* Zoom In */}
               <button
                 type="button"
                 onClick={() => setScale((s) => Math.min(4, +(s + 0.5).toFixed(2)))}
@@ -289,7 +252,6 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
                 <ZoomIn className="w-4 h-4" />
               </button>
 
-              {/* Reset View */}
               <button
                 type="button"
                 onClick={() => {
@@ -303,7 +265,7 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
                 <span className="hidden sm:inline">Reset</span>
               </button>
 
-              {/* Upload New Product Photo */}
+              {/* Change / Replace Selected Product Photo */}
               <label className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 text-xs font-bold transition-colors cursor-pointer">
                 {isUploadingPhoto ? (
                   <>
@@ -313,24 +275,22 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
                 ) : justUpdatedPhoto ? (
                   <>
                     <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Photo Saved!</span>
+                    <span>Photo Replaced!</span>
                   </>
                 ) : (
                   <>
                     <Upload className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Upload Product Photo</span>
+                    <span className="hidden sm:inline">Replace Selected Photo</span>
                   </>
                 )}
                 <input
                   type="file"
                   accept="image/*"
-                  multiple
                   onChange={handleUploadNewPhoto}
                   className="hidden"
                 />
               </label>
 
-              {/* Close Button */}
               <button
                 type="button"
                 onClick={closeZoom}
@@ -360,53 +320,17 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
                 : 'cursor-zoom-in'
             }`}
           >
-            {/* Previous Image Button */}
-            {gallery.length > 1 && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedIndex((idx) => (idx - 1 + gallery.length) % gallery.length);
-                  setScale(1);
-                  setPosition({ x: 0, y: 0 });
-                }}
-                className="absolute left-4 z-20 p-3 rounded-full bg-slate-900/80 hover:bg-indigo-600 text-white border border-slate-700 shadow-xl transition-all cursor-pointer"
-                title="Previous Angle"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-            )}
-
-            {/* Zoomable Product Image */}
             <img
-              src={gallery[selectedIndex]}
-              alt={`${activeSample.styleName} - View ${selectedIndex + 1}`}
+              src={selectedImageUrl}
+              alt={`${activeSample.styleName} - Connected Style Image`}
               draggable={false}
               style={{
                 transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
                 transition: isDragging ? 'none' : 'transform 0.22s cubic-bezier(0.2, 0, 0, 1)',
               }}
-              className="max-h-[75vh] max-w-[88vw] object-contain rounded-xl shadow-2xl border border-white/10"
+              className="max-h-[78vh] max-w-[88vw] object-contain rounded-xl shadow-2xl border border-white/10"
             />
 
-            {/* Next Image Button */}
-            {gallery.length > 1 && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedIndex((idx) => (idx + 1) % gallery.length);
-                  setScale(1);
-                  setPosition({ x: 0, y: 0 });
-                }}
-                className="absolute right-4 z-20 p-3 rounded-full bg-slate-900/80 hover:bg-indigo-600 text-white border border-slate-700 shadow-xl transition-all cursor-pointer"
-                title="Next Angle"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            )}
-
-            {/* Floating Helper Overlay at Bottom of Canvas */}
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/80 text-[11px] text-slate-300 flex items-center gap-3 shadow-xl pointer-events-none">
               <span className="flex items-center gap-1 text-indigo-300 font-semibold">
                 <ZoomIn className="w-3.5 h-3.5" />
@@ -418,66 +342,6 @@ export const ImageZoomProvider: React.FC<ImageZoomProviderProps> = ({
                   Drag to pan around garment details
                 </span>
               )}
-            </div>
-          </div>
-
-          {/* Bottom Multi-Angle Thumbnail Strip & Garment Spec Summary */}
-          <div
-            className="px-4 sm:px-6 py-3 bg-slate-900/95 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-2.5 overflow-x-auto pb-1 sm:pb-0">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
-                <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                Product Views ({gallery.length}):
-              </span>
-              {gallery.map((imgUrl, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setSelectedIndex(idx);
-                    setScale(1);
-                    setPosition({ x: 0, y: 0 });
-                  }}
-                  className={`relative w-12 h-14 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${
-                    selectedIndex === idx
-                      ? 'border-indigo-400 scale-105 shadow-md shadow-indigo-500/30'
-                      : 'border-slate-700 opacity-60 hover:opacity-100'
-                  }`}
-                >
-                  <img
-                    src={imgUrl}
-                    alt={`Angle ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                  <span className="absolute bottom-0 inset-x-0 bg-black/75 text-[8px] font-mono text-white text-center">
-                    #{idx + 1}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            {/* Quick Zoom Presets */}
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="text-slate-400 text-[11px] mr-1">Magnification:</span>
-              {[1, 1.75, 2.5, 3.5].map((presetScale) => (
-                <button
-                  key={presetScale}
-                  type="button"
-                  onClick={() => {
-                    setScale(presetScale);
-                    if (presetScale === 1) setPosition({ x: 0, y: 0 });
-                  }}
-                  className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold transition-all cursor-pointer ${
-                    Math.abs(scale - presetScale) < 0.15
-                      ? 'bg-indigo-600 text-white shadow'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
-                  }`}
-                >
-                  {presetScale}x
-                </button>
-              ))}
             </div>
           </div>
         </div>
@@ -496,7 +360,7 @@ interface StyleProductImageProps {
 
 /**
  * Reusable Product Picture component for any Style.
- * Double-clicking on the picture immediately opens the high-resolution Zoom Inspector.
+ * Displays ONLY the Selected Image connected with that style.
  */
 export const StyleProductImage: React.FC<StyleProductImageProps> = ({
   sample,
@@ -516,6 +380,17 @@ export const StyleProductImage: React.FC<StyleProductImageProps> = ({
     banner: 'w-full h-28 rounded-xl',
   };
 
+  if (!imageUrl) {
+    return (
+      <div
+        className={`relative overflow-hidden bg-slate-900/80 border border-dashed border-slate-700 flex flex-col items-center justify-center text-slate-500 select-none shrink-0 ${sizeClasses[size]} ${className}`}
+        title={`No image selected for ${sample.styleCode}`}
+      >
+        <ImageIcon className="w-3.5 h-3.5 opacity-50" />
+      </div>
+    );
+  }
+
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -525,9 +400,6 @@ export const StyleProductImage: React.FC<StyleProductImageProps> = ({
   return (
     <div
       onDoubleClick={handleDoubleClick}
-      onClick={(e) => {
-        // Prevent single click on the zoom badge from triggering parent card navigation if user clicks the lens icon
-      }}
       title={`Double-click picture to zoom "${sample.styleName}" (${sample.styleCode})`}
       className={`relative overflow-hidden bg-slate-900 border border-slate-700/80 hover:border-indigo-400 transition-all group/img select-none cursor-zoom-in shrink-0 shadow-sm ${sizeClasses[size]} ${className}`}
     >
@@ -538,7 +410,6 @@ export const StyleProductImage: React.FC<StyleProductImageProps> = ({
         draggable={false}
       />
 
-      {/* Subtle hover overlay indicating Double-Click to Zoom */}
       {showBadge && (
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity flex flex-col items-center justify-end p-1 pointer-events-none">
           <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-600/95 text-white text-[8px] font-bold tracking-tight shadow">
@@ -548,7 +419,6 @@ export const StyleProductImage: React.FC<StyleProductImageProps> = ({
         </div>
       )}
 
-      {/* Corner mini zoom indicator icon */}
       <button
         type="button"
         onClick={(e) => {
