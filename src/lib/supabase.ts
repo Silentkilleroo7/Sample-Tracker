@@ -117,6 +117,23 @@ export function mapRowToSample(row: any): SampleItem {
       ? Boolean(reqForm.isLocked)
       : Boolean(pDetails?.isRequisitionLocked);
 
+  const effectiveThreadNote =
+    row.thread_note ||
+    reqForm?.threadNote ||
+    reqForm?.trims?.threadNote ||
+    reqForm?.threadInstruction ||
+    '';
+  const effectiveZipperNote =
+    row.zipper_note ||
+    reqForm?.zipperNote ||
+    reqForm?.trims?.zipperNote ||
+    '';
+  const effectiveButtonNote =
+    row.button_note ||
+    reqForm?.buttonNote ||
+    reqForm?.trims?.buttonNote ||
+    '';
+
   const sample: SampleItem = {
     id: row.id,
     styleCode: row.style_code || '',
@@ -132,6 +149,9 @@ export function mapRowToSample(row: any): SampleItem {
     fabricCode: row.fabric_code || '',
     fabricName: row.fabric_name || '',
     fabricRequiredYards: Number(row.fabric_required_yards ?? 0),
+    threadNote: effectiveThreadNote,
+    zipperNote: effectiveZipperNote,
+    buttonNote: effectiveButtonNote,
     stage: row.stage || 'requisition',
     priority: row.priority || 'normal',
     targetParcelDate: row.target_parcel_date || '',
@@ -201,6 +221,15 @@ export function mapRowToSample(row: any): SampleItem {
       ? {
           ...reqForm,
           shipmentDate: reqForm.shipmentDate || effectiveShipmentDate,
+          threadNote: effectiveThreadNote,
+          zipperNote: effectiveZipperNote,
+          buttonNote: effectiveButtonNote,
+          trims: {
+            ...(reqForm.trims || {}),
+            threadNote: reqForm.trims?.threadNote || effectiveThreadNote,
+            zipperNote: reqForm.trims?.zipperNote || effectiveZipperNote,
+            buttonNote: reqForm.trims?.buttonNote || effectiveButtonNote,
+          },
           isLocked,
         }
       : undefined,
@@ -222,6 +251,23 @@ export function mapSampleToRow(sample: SampleItem) {
     sample.isRequisitionLocked || sample.requisitionForm?.isLocked
   );
 
+  const effectiveThreadNote =
+    sample.threadNote ||
+    sample.requisitionForm?.trims?.threadNote ||
+    sample.requisitionForm?.threadNote ||
+    sample.requisitionForm?.threadInstruction ||
+    '';
+  const effectiveZipperNote =
+    sample.zipperNote ||
+    sample.requisitionForm?.trims?.zipperNote ||
+    sample.requisitionForm?.zipperNote ||
+    '';
+  const effectiveButtonNote =
+    sample.buttonNote ||
+    sample.requisitionForm?.trims?.buttonNote ||
+    sample.requisitionForm?.buttonNote ||
+    '';
+
   const enrichedParcelDetails = {
     ...(sample.parcelDetails || {}),
     shipmentDate: effectiveShipmentDate,
@@ -232,10 +278,22 @@ export function mapSampleToRow(sample: SampleItem) {
     ? {
         ...sample.requisitionForm,
         shipmentDate: effectiveShipmentDate,
+        threadNote: effectiveThreadNote,
+        zipperNote: effectiveZipperNote,
+        buttonNote: effectiveButtonNote,
+        trims: {
+          ...(sample.requisitionForm.trims || {}),
+          threadNote: sample.requisitionForm.trims?.threadNote || effectiveThreadNote,
+          zipperNote: sample.requisitionForm.trims?.zipperNote || effectiveZipperNote,
+          buttonNote: sample.requisitionForm.trims?.buttonNote || effectiveButtonNote,
+        },
         isLocked,
       }
     : {
         shipmentDate: effectiveShipmentDate,
+        threadNote: effectiveThreadNote,
+        zipperNote: effectiveZipperNote,
+        buttonNote: effectiveButtonNote,
         isLocked,
       };
 
@@ -254,9 +312,14 @@ export function mapSampleToRow(sample: SampleItem) {
     fabric_code: sample.fabricCode,
     fabric_name: sample.fabricName,
     fabric_required_yards: sample.fabricRequiredYards,
+    thread_note: effectiveThreadNote,
+    zipper_note: effectiveZipperNote,
+    button_note: effectiveButtonNote,
     stage: sample.stage,
     priority: sample.priority,
     target_parcel_date: sample.targetParcelDate,
+    shipment_date: effectiveShipmentDate,
+    is_requisition_locked: isLocked,
     thumbnail: sample.thumbnail || null,
     images: sample.thumbnail ? [sample.thumbnail] : [],
     stage_history: sample.stageHistory || [],
@@ -449,8 +512,23 @@ export async function fetchAllSupabaseData(): Promise<{
 
 export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> {
   if (!supabase) return;
-  const { error } = await supabase.from('samples').upsert(mapSampleToRow(sample));
-  if (error) console.error('Supabase upsert sample error:', error);
+  const fullRow = mapSampleToRow(sample);
+  const { error } = await supabase.from('samples').upsert(fullRow);
+  if (error) {
+    // Fallback if new columns (thread_note, zipper_note, button_note, shipment_date, is_requisition_locked) are not yet added to table
+    const {
+      thread_note,
+      zipper_note,
+      button_note,
+      shipment_date,
+      is_requisition_locked,
+      ...legacyRow
+    } = fullRow;
+    const { error: fallbackErr } = await supabase.from('samples').upsert(legacyRow);
+    if (fallbackErr) {
+      console.error('Supabase upsert sample error:', fallbackErr);
+    }
+  }
 }
 
 /**

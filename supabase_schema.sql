@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS public.fabrics (
 );
 
 -- =====================================================================================
--- 2. SAMPLES PIPELINE TABLE (Tracks Requisition, Locked Status, Shipment Date, Approvals)
+-- 2. SAMPLES PIPELINE TABLE (Tracks Requisition, Stored Styles, Color/Wash/Size Changes,
+--    Thread/Zipper/Button Notes, Locked Status, Shipment Date, and Approvals)
 -- =====================================================================================
 CREATE TABLE IF NOT EXISTS public.samples (
   id TEXT PRIMARY KEY,
@@ -53,6 +54,9 @@ CREATE TABLE IF NOT EXISTS public.samples (
   target_parcel_date TEXT NOT NULL DEFAULT '',
   shipment_date TEXT NOT NULL DEFAULT '',
   is_requisition_locked BOOLEAN NOT NULL DEFAULT TRUE,
+  thread_note TEXT NOT NULL DEFAULT '',
+  zipper_note TEXT NOT NULL DEFAULT '',
+  button_note TEXT NOT NULL DEFAULT '',
   thumbnail TEXT,
   images JSONB NOT NULL DEFAULT '[]'::jsonb,
   stage_history JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -69,6 +73,12 @@ CREATE TABLE IF NOT EXISTS public.samples (
 -- Safe migration columns for existing deployments
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS shipment_date TEXT NOT NULL DEFAULT '';
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS is_requisition_locked BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS thread_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS zipper_note TEXT NOT NULL DEFAULT '';
+ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS button_note TEXT NOT NULL DEFAULT '';
+
+-- Index on style_code for fast lookup when selecting stored styles from database
+CREATE INDEX IF NOT EXISTS idx_samples_style_code ON public.samples (style_code);
 
 -- =====================================================================================
 -- 3. BUREAU VERITAS (BV) LAB TESTS TABLE (Tracks Lab Tests & 24-Hour Re-Test Alerts)

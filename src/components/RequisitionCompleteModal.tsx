@@ -33,7 +33,8 @@ const DEFAULT_TRIMS: TrimsChecklist = {
   mainLabel: true,
   sizeLabel: true,
   careOrigin: false,
-  button: false,
+  button: true,
+  buttonNote: '',
   buckles: false,
   velcro: false,
   rivet: false,
@@ -43,6 +44,7 @@ const DEFAULT_TRIMS: TrimsChecklist = {
   interlining: true,
   elastic: false,
   zipper: true,
+  zipperNote: '',
   drawstring: true,
   stopperEyelet: true,
   snap: false,
@@ -81,9 +83,47 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
     if (!sample) return;
     setIsEditMode(false);
     setShowSaveConfirmModal(false);
+    const effectiveThreadNote =
+      sample.threadNote ||
+      sample.requisitionForm?.threadNote ||
+      sample.requisitionForm?.trims?.threadNote ||
+      sample.requisitionForm?.threadInstruction ||
+      '';
+    const effectiveZipperNote =
+      sample.zipperNote ||
+      sample.requisitionForm?.zipperNote ||
+      sample.requisitionForm?.trims?.zipperNote ||
+      '';
+    const effectiveButtonNote =
+      sample.buttonNote ||
+      sample.requisitionForm?.buttonNote ||
+      sample.requisitionForm?.trims?.buttonNote ||
+      '';
+    const washStr = sample.washDetails?.washType || '';
+    const defaultColorWash =
+      washStr && washStr !== 'Standard Wash' && !sample.color.toLowerCase().includes(washStr.toLowerCase())
+        ? `${sample.color} / ${washStr}`
+        : sample.color || '';
+
     if (sample.requisitionForm && sample.requisitionForm.companyName) {
       setForm({
         ...sample.requisitionForm,
+        colorWash: sample.requisitionForm.colorWash || defaultColorWash,
+        sampleSizeLabel:
+          sample.requisitionForm.sampleSizeLabel ||
+          `${sample.sampleType}\nSize: ${sample.size} (${sample.quantity} Pcs)`,
+        threadNote: effectiveThreadNote,
+        zipperNote: effectiveZipperNote,
+        buttonNote: effectiveButtonNote,
+        threadInstruction:
+          sample.requisitionForm.threadInstruction || effectiveThreadNote || 'AS PER CHART',
+        trims: {
+          ...DEFAULT_TRIMS,
+          ...(sample.requisitionForm.trims || {}),
+          threadNote: effectiveThreadNote || 'AS PER CHART',
+          zipperNote: effectiveZipperNote,
+          buttonNote: effectiveButtonNote,
+        },
         isLocked: Boolean(sample.isRequisitionLocked || sample.requisitionForm.isLocked),
       });
     } else {
@@ -98,16 +138,24 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
         descriptionCode: sample.styleCode || '',
         styleName: sample.styleName || '',
         sampleSizeLabel: `${sample.sampleType}\nSize: ${sample.size} (${sample.quantity} Pcs)`,
-        colorWash: sample.color || '',
+        colorWash: defaultColorWash,
         fabricCode: sample.fabricCode || '',
         fitting: '',
-        threadInstruction: '',
+        threadInstruction: effectiveThreadNote || 'AS PER CHART',
+        threadNote: effectiveThreadNote,
+        zipperNote: effectiveZipperNote,
+        buttonNote: effectiveButtonNote,
         quantityText: `${sample.quantity} Pcs`,
         block: '',
         fabricComposition: sample.fabricName || '',
         supplier: '',
         weight: '',
-        trims: { ...DEFAULT_TRIMS },
+        trims: {
+          ...DEFAULT_TRIMS,
+          threadNote: effectiveThreadNote || 'AS PER CHART',
+          zipperNote: effectiveZipperNote,
+          buttonNote: effectiveButtonNote,
+        },
         specialInstructions: '',
         samplingSectionNotes: '',
         receivedBy: '',
@@ -126,7 +174,12 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
     window.print();
   };
 
-  const handleToggleTrim = (key: keyof Omit<TrimsChecklist, 'threadNote' | 'pocketingNote' | 'customTrims'>) => {
+  const handleToggleTrim = (
+    key: keyof Omit<
+      TrimsChecklist,
+      'threadNote' | 'zipperNote' | 'buttonNote' | 'pocketingNote' | 'customTrims'
+    >
+  ) => {
     if (isRequisitionLocked) return;
     setForm((prev) => {
       if (!prev) return prev;
@@ -201,7 +254,8 @@ Priority: ${form.priorityType.toUpperCase()} | Type of Sample: ${form.sampleType
 Description: ${form.descriptionCode} | Style: ${form.styleName}
 Sample Size: ${form.sampleSizeLabel} | Color/Wash: ${form.colorWash}
 Fabric Code: ${form.fabricCode} | Fitting: ${form.fitting}
-Thread: ${form.threadInstruction} | Qty: ${form.quantityText}
+Thread Note: ${form.trims.threadNote || form.threadNote || form.threadInstruction} | Zipper Note: ${form.trims.zipperNote || form.zipperNote || 'N/A'} | Button Note: ${form.trims.buttonNote || form.buttonNote || 'N/A'}
+Qty: ${form.quantityText}
 Fabric Comp: ${form.fabricComposition} | Supp: ${form.supplier} | Weight: ${form.weight}
 Special Instructions: ${form.specialInstructions}
     `.trim();
@@ -211,8 +265,14 @@ Special Instructions: ${form.specialInstructions}
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm overflow-y-auto print:p-0 print:bg-white print:static">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[96vh] overflow-y-auto text-xs text-slate-300 print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white print:text-black print:p-0 print:w-full">
+    <div
+      id="requisition-print-modal-backdrop"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm overflow-y-auto print:p-0 print:m-0 print:bg-white print:static print:block"
+    >
+      <div
+        id="requisition-print-modal-container"
+        className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[96vh] overflow-y-auto text-xs text-slate-300 print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white print:text-black print:p-0 print:m-0 print:w-full"
+      >
         {/* Modal Top Control Bar (Hidden when Printing) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-800 print:hidden">
           <div className="flex items-center gap-3">
@@ -333,28 +393,28 @@ Special Instructions: ${form.specialInstructions}
           )
         )}
 
-        {/* OFFICIAL VOLAR FASHION PVT LTD REQUISITION FORM */}
+        {/* OFFICIAL VOLAR FASHION PVT LTD REQUISITION FORM (ZERO GAP PRINTABLE SLIP) */}
         <div
           id="requisition-printable-slip"
-          className="bg-white text-black p-4 sm:p-7 rounded-lg border-2 border-black font-sans print:border-black print:p-2 print:shadow-none print:w-full print:text-black selection:bg-indigo-100"
+          className="bg-white text-black p-3 sm:p-5 rounded-lg border-2 border-black font-sans print:border-black print:p-2 print:m-0 print:rounded-none print:shadow-none print:w-full print:text-black selection:bg-indigo-100"
           style={{ fontFamily: "'Segoe UI', Arial, sans-serif" }}
         >
-          {/* Header Title: VOLAR FASHION PVT LTD */}
-          <div className="text-center pb-2 mb-2">
+          {/* Header Title: VOLAR FASHION PVT LTD (Contiguous Top Box) */}
+          <div className="text-center py-1.5 border border-b-0 border-black bg-white">
             {isEditMode ? (
               <input
                 type="text"
                 value={form.companyName}
                 onChange={(e) => setForm({ ...form, companyName: e.target.value })}
-                className="text-center text-lg sm:text-2xl font-black underline uppercase tracking-wider text-black border-b border-indigo-400 bg-indigo-50/50 w-full focus:outline-none"
+                className="text-center text-lg sm:text-xl font-black underline uppercase tracking-wider text-black border-b border-indigo-400 bg-indigo-50/50 w-full focus:outline-none"
               />
             ) : (
-              <h1 className="text-xl sm:text-2xl font-black underline uppercase tracking-wider text-black">
+              <h1 className="text-lg sm:text-xl font-black underline uppercase tracking-wider text-black leading-tight">
                 {form.companyName}
               </h1>
             )}
             <div
-              className="text-base sm:text-lg italic text-black font-serif mt-0.5"
+              className="text-sm sm:text-base italic text-black font-serif"
               style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
             >
               Sample Requisition Form
@@ -482,30 +542,30 @@ Special Instructions: ${form.specialInstructions}
             </div>
           </div>
 
-          {/* Main Product Table Grid */}
-          <div className="border-x border-b border-black mt-2 text-[11px] sm:text-xs">
+          {/* Main Product Table Grid (Zero Gap: border-x border-b border-black) */}
+          <div className="border-x border-b border-black text-[11px] sm:text-xs">
             <div className="grid grid-cols-12 border-b border-black">
-              <div className="col-span-2 p-2 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
+              <div className="col-span-2 p-1.5 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
                 DESCRIPTION:
               </div>
-              <div className={`${getSampleImage(sample) ? 'col-span-8 border-r border-black' : 'col-span-10'} p-2 font-black text-base sm:text-lg tracking-wider text-black flex items-center`}>
+              <div className={`${getSampleImage(sample) ? 'col-span-8 border-r border-black' : 'col-span-10'} p-1.5 font-black text-sm sm:text-base tracking-wider text-black flex items-center`}>
                 {isEditMode ? (
                   <input
                     type="text"
                     value={form.descriptionCode}
                     onChange={(e) => setForm({ ...form, descriptionCode: e.target.value })}
-                    className="w-full bg-indigo-50/50 px-2 py-1 border border-indigo-300 font-black text-lg"
+                    className="w-full bg-indigo-50/50 px-2 py-0.5 border border-indigo-300 font-black text-base"
                   />
                 ) : (
                   <span>{form.descriptionCode}</span>
                 )}
               </div>
               {getSampleImage(sample) && (
-                <div className="col-span-2 p-1.5 flex flex-col items-center justify-center bg-white">
+                <div className="col-span-2 p-1 flex flex-col items-center justify-center bg-white">
                   <img
                     src={getSampleImage(sample)}
                     alt={sample.styleCode}
-                    className="h-12 w-12 object-cover rounded border border-black"
+                    className="h-11 w-11 object-cover rounded border border-black"
                   />
                   <span className="text-[8px] font-bold uppercase text-black mt-0.5">
                     Selected Image
@@ -515,42 +575,42 @@ Special Instructions: ${form.specialInstructions}
             </div>
 
             <div className="grid grid-cols-12 border-b border-black bg-slate-100 font-bold text-center">
-              <div className="col-span-4 p-2 border-r border-black text-left flex items-center">
+              <div className="col-span-4 p-1.5 border-r border-black text-left flex items-center">
                 <span className="font-bold mr-2 uppercase">STYLE:</span>
                 {isEditMode ? (
                   <input
                     type="text"
                     value={form.styleName}
                     onChange={(e) => setForm({ ...form, styleName: e.target.value })}
-                    className="flex-1 bg-indigo-50/50 px-1.5 py-0.5 border border-indigo-300 font-black uppercase text-sm"
+                    className="flex-1 bg-indigo-50/50 px-1.5 py-0.5 border border-indigo-300 font-black uppercase text-xs"
                   />
                 ) : (
-                  <span className="font-black text-sm uppercase text-black">{form.styleName}</span>
+                  <span className="font-black text-xs sm:text-sm uppercase text-black">{form.styleName}</span>
                 )}
               </div>
-              <div className="col-span-2 p-2 border-r border-black uppercase flex items-center justify-center">
+              <div className="col-span-2 p-1.5 border-r border-black uppercase flex items-center justify-center">
                 SAMPLE SIZE
               </div>
-              <div className="col-span-2 p-2 border-r border-black uppercase flex items-center justify-center">
+              <div className="col-span-2 p-1.5 border-r border-black uppercase flex items-center justify-center">
                 COLOR /WASH
               </div>
-              <div className="col-span-1 p-2 border-r border-black uppercase flex items-center justify-center">
+              <div className="col-span-1 p-1.5 border-r border-black uppercase flex items-center justify-center">
                 FABRIC CODE
               </div>
-              <div className="col-span-1 p-2 border-r border-black uppercase flex items-center justify-center">
+              <div className="col-span-1 p-1.5 border-r border-black uppercase flex items-center justify-center">
                 FITTING
               </div>
-              <div className="col-span-1 p-2 border-r border-black uppercase flex items-center justify-center">
+              <div className="col-span-1 p-1.5 border-r border-black uppercase flex items-center justify-center">
                 THREAD
               </div>
-              <div className="col-span-1 p-2 uppercase flex items-center justify-center">
+              <div className="col-span-1 p-1.5 uppercase flex items-center justify-center">
                 QTY
               </div>
             </div>
 
-            <div className="grid grid-cols-12 border-b border-black text-center min-h-[70px]">
-              <div className="col-span-4 p-3 border-r border-black text-left flex items-start">
-                <span className="font-bold mr-3 uppercase shrink-0">BLOCK</span>
+            <div className="grid grid-cols-12 border-b border-black text-center min-h-[56px]">
+              <div className="col-span-4 p-2 border-r border-black text-left flex items-start">
+                <span className="font-bold mr-2 uppercase shrink-0">BLOCK</span>
                 <div className="flex-1">
                   {isEditMode ? (
                     <input
@@ -565,7 +625,7 @@ Special Instructions: ${form.specialInstructions}
                 </div>
               </div>
 
-              <div className="col-span-2 p-2 border-r border-black flex flex-col justify-center items-center">
+              <div className="col-span-2 p-1.5 border-r border-black flex flex-col justify-center items-center">
                 {isEditMode ? (
                   <textarea
                     rows={2}
@@ -580,7 +640,7 @@ Special Instructions: ${form.specialInstructions}
                 )}
               </div>
 
-              <div className="col-span-2 p-2 border-r border-black font-bold uppercase flex items-center justify-center">
+              <div className="col-span-2 p-1.5 border-r border-black font-bold uppercase flex items-center justify-center">
                 {isEditMode ? (
                   <input
                     type="text"
@@ -593,7 +653,7 @@ Special Instructions: ${form.specialInstructions}
                 )}
               </div>
 
-              <div className="col-span-1 p-2 border-r border-black font-mono font-bold text-[10px] break-all flex items-center justify-center">
+              <div className="col-span-1 p-1.5 border-r border-black font-mono font-bold text-[10px] break-all flex items-center justify-center">
                 {isEditMode ? (
                   <input
                     type="text"
@@ -606,7 +666,7 @@ Special Instructions: ${form.specialInstructions}
                 )}
               </div>
 
-              <div className="col-span-1 p-2 border-r border-black text-[10px] flex items-center justify-center leading-tight">
+              <div className="col-span-1 p-1.5 border-r border-black text-[10px] flex items-center justify-center leading-tight">
                 {isEditMode ? (
                   <textarea
                     rows={2}
@@ -619,20 +679,27 @@ Special Instructions: ${form.specialInstructions}
                 )}
               </div>
 
-              <div className="col-span-1 p-2 border-r border-black text-[10px] flex items-center justify-center leading-tight">
+              <div className="col-span-1 p-1.5 border-r border-black text-[10px] flex items-center justify-center leading-tight font-bold">
                 {isEditMode ? (
                   <textarea
                     rows={2}
                     value={form.threadInstruction}
-                    onChange={(e) => setForm({ ...form, threadInstruction: e.target.value })}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        threadInstruction: e.target.value,
+                        threadNote: e.target.value,
+                        trims: { ...form.trims, threadNote: e.target.value },
+                      })
+                    }
                     className="w-full bg-indigo-50/50 p-0.5 border border-indigo-300 text-[10px]"
                   />
                 ) : (
-                  <span>{form.threadInstruction}</span>
+                  <span>{form.threadInstruction || form.trims.threadNote || form.threadNote || 'AS PER CHART'}</span>
                 )}
               </div>
 
-              <div className="col-span-1 p-2 font-bold flex items-center justify-center">
+              <div className="col-span-1 p-1.5 font-bold flex items-center justify-center">
                 {isEditMode ? (
                   <input
                     type="text"
@@ -687,19 +754,87 @@ Special Instructions: ${form.specialInstructions}
                 )}
               </div>
             </div>
+
+            {/* DEDICATED THREAD, ZIPPER & BUTTON NOTES ROW INCLUDED IN REQUISITION FORM */}
+            <div className="grid grid-cols-12 bg-slate-50 text-[10px] sm:text-[11px]">
+              <div className="col-span-4 p-1.5 border-r border-black flex items-center">
+                <span className="font-black mr-1.5 uppercase shrink-0">THREAD NOTE:</span>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={form.trims.threadNote || form.threadNote || ''}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        threadNote: e.target.value,
+                        threadInstruction: e.target.value,
+                        trims: { ...form.trims, threadNote: e.target.value },
+                      })
+                    }
+                    className="flex-1 bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold uppercase text-[10px]"
+                  />
+                ) : (
+                  <span className="font-bold uppercase text-black">
+                    {form.trims.threadNote || form.threadNote || form.threadInstruction || 'AS PER CHART'}
+                  </span>
+                )}
+              </div>
+              <div className="col-span-4 p-1.5 border-r border-black flex items-center">
+                <span className="font-black mr-1.5 uppercase shrink-0">ZIPPER NOTE:</span>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={form.trims.zipperNote || form.zipperNote || ''}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        zipperNote: e.target.value,
+                        trims: { ...form.trims, zipperNote: e.target.value },
+                      })
+                    }
+                    className="flex-1 bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold uppercase text-[10px]"
+                  />
+                ) : (
+                  <span className="font-bold uppercase text-black">
+                    {form.trims.zipperNote || form.zipperNote || 'AS PER SAMPLE'}
+                  </span>
+                )}
+              </div>
+              <div className="col-span-4 p-1.5 flex items-center">
+                <span className="font-black mr-1.5 uppercase shrink-0">BUTTON NOTE:</span>
+                {isEditMode ? (
+                  <input
+                    type="text"
+                    value={form.trims.buttonNote || form.buttonNote || ''}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        buttonNote: e.target.value,
+                        trims: { ...form.trims, buttonNote: e.target.value },
+                      })
+                    }
+                    className="flex-1 bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold uppercase text-[10px]"
+                  />
+                ) : (
+                  <span className="font-bold uppercase text-black">
+                    {form.trims.buttonNote || form.buttonNote || 'AS PER SAMPLE'}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* TRIMS REQUIRED */}
-          <div className="border-x border-b border-black mt-2 text-[10px] sm:text-[11px]">
+          {/* TRIMS REQUIRED (Zero Gap: border-x border-b border-black) */}
+          <div className="border-x border-b border-black text-[10px] sm:text-[11px]">
             <div className="p-1.5 bg-slate-100 font-black uppercase border-b border-black tracking-wide">
-              TRIMS REQUIRD (PLEASE TICK ONE GIVEN AT THE TIME OF REQUISITION
+              TRIMS REQUIRED (PLEASE TICK ONE GIVEN AT THE TIME OF REQUISITION)
             </div>
 
             <div className="grid grid-cols-2 divide-x divide-black">
               <div className="divide-y divide-black">
                 <div
                   onClick={() => handleToggleTrim('mainLabel')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.mainLabel ? 'X' : ''}
@@ -712,7 +847,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('sizeLabel')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.sizeLabel ? 'X' : ''}
@@ -725,7 +860,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('careOrigin')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.careOrigin ? 'X' : ''}
@@ -738,7 +873,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('button')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.button ? 'X' : ''}
@@ -746,12 +881,31 @@ Special Instructions: ${form.specialInstructions}
                   <span className="w-4 h-4 border border-black inline-flex items-center justify-center mr-2 text-[9px] font-black">
                     {form.trims.button ? 'X' : ''}
                   </span>
-                  <span className="font-bold">BUTTON</span>
+                  <span className="font-bold mr-2">BUTTON:</span>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={form.trims.buttonNote || form.buttonNote || ''}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          buttonNote: e.target.value,
+                          trims: { ...form.trims, buttonNote: e.target.value },
+                        })
+                      }
+                      className="flex-1 bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold uppercase text-[10px]"
+                    />
+                  ) : (
+                    <span className="font-bold uppercase text-black">
+                      {form.trims.buttonNote || form.buttonNote || ''}
+                    </span>
+                  )}
                 </div>
 
                 <div
                   onClick={() => handleToggleTrim('buckles')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.buckles ? 'X' : ''}
@@ -764,7 +918,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('velcro')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.velcro ? 'X' : ''}
@@ -777,7 +931,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('rivet')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.rivet ? 'X' : ''}
@@ -790,7 +944,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('stud')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.stud ? 'X' : ''}
@@ -805,7 +959,7 @@ Special Instructions: ${form.specialInstructions}
               <div className="divide-y divide-black">
                 <div
                   onClick={() => handleToggleTrim('thread')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.thread ? 'X' : ''}
@@ -817,11 +971,13 @@ Special Instructions: ${form.specialInstructions}
                   {isEditMode ? (
                     <input
                       type="text"
-                      value={form.trims.threadNote || ''}
+                      value={form.trims.threadNote || form.threadNote || ''}
                       onClick={(e) => e.stopPropagation()}
                       onChange={(e) =>
                         setForm({
                           ...form,
+                          threadNote: e.target.value,
+                          threadInstruction: e.target.value,
                           trims: { ...form.trims, threadNote: e.target.value },
                         })
                       }
@@ -829,14 +985,14 @@ Special Instructions: ${form.specialInstructions}
                     />
                   ) : (
                     <span className="font-bold uppercase text-black">
-                      {form.trims.threadNote || 'AS PER CHART'}
+                      {form.trims.threadNote || form.threadNote || 'AS PER CHART'}
                     </span>
                   )}
                 </div>
 
                 <div
                   onClick={() => handleToggleTrim('interlining')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.interlining ? 'X' : ''}
@@ -849,7 +1005,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('elastic')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.elastic ? 'X' : ''}
@@ -862,7 +1018,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('zipper')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.zipper ? 'X' : ''}
@@ -870,12 +1026,31 @@ Special Instructions: ${form.specialInstructions}
                   <span className="w-4 h-4 border border-black inline-flex items-center justify-center mr-2 text-[9px] font-black">
                     {form.trims.zipper ? 'X' : ''}
                   </span>
-                  <span className="font-bold">ZIPPER</span>
+                  <span className="font-bold mr-2">ZIPPER:</span>
+                  {isEditMode ? (
+                    <input
+                      type="text"
+                      value={form.trims.zipperNote || form.zipperNote || ''}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          zipperNote: e.target.value,
+                          trims: { ...form.trims, zipperNote: e.target.value },
+                        })
+                      }
+                      className="flex-1 bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold uppercase text-[10px]"
+                    />
+                  ) : (
+                    <span className="font-bold uppercase text-black">
+                      {form.trims.zipperNote || form.zipperNote || ''}
+                    </span>
+                  )}
                 </div>
 
                 <div
                   onClick={() => handleToggleTrim('drawstring')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.drawstring ? 'X' : ''}
@@ -888,7 +1063,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('stopperEyelet')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.stopperEyelet ? 'X' : ''}
@@ -901,7 +1076,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('snap')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.snap ? 'X' : ''}
@@ -914,7 +1089,7 @@ Special Instructions: ${form.specialInstructions}
 
                 <div
                   onClick={() => handleToggleTrim('pocketing')}
-                  className="flex items-center p-1.5 hover:bg-slate-50 cursor-pointer select-none"
+                  className="flex items-center p-1 hover:bg-slate-50 cursor-pointer select-none"
                 >
                   <span className="w-5 text-center font-bold font-mono">
                     {form.trims.pocketing ? 'X' : ''}
@@ -946,22 +1121,23 @@ Special Instructions: ${form.specialInstructions}
             </div>
           </div>
 
-          {/* Special Instructions / Notes Rows */}
-          <div className="border-x border-b border-black mt-2 text-[10px] sm:text-[11px]">
-            <div className="p-2 border-b border-black font-bold uppercase tracking-wide bg-slate-50">
+          {/* Special Instructions / Notes Rows (Zero Gap: border-x border-b border-black) */}
+          <div className="border-x border-b border-black text-[10px] sm:text-[11px]">
+            <div className="p-1.5 border-b border-black font-bold uppercase tracking-wide bg-slate-50 flex items-center">
+              <span className="font-black mr-2 shrink-0">SPECIAL INSTRUCTIONS / NOTES:</span>
               {isEditMode ? (
                 <input
                   type="text"
                   value={form.specialInstructions}
                   onChange={(e) => setForm({ ...form, specialInstructions: e.target.value })}
-                  className="w-full bg-indigo-50/50 px-2 py-1 border border-indigo-300 font-bold uppercase"
+                  className="flex-1 bg-indigo-50/50 px-2 py-0.5 border border-indigo-300 font-bold uppercase"
                 />
               ) : (
-                <span>{form.specialInstructions}</span>
+                <span>{form.specialInstructions || '—'}</span>
               )}
             </div>
 
-            <div className="p-2 min-h-[42px] flex items-start">
+            <div className="p-1.5 min-h-[34px] flex items-center">
               <span className="font-bold uppercase mr-2 shrink-0">
                 TO BE FILLED BY SAMPLING SECTION:
               </span>
@@ -981,8 +1157,8 @@ Special Instructions: ${form.specialInstructions}
             </div>
           </div>
 
-          {/* Bottom Signatures Block */}
-          <div className="mt-8 pt-4 grid grid-cols-2 gap-8 text-[11px] font-bold">
+          {/* Bottom Signatures Block (Zero Gap: border-x border-b border-black) */}
+          <div className="border-x border-b border-black p-3 pt-6 grid grid-cols-2 gap-8 text-[11px] font-bold bg-white">
             <div className="flex flex-col">
               <div className="border-b-2 border-black pb-1 mb-1 font-mono uppercase">
                 RECEIVED BY: {form.receivedBy || ''}

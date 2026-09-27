@@ -287,6 +287,7 @@ export default function App() {
 
   // 3. Modals State
   const [isNewSampleModalOpen, setIsNewSampleModalOpen] = useState(false);
+  const [selectedStyleForModification, setSelectedStyleForModification] = useState<SampleItem | null>(null);
   const [isRequisitionCompleteModalOpen, setIsRequisitionCompleteModalOpen] = useState(false);
   const [completedRequisitionSample, setCompletedRequisitionSample] = useState<SampleItem | null>(null);
   const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
@@ -391,9 +392,88 @@ export default function App() {
     );
   };
 
+  const handleUpdateStoredStyle = (sampleId: string, updates: Partial<SampleItem>) => {
+    let updatedSampleRef: SampleItem | null = null;
+    setSamples((prev) =>
+      prev.map((s) => {
+        if (s.id === sampleId) {
+          const merged: SampleItem = {
+            ...s,
+            ...updates,
+            washDetails: {
+              ...s.washDetails,
+              ...(updates.washDetails || {}),
+            },
+            parcelDetails: {
+              ...s.parcelDetails,
+              ...(updates.parcelDetails || {}),
+            },
+            requisitionForm: updates.requisitionForm
+              ? {
+                  ...(s.requisitionForm || {}),
+                  ...updates.requisitionForm,
+                }
+              : s.requisitionForm,
+            stageHistory: [
+              ...s.stageHistory,
+              {
+                stage: s.stage,
+                timestamp: new Date().toISOString(),
+                note: `Stored style updated: Color (${updates.color || s.color}), Wash (${updates.washDetails?.washType || s.washDetails.washType || 'N/A'}), Sizes (${updates.size || s.size})`,
+                operator: updates.requisitionForm?.requestedBy || 'Merchandiser',
+              },
+            ],
+            updatedAt: new Date().toISOString(),
+          };
+          updatedSampleRef = merged;
+          void upsertSampleInSupabase(merged);
+          return merged;
+        }
+        return s;
+      })
+    );
+
+    if (updatedSampleRef) {
+      setCompletedRequisitionSample(updatedSampleRef);
+      setIsRequisitionCompleteModalOpen(true);
+      if (selectedSampleForDetail && selectedSampleForDetail.id === sampleId) {
+        setSelectedSampleForDetail(updatedSampleRef);
+      }
+      sendPushNotification(
+        'Stored Style Updated',
+        `Style ${(updatedSampleRef as SampleItem).styleCode} updated with Color "${(updatedSampleRef as SampleItem).color}", Wash "${(updatedSampleRef as SampleItem).washDetails?.washType || 'N/A'}", and Sizes "${(updatedSampleRef as SampleItem).size}".`,
+        'success',
+        { sampleId, styleCode: (updatedSampleRef as SampleItem).styleCode }
+      );
+    }
+  };
+
+  const handleSelectStoredStyleToModify = (sample: SampleItem) => {
+    setSelectedStyleForModification(sample);
+    setIsNewSampleModalOpen(true);
+  };
+
   const handleSaveRequisitionForm = (sampleId: string, form: VolarRequisitionForm) => {
+    const firstRow = form.rows?.[0];
+    const effectiveThread =
+      form.threadNote || form.trims?.threadNote || form.threadInstruction || '';
+    const effectiveZipper =
+      form.zipperNote || form.trims?.zipperNote || '';
+    const effectiveButton =
+      form.buttonNote || form.trims?.buttonNote || '';
+
     const lockedForm: VolarRequisitionForm = {
       ...form,
+      threadNote: effectiveThread,
+      zipperNote: effectiveZipper,
+      buttonNote: effectiveButton,
+      threadInstruction: effectiveThread || form.threadInstruction,
+      trims: {
+        ...form.trims,
+        threadNote: effectiveThread,
+        zipperNote: effectiveZipper,
+        buttonNote: effectiveButton,
+      },
       isLocked: true,
       lockedAt: form.lockedAt || new Date().toISOString(),
     };
@@ -402,6 +482,15 @@ export default function App() {
         if (s.id === sampleId) {
           const updated: SampleItem = {
             ...s,
+            color: firstRow?.color || s.color,
+            size: firstRow?.size || s.size,
+            washDetails: {
+              ...s.washDetails,
+              washType: firstRow?.wash || s.washDetails.washType,
+            },
+            threadNote: effectiveThread || s.threadNote,
+            zipperNote: effectiveZipper || s.zipperNote,
+            buttonNote: effectiveButton || s.buttonNote,
             shipmentDate: lockedForm.shipmentDate || s.shipmentDate || s.targetParcelDate,
             isRequisitionLocked: true,
             requisitionForm: lockedForm,
@@ -418,6 +507,15 @@ export default function App() {
         prev
           ? {
               ...prev,
+              color: firstRow?.color || prev.color,
+              size: firstRow?.size || prev.size,
+              washDetails: {
+                ...prev.washDetails,
+                washType: firstRow?.wash || prev.washDetails.washType,
+              },
+              threadNote: effectiveThread || prev.threadNote,
+              zipperNote: effectiveZipper || prev.zipperNote,
+              buttonNote: effectiveButton || prev.buttonNote,
               shipmentDate: lockedForm.shipmentDate || prev.shipmentDate,
               isRequisitionLocked: true,
               requisitionForm: lockedForm,
@@ -430,6 +528,15 @@ export default function App() {
         prev
           ? {
               ...prev,
+              color: firstRow?.color || prev.color,
+              size: firstRow?.size || prev.size,
+              washDetails: {
+                ...prev.washDetails,
+                washType: firstRow?.wash || prev.washDetails.washType,
+              },
+              threadNote: effectiveThread || prev.threadNote,
+              zipperNote: effectiveZipper || prev.zipperNote,
+              buttonNote: effectiveButton || prev.buttonNote,
               shipmentDate: lockedForm.shipmentDate || prev.shipmentDate,
               isRequisitionLocked: true,
               requisitionForm: lockedForm,
@@ -1050,7 +1157,11 @@ export default function App() {
                 setIsDetailModalOpen(true);
               }}
               onAdvanceStage={handleTriggerAdvance}
-              onNewRequisition={() => setIsNewSampleModalOpen(true)}
+              onNewRequisition={() => {
+                setSelectedStyleForModification(null);
+                setIsNewSampleModalOpen(true);
+              }}
+              onModifyStoredStyle={handleSelectStoredStyleToModify}
               onDeleteSample={handleDeleteSample}
               initialStageFilter={initialStageFilter}
               onOpenFollowUp={handleOpenFollowUp}
@@ -1209,9 +1320,15 @@ export default function App() {
       {/* Modals */}
       <NewSampleModal
         isOpen={isNewSampleModalOpen}
-        onClose={() => setIsNewSampleModalOpen(false)}
+        onClose={() => {
+          setIsNewSampleModalOpen(false);
+          setSelectedStyleForModification(null);
+        }}
         fabrics={fabrics}
+        samples={samples}
+        initialSelectedStyle={selectedStyleForModification}
         onCreateSample={handleCreateSample}
+        onUpdateStoredStyle={handleUpdateStoredStyle}
         onOpenAddFabric={() => setIsAddFabricModalOpen(true)}
       />
 
@@ -1239,6 +1356,10 @@ export default function App() {
         onOpenRequisitionSlip={(sample) => {
           setCompletedRequisitionSample(sample);
           setIsRequisitionCompleteModalOpen(true);
+        }}
+        onModifyStoredStyle={(sample) => {
+          setIsDetailModalOpen(false);
+          handleSelectStoredStyleToModify(sample);
         }}
         onUpdateSampleThumbnail={handleUpdateSampleThumbnail}
       />

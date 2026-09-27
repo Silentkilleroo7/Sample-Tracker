@@ -28,6 +28,7 @@ import {
   Printer,
   ZoomIn,
   Lock,
+  Edit3,
 } from 'lucide-react';
 
 interface AllSamplesViewProps {
@@ -37,6 +38,7 @@ interface AllSamplesViewProps {
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
   onNewRequisition: () => void;
+  onModifyStoredStyle?: (sample: SampleItem) => void;
   onDeleteSample?: (id: string) => void;
   initialStageFilter?: SampleStage | 'all';
   onOpenFollowUp?: (sample: SampleItem) => void;
@@ -55,6 +57,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
   onSelectSample,
   onAdvanceStage,
   onNewRequisition,
+  onModifyStoredStyle,
   initialStageFilter = 'all',
   onOpenFollowUp,
   onToggleWorkbookSent,
@@ -421,7 +424,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                               {sample.styleName}
                             </div>
                             <div className="text-[11px] text-slate-400 mt-0.5">
-                              Color: {sample.color} • Size: {sample.size} • Qty: {sample.quantity}
+                              Color: {sample.color} • Wash: {sample.washDetails?.washType || 'N/A'} • Size: {sample.size} • Qty: {sample.quantity}
                             </div>
                           </div>
                         </div>
@@ -564,6 +567,16 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                             >
                               <span>Next</span>
                               <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {onModifyStoredStyle && (
+                            <button
+                              onClick={() => onModifyStoredStyle(sample)}
+                              className="px-2 py-1 text-emerald-300 hover:text-white bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/40 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                              title="Select this stored style to change Color, Wash, or Sizes"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                              <span className="hidden xl:inline">Select / Change</span>
                             </button>
                           )}
                           <button

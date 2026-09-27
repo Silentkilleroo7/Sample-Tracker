@@ -111,6 +111,7 @@ export interface TrimsChecklist {
   sizeLabel: boolean;
   careOrigin: boolean;
   button: boolean;
+  buttonNote?: string;
   buckles: boolean;
   velcro: boolean;
   rivet: boolean;
@@ -120,6 +121,7 @@ export interface TrimsChecklist {
   interlining: boolean;
   elastic: boolean;
   zipper: boolean;
+  zipperNote?: string;
   drawstring: boolean;
   stopperEyelet: boolean;
   snap: boolean;
@@ -144,6 +146,9 @@ export interface VolarRequisitionForm {
   fabricCode: string;
   fitting: string;
   threadInstruction: string;
+  threadNote?: string;
+  zipperNote?: string;
+  buttonNote?: string;
   quantityText: string;
   block: string;
   fabricComposition: string;
@@ -173,6 +178,9 @@ export interface SampleItem {
   fabricCode: string;
   fabricName: string;
   fabricRequiredYards: number;
+  threadNote?: string;
+  zipperNote?: string;
+  buttonNote?: string;
   stage: SampleStage;
   stageHistory: StageHistoryEntry[];
   priority: SamplePriority;

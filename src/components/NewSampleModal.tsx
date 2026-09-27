@@ -5,6 +5,7 @@ import {
   SamplePriority,
   SampleType,
   PRESET_STYLE_IMAGES,
+  getSampleImage,
 } from '../types/sample';
 import {
   X,
@@ -20,6 +21,9 @@ import {
   ShieldAlert,
   Calendar,
   Tag,
+  Sparkles,
+  RefreshCw,
+  FileText,
 } from 'lucide-react';
 import {
   RequisitionOptions,
@@ -33,7 +37,10 @@ interface NewSampleModalProps {
   isOpen: boolean;
   onClose: () => void;
   fabrics: FabricItem[];
+  samples?: SampleItem[];
+  initialSelectedStyle?: SampleItem | null;
   onCreateSample: (sampleData: Partial<SampleItem>, deductYards: boolean) => void;
+  onUpdateStoredStyle?: (sampleId: string, updates: Partial<SampleItem>) => void;
   onOpenAddFabric?: () => void;
 }
 
@@ -41,11 +48,15 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   isOpen,
   onClose,
   fabrics,
+  samples = [],
+  initialSelectedStyle = null,
   onCreateSample,
+  onUpdateStoredStyle,
   onOpenAddFabric,
 }) => {
   // Load persistent user-saved database options (clean, no mock data)
   const [options, setOptions] = useState<RequisitionOptions>(loadRequisitionOptions);
+  const [selectedStoredStyleId, setSelectedStoredStyleId] = useState<string>('');
 
   // Clean, blank initial form fields (no pre-filled mock data)
   const [styleCode, setStyleCode] = useState('');
@@ -80,7 +91,17 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const [courier, setCourier] = useState('');
   const [requestedBy, setRequestedBy] = useState('');
   const [autoDeduct, setAutoDeduct] = useState(true);
+
+  // Thread, Zipper & Button Notes for Requisition Form
+  const [threadNote, setThreadNote] = useState('');
+  const [zipperNote, setZipperNote] = useState('');
+  const [buttonNote, setButtonNote] = useState('');
+  const [includeThreadTrim, setIncludeThreadTrim] = useState(true);
+  const [includeZipperTrim, setIncludeZipperTrim] = useState(true);
+  const [includeButtonTrim, setIncludeButtonTrim] = useState(true);
+
   const [showSecondConfirmation, setShowSecondConfirmation] = useState(false);
+  const [confirmationMode, setConfirmationMode] = useState<'create' | 'update'>('create');
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Style Picture state (only the single selected image is connected to the style)
@@ -92,13 +113,86 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   // Notification / confirmation feedback
   const [saveToast, setSaveToast] = useState<string | null>(null);
 
+  const populateFromStoredStyle = (stored: SampleItem) => {
+    setSelectedStoredStyleId(stored.id);
+    setStyleCode(stored.styleCode || '');
+    setStyleName(stored.styleName || '');
+    setBuyer(stored.buyer || '');
+    setPoNumber(stored.poNumber || '');
+    setLineCode(stored.lineCode || '');
+    setSampleType(stored.sampleType || '');
+    setColor(stored.color || '');
+    const parsedSizes = (stored.size || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    setListedSizes(parsedSizes);
+    setSizeInput('');
+    setQuantity(stored.quantity || 1);
+    setSelectedFabricId(stored.fabricId || '');
+    setCustomFabricCode(stored.fabricId ? '' : stored.fabricCode || '');
+    setCustomFabricName(stored.fabricId ? '' : stored.fabricName || '');
+    setRequiredYards(stored.fabricRequiredYards ?? 1);
+    setPriority(stored.priority || 'normal');
+    if (stored.targetParcelDate) setTargetParcelDate(stored.targetParcelDate);
+    if (stored.shipmentDate) setShipmentDate(stored.shipmentDate);
+    setWashType(stored.washDetails?.washType || '');
+    setCourier(stored.parcelDetails?.courier || '');
+    setRequestedBy(stored.requisitionForm?.requestedBy || '');
+
+    const storedThread =
+      stored.threadNote ||
+      stored.requisitionForm?.threadNote ||
+      stored.requisitionForm?.trims?.threadNote ||
+      stored.requisitionForm?.threadInstruction ||
+      '';
+    const storedZipper =
+      stored.zipperNote ||
+      stored.requisitionForm?.zipperNote ||
+      stored.requisitionForm?.trims?.zipperNote ||
+      '';
+    const storedButton =
+      stored.buttonNote ||
+      stored.requisitionForm?.buttonNote ||
+      stored.requisitionForm?.trims?.buttonNote ||
+      '';
+
+    setThreadNote(storedThread);
+    setZipperNote(storedZipper);
+    setButtonNote(storedButton);
+    setIncludeThreadTrim(
+      stored.requisitionForm?.trims?.thread !== undefined
+        ? stored.requisitionForm.trims.thread
+        : true
+    );
+    setIncludeZipperTrim(
+      stored.requisitionForm?.trims?.zipper !== undefined
+        ? stored.requisitionForm.trims.zipper
+        : true
+    );
+    setIncludeButtonTrim(
+      stored.requisitionForm?.trims?.button !== undefined
+        ? stored.requisitionForm.trims.button
+        : true
+    );
+
+    setThumbnail(getSampleImage(stored));
+    setValidationError(null);
+    setSaveToast(
+      `Selected Stored Style "${stored.styleCode}" — you can now change Color, Wash, or Sizes!`
+    );
+  };
+
   useEffect(() => {
     if (isOpen) {
       syncRequisitionOptionsFromCloud().then((synced) => {
         setOptions(synced);
       });
+      if (initialSelectedStyle) {
+        populateFromStoredStyle(initialSelectedStyle);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, initialSelectedStyle]);
 
   useEffect(() => {
     if (saveToast) {
@@ -112,12 +206,14 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const selectedFabric = fabrics.find((f) => f.id === selectedFabricId);
   const willTriggerLowStock =
     selectedFabric && selectedFabric.availableYards - requiredYards <= 5;
+  const selectedStoredSample = samples.find((s) => s.id === selectedStoredStyleId) || null;
 
   const triggerSaveNotification = (msg: string) => {
     setSaveToast(msg);
   };
 
   const resetFormFields = () => {
+    setSelectedStoredStyleId('');
     setStyleCode('');
     setStyleName('');
     setBuyer('');
@@ -136,6 +232,12 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     setWashType('');
     setCourier('');
     setRequestedBy('');
+    setThreadNote('');
+    setZipperNote('');
+    setButtonNote('');
+    setIncludeThreadTrim(true);
+    setIncludeZipperTrim(true);
+    setIncludeButtonTrim(true);
     setThumbnail('');
     setValidationError(null);
     setShowSecondConfirmation(false);
@@ -300,10 +402,10 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     return combined.join(', ');
   })();
 
-  const handleProceedToConfirmation = () => {
+  const handleProceedToConfirmation = (mode: 'create' | 'update' = 'create') => {
     setValidationError(null);
     if (!styleCode.trim()) {
-      setValidationError('Please enter the Style Code / Number.');
+      setValidationError('Please enter or select the Style Code / Number.');
       return;
     }
     if (!styleName.trim()) {
@@ -350,6 +452,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     setOptions(nextOptions);
     saveRequisitionOptions(nextOptions);
 
+    setConfirmationMode(mode);
     setShowSecondConfirmation(true);
   };
 
@@ -363,6 +466,10 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     const finalColor = color.trim() || 'Standard';
     const finalWash = washType.trim() || 'Standard Wash';
     const finalCourier = courier.trim() || '';
+
+    const finalThreadNote = threadNote.trim();
+    const finalZipperNote = zipperNote.trim();
+    const finalButtonNote = buttonNote.trim();
 
     const finalFabricId = selectedFabric?.id || '';
     const finalFabricCode =
@@ -383,6 +490,19 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       return `${day}-${month}-${year}`;
     };
 
+    const combinedColorWash =
+      finalWash &&
+      finalWash !== 'Standard Wash' &&
+      !finalColor.toLowerCase().includes(finalWash.toLowerCase())
+        ? `${finalColor} / ${finalWash}`
+        : finalColor;
+
+    const notesSummaryParts: string[] = [];
+    if (finalThreadNote) notesSummaryParts.push(`THREAD: ${finalThreadNote}`);
+    if (finalZipperNote) notesSummaryParts.push(`ZIPPER: ${finalZipperNote}`);
+    if (finalButtonNote) notesSummaryParts.push(`BUTTON: ${finalButtonNote}`);
+    const autoSpecialInstructions = notesSummaryParts.join(' | ');
+
     const newSample: Partial<SampleItem> = {
       styleCode: styleCode.trim().toUpperCase(),
       styleName: styleName.trim(),
@@ -399,27 +519,52 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       fabricCode: finalFabricCode,
       fabricName: finalFabricName,
       fabricRequiredYards: requiredYards,
-      stage: 'requisition',
+      threadNote: finalThreadNote,
+      zipperNote: finalZipperNote,
+      buttonNote: finalButtonNote,
+      stage:
+        selectedStoredSample && confirmationMode === 'update'
+          ? selectedStoredSample.stage
+          : 'requisition',
       priority,
       targetParcelDate,
       shipmentDate,
       isRequisitionLocked: true,
-      createdAt: nowIso,
+      createdAt:
+        selectedStoredSample && confirmationMode === 'update'
+          ? selectedStoredSample.createdAt
+          : nowIso,
       updatedAt: nowIso,
-      stageHistory: [
-        {
-          stage: 'requisition',
-          timestamp: nowIso,
-          note: `Requisition confirmed & permanently locked for ${finalSampleType}. Sizes: ${finalSize}. Shipment Date: ${shipmentDate}.`,
-          operator: requestedBy.trim() || 'Merchandiser',
-        },
-      ],
+      stageHistory:
+        selectedStoredSample && confirmationMode === 'update'
+          ? [
+              ...selectedStoredSample.stageHistory,
+              {
+                stage: selectedStoredSample.stage,
+                timestamp: nowIso,
+                note: `Updated stored style specs — Color: ${finalColor}, Wash: ${finalWash}, Sizes: ${finalSize}${
+                  autoSpecialInstructions ? ` (${autoSpecialInstructions})` : ''
+                }.`,
+                operator: requestedBy.trim() || 'Merchandiser',
+              },
+            ]
+          : [
+              {
+                stage: 'requisition',
+                timestamp: nowIso,
+                note: `Requisition confirmed & permanently locked for ${finalSampleType}. Color: ${finalColor}, Wash: ${finalWash}, Sizes: ${finalSize}.${
+                  autoSpecialInstructions ? ` Trims: ${autoSpecialInstructions}.` : ''
+                }`,
+                operator: requestedBy.trim() || 'Merchandiser',
+              },
+            ],
       washDetails: {
+        ...(selectedStoredSample?.washDetails || {}),
         washType: finalWash,
-        washTechnician: '',
+        washTechnician: selectedStoredSample?.washDetails?.washTechnician || '',
         washFormula: finalWash,
       },
-      finishingDetails: {
+      finishingDetails: selectedStoredSample?.finishingDetails || {
         finishingLine: '',
         supervisor: '',
         ironingDone: false,
@@ -428,15 +573,16 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         qualityPassed: false,
       },
       parcelDetails: {
+        ...(selectedStoredSample?.parcelDetails || {}),
         courier: finalCourier,
-        trackingNumber: '',
+        trackingNumber: selectedStoredSample?.parcelDetails?.trackingNumber || '',
         parcelDate: targetParcelDate,
         recipient: finalBuyer,
-        destinationCountry: '',
-        dispatchStatus: 'pending',
-        workbookSent: false,
+        destinationCountry: selectedStoredSample?.parcelDetails?.destinationCountry || '',
+        dispatchStatus: selectedStoredSample?.parcelDetails?.dispatchStatus || 'pending',
+        workbookSent: selectedStoredSample?.parcelDetails?.workbookSent || false,
       },
-      approvalDetails: {
+      approvalDetails: selectedStoredSample?.approvalDetails || {
         washComments: '',
         washApproved: false,
         trimsComments: '',
@@ -450,7 +596,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         overallVerdict: 'pending',
       },
       requisitionForm: {
-        companyName: 'VOLAR FASHION PVT LTD',
+        companyName: selectedStoredSample?.requisitionForm?.companyName || 'VOLAR FASHION PVT LTD',
         date: formatVolarDate(nowIso),
         requiredDate: formatVolarDate(targetParcelDate),
         shipmentDate,
@@ -461,29 +607,36 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         descriptionCode: styleCode.trim().toUpperCase(),
         styleName: styleName.trim(),
         sampleSizeLabel: `${finalSampleType}\nSize: ${finalSize} (${quantity} Pcs)`,
-        colorWash: finalColor,
+        colorWash: combinedColorWash,
         fabricCode: finalFabricCode,
-        fitting: '',
-        threadInstruction: '',
+        fitting: selectedStoredSample?.requisitionForm?.fitting || '',
+        threadInstruction: finalThreadNote || 'AS PER SAMPLE',
+        threadNote: finalThreadNote,
+        zipperNote: finalZipperNote,
+        buttonNote: finalButtonNote,
         quantityText: `${quantity} Pcs`,
-        block: '',
+        block: selectedStoredSample?.requisitionForm?.block || '',
         fabricComposition: finalFabricName,
-        supplier: selectedFabric?.supplier || '',
-        weight: selectedFabric?.gsm ? `${selectedFabric.gsm} GSM` : '',
+        supplier: selectedFabric?.supplier || selectedStoredSample?.requisitionForm?.supplier || '',
+        weight: selectedFabric?.gsm
+          ? `${selectedFabric.gsm} GSM`
+          : selectedStoredSample?.requisitionForm?.weight || '',
         trims: {
           mainLabel: true,
           sizeLabel: true,
           careOrigin: false,
-          button: true,
+          button: includeButtonTrim || Boolean(finalButtonNote),
+          buttonNote: finalButtonNote,
           buckles: false,
           velcro: false,
           rivet: false,
           stud: false,
-          thread: true,
-          threadNote: '',
+          thread: includeThreadTrim || Boolean(finalThreadNote),
+          threadNote: finalThreadNote || 'AS PER CHART',
           interlining: false,
           elastic: false,
-          zipper: false,
+          zipper: includeZipperTrim || Boolean(finalZipperNote),
+          zipperNote: finalZipperNote,
           drawstring: false,
           stopperEyelet: false,
           snap: false,
@@ -491,14 +644,21 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
           pocketingNote: '',
           customTrims: [],
         },
-        specialInstructions: '',
-        samplingSectionNotes: '',
-        receivedBy: '',
+        specialInstructions: autoSpecialInstructions,
+        samplingSectionNotes: selectedStoredSample?.requisitionForm?.samplingSectionNotes || '',
+        receivedBy: selectedStoredSample?.requisitionForm?.receivedBy || '',
         merchandiserSignature: requestedBy.trim(),
         isLocked: true,
         lockedAt: nowIso,
       },
     };
+
+    if (confirmationMode === 'update' && selectedStoredSample && onUpdateStoredStyle) {
+      onUpdateStoredStyle(selectedStoredSample.id, newSample);
+      resetFormFields();
+      onClose();
+      return;
+    }
 
     resetFormFields();
     onCreateSample(newSample, autoDeduct && Boolean(selectedFabric));
@@ -522,7 +682,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto print:hidden">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative max-h-[92vh] overflow-y-auto text-xs text-slate-300">
         {saveToast && (
           <div className="fixed top-6 right-6 z-50 bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-xl shadow-2xl shadow-emerald-950/60 border border-emerald-400 flex items-center gap-2">
@@ -545,14 +705,18 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black text-white">Create New Sample Requisition</h2>
+              <h2 className="text-lg font-black text-white">
+                {selectedStoredSample
+                  ? `Stored Style Selected: ${selectedStoredSample.styleCode}`
+                  : 'Create Sample Requisition / Select Stored Style'}
+              </h2>
               <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30 flex items-center gap-1">
                 <Database className="w-3 h-3" />
-                Live Input Mode
+                Live Database
               </span>
             </div>
             <p className="text-slate-400 text-xs">
-              Type any field (like Size, Buyer, Line, Color, Wash) and press <strong className="text-indigo-300">Enter</strong> to list it immediately without filling or submitting the rest of the form.
+              Select any stored style from our database to change <strong className="text-emerald-300">Color, Wash, or Sizes</strong>, or include <strong className="text-amber-300">Thread, Zipper &amp; Button notes</strong> in the Requisition Form.
             </p>
           </div>
         </div>
@@ -576,11 +740,95 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            handleProceedToConfirmation();
+            handleProceedToConfirmation('create');
           }}
           onKeyDown={handleFormKeyDown}
           className="space-y-4"
         >
+          {/* STORED STYLE SELECTOR FROM DATABASE */}
+          <div className="p-3.5 rounded-xl bg-emerald-950/25 border border-emerald-500/40 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="font-bold text-emerald-300 flex items-center gap-1.5 text-xs">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>
+                  Select Listed Style from Database (Change Color, Wash, or Sizes)
+                </span>
+              </label>
+              {selectedStoredSample && (
+                <button
+                  type="button"
+                  onClick={resetFormFields}
+                  className="text-[10px] font-bold text-slate-300 hover:text-white bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>Clear &amp; Input New Style</span>
+                </button>
+              )}
+            </div>
+
+            {samples.length === 0 ? (
+              <p className="text-[11px] text-slate-400 italic">
+                Once a style has been listed in this system, it will appear here so you can select it and change its Color, Wash, or Sizes anytime.
+              </p>
+            ) : (
+              <>
+                <select
+                  value={selectedStoredStyleId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (!id) {
+                      resetFormFields();
+                      return;
+                    }
+                    const found = samples.find((s) => s.id === id);
+                    if (found) populateFromStoredStyle(found);
+                  }}
+                  className="w-full bg-slate-900 border border-emerald-500/50 rounded-xl p-2.5 text-white font-mono text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">
+                    -- Select a Stored Style from Database ({samples.length} Listed Style{samples.length > 1 ? 's' : ''}) --
+                  </option>
+                  {samples.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.styleCode} — {s.styleName} | Color: {s.color} | Wash: {s.washDetails?.washType || 'N/A'} | Sizes: {s.size}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-emerald-300/80 font-semibold">
+                    Stored Styles:
+                  </span>
+                  {samples.map((s) => {
+                    const isSelected = selectedStoredStyleId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => populateFromStoredStyle(s)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30'
+                            : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-emerald-500/50 hover:text-white'
+                        }`}
+                      >
+                        <span>{s.styleCode}</span>
+                        <span className="text-[10px] font-sans font-normal opacity-85 truncate max-w-[110px]">
+                          ({s.color} • {s.size})
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {selectedStoredSample && (
+              <div className="p-2 rounded-lg bg-emerald-900/30 border border-emerald-500/40 text-emerald-200 text-[11px]">
+                ✅ <strong>{selectedStoredSample.styleCode} ({selectedStoredSample.styleName})</strong> loaded! You can now change its <strong>Color</strong>, <strong>Wash</strong>, or <strong>Sizes</strong> below and either update this stored style or create a new requisition.
+              </div>
+            )}
+          </div>
           {/* Style Picture & Techpack Sketch Section */}
           <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2.5">
             <div className="flex items-center justify-between">
@@ -1383,13 +1631,105 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
             </div>
           </div>
 
+          {/* 12. Thread, Zipper & Button Notes (Included Directly in Requisition Form) */}
+          <div className="p-3.5 rounded-xl bg-indigo-950/30 border border-indigo-500/40 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="font-bold text-indigo-300 flex items-center gap-1.5 text-xs">
+                <FileText className="w-4 h-4 text-indigo-400" />
+                <span>
+                  Thread, Zipper &amp; Button Notes (Included in Requisition Form)
+                </span>
+              </label>
+              <span className="text-[10px] text-indigo-300/80 font-mono">
+                Printed in Main Table &amp; Trims Checklist on Requisition Form
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Thread Note */}
+              <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-white flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeThreadTrim}
+                      onChange={(e) => setIncludeThreadTrim(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-0"
+                    />
+                    <span>Thread Note</span>
+                  </label>
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300">
+                    THREAD
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. TKT 40/2 DTM / Contrast Gold"
+                  value={threadNote}
+                  onChange={(e) => setThreadNote(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+              </div>
+
+              {/* Zipper Note */}
+              <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-white flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeZipperTrim}
+                      onChange={(e) => setIncludeZipperTrim(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-0"
+                    />
+                    <span>Zipper Note</span>
+                  </label>
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300">
+                    ZIPPER
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. YKK #5 Metal Brass Auto-Lock"
+                  value={zipperNote}
+                  onChange={(e) => setZipperNote(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-400"
+                />
+              </div>
+
+              {/* Button Note */}
+              <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-white flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeButtonTrim}
+                      onChange={(e) => setIncludeButtonTrim(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-0"
+                    />
+                    <span>Button Note</span>
+                  </label>
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300">
+                    BUTTON
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  placeholder="e.g. 17mm Antique Brass Shank / 24L"
+                  value={buttonNote}
+                  onChange={(e) => setButtonNote(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Submit Actions */}
-          <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+          <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
             <span className="text-[11px] text-slate-400 flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5 text-amber-400" />
               Requires 2nd confirmation before permanent save (locked once saved)
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 onClick={onClose}
@@ -1397,13 +1737,29 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               >
                 Cancel
               </button>
+
+              {selectedStoredSample && onUpdateStoredStyle && (
+                <button
+                  type="button"
+                  onClick={() => handleProceedToConfirmation('update')}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Update Stored Style ({selectedStoredSample.styleCode})</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={handleProceedToConfirmation}
+                onClick={() => handleProceedToConfirmation('create')}
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center gap-2"
               >
                 <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>Save Requisition (Proceed to Confirmation)</span>
+                <span>
+                  {selectedStoredSample
+                    ? 'Give New Requisition for Selected Style'
+                    : 'Save Requisition (Proceed to Confirmation)'}
+                </span>
               </button>
             </div>
           </div>
@@ -1495,6 +1851,18 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Priority Level</span>
                     <span className="font-bold uppercase text-rose-300">{priority}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Thread Note</span>
+                    <span className="font-semibold text-indigo-300 truncate block">{threadNote.trim() || 'AS PER CHART'}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Zipper Note</span>
+                    <span className="font-semibold text-cyan-300 truncate block">{zipperNote.trim() || '—'}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
+                    <span className="text-slate-400 block text-[10px]">Button Note</span>
+                    <span className="font-semibold text-emerald-300 truncate block">{buttonNote.trim() || '—'}</span>
                   </div>
                 </div>
 

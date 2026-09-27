@@ -1,16 +1,27 @@
 @import "tailwindcss";
 
 @media print {
-  body {
+  @page {
+    margin: 4mm;
+    size: auto;
+  }
+
+  html,
+  body,
+  #root {
     background-color: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
     padding: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    width: 100% !important;
+    overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide all main app views, navigation, headers, footers, and non-printable UI so ONLY the requisition form prints */
+  /* Hide all main app views, navigation, headers, footers, and non-printable UI so ONLY the requisition form prints without any gap */
   nav,
   header,
   aside,
@@ -18,26 +29,46 @@
   main,
   .print\:hidden {
     display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  #requisition-print-modal-backdrop,
+  #requisition-print-modal-container {
+    position: static !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 
   #requisition-printable-slip {
     display: block !important;
+    position: relative !important;
+    top: 0 !important;
+    left: 0 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 5mm !important;
+    padding: 3mm !important;
     box-shadow: none !important;
     color: #000000 !important;
     background: #ffffff !important;
     border: 2px solid #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   #requisition-printable-slip * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-  }
-
-  @page {
-    margin: 10mm;
-    size: auto;
   }
 }

@@ -26,6 +26,7 @@ import {
   Image as ImageIcon,
   Upload,
   Lock,
+  Edit3,
 } from 'lucide-react';
 
 interface SampleDetailModalProps {
@@ -37,6 +38,7 @@ interface SampleDetailModalProps {
   onToggleWorkbookSent?: (sampleId: string) => void;
   onSendWhatsApp?: (sample: SampleItem, phone: string, customMessage?: string) => void;
   onOpenRequisitionSlip?: (sample: SampleItem) => void;
+  onModifyStoredStyle?: (sample: SampleItem) => void;
   onUpdateSampleThumbnail?: (sampleId: string, newThumbnail: string, additionalImages?: string[]) => void;
 }
 
@@ -49,6 +51,7 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
   onToggleWorkbookSent,
   onSendWhatsApp,
   onOpenRequisitionSlip,
+  onModifyStoredStyle,
   onUpdateSampleThumbnail,
 }) => {
   const { openZoom } = useImageZoom();
@@ -115,6 +118,17 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onModifyStoredStyle && (
+              <button
+                type="button"
+                onClick={() => onModifyStoredStyle(sample)}
+                className="px-2.5 py-1.5 bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white rounded-xl border border-emerald-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                title="Select this stored style to change Color, Wash, or Sizes"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Change Color / Wash / Sizes</span>
+              </button>
+            )}
             {onOpenRequisitionSlip && (
               <button
                 type="button"
@@ -268,11 +282,29 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Garment Color / Wash:</span>
-                <span>{sample.color}</span>
+                <span>{sample.color} • {sample.washDetails?.washType || 'N/A'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Size Spec &amp; Qty:</span>
                 <span>Size {sample.size} • {sample.quantity} Piece{sample.quantity > 1 ? 's' : ''}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-indigo-300 font-semibold">Thread Note:</span>
+                <span className="text-right font-medium max-w-[200px] truncate text-slate-200">
+                  {sample.threadNote || sample.requisitionForm?.threadNote || sample.requisitionForm?.trims?.threadNote || 'AS PER CHART'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-indigo-300 font-semibold">Zipper Note:</span>
+                <span className="text-right font-medium max-w-[200px] truncate text-slate-200">
+                  {sample.zipperNote || sample.requisitionForm?.zipperNote || sample.requisitionForm?.trims?.zipperNote || 'AS PER SAMPLE'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-indigo-300 font-semibold">Button Note:</span>
+                <span className="text-right font-medium max-w-[200px] truncate text-slate-200">
+                  {sample.buttonNote || sample.requisitionForm?.buttonNote || sample.requisitionForm?.trims?.buttonNote || 'AS PER SAMPLE'}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-amber-300 font-semibold">Order Shipment Date:</span>
