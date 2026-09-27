@@ -8,9 +8,11 @@ import {
   getSampleImage,
   getEffectiveShipmentDate,
   getDaysUntilShipment,
+  getSampleTypeTone,
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage, useImageZoom } from './StyleProductImage';
+import { SampleTypeBadge } from './SampleTypeBadge';
 import {
   Search,
   ArrowUpDown,
@@ -388,11 +390,12 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                 {paginatedSamples.map((sample) => {
                   const stageConfig = STAGE_CONFIG[sample.stage];
                   const hasNextStage = !!stageConfig.nextStage;
+                  const typeTone = getSampleTypeTone(sample.sampleType);
 
                   return (
                     <tr
                       key={sample.id}
-                      className="hover:bg-slate-800/40 transition-colors group"
+                      className={`transition-colors group ${typeTone.rowTintClass}`}
                     >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
@@ -450,21 +453,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                           {sample.buyer}
                         </div>
                         <div className="mt-1">
-                          {sample.sampleType === 'Red Seal Sample' ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                              <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
-                              Red Seal Sample
-                            </span>
-                          ) : sample.sampleType === 'Gold Seal Sample' ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                              Gold Seal Sample
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-slate-400">
-                              {sample.sampleType}
-                            </span>
-                          )}
+                          <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
                         </div>
                       </td>
 
@@ -717,11 +706,13 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
-                  {stageSamples.map((sample) => (
+                  {stageSamples.map((sample) => {
+                    const typeTone = getSampleTypeTone(sample.sampleType);
+                    return (
                     <div
                       key={sample.id}
                       onClick={() => onSelectSample(sample)}
-                      className="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 hover:border-indigo-500/50 transition-all cursor-pointer shadow-md group"
+                      className={`p-2.5 rounded-xl border hover:border-indigo-500/50 transition-all cursor-pointer shadow-md group ${typeTone.cardTintClass}`}
                     >
                       {getSampleImage(sample) ? (
                         <div
@@ -768,13 +759,9 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                         {sample.styleName}
                       </h4>
                       <div className="mt-2 text-[11px] text-slate-400 space-y-0.5">
-                        <div className="flex items-center justify-between">
-                          <span>Buyer: <strong className="text-slate-200">{sample.buyer}</strong></span>
-                          {sample.sampleType === 'Red Seal Sample' && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                              Red Seal
-                            </span>
-                          )}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="truncate">Buyer: <strong className="text-slate-200">{sample.buyer}</strong></span>
+                          <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
                         </div>
                         <div>PO: <span className="font-mono text-slate-300">{sample.poNumber}</span></div>
                         <div>Line: <span className="font-mono text-slate-300">{sample.lineCode}</span></div>
@@ -847,7 +834,8 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {stageSamples.length === 0 && (
                     <div className="py-8 text-center text-slate-600 text-[11px] border border-dashed border-slate-800 rounded-xl">
                       Empty stage

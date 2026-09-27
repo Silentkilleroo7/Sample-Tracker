@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { SampleItem } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
+import { SampleTypeBadge } from './SampleTypeBadge';
 import {
   Sparkles,
   PackageCheck,
@@ -108,6 +109,7 @@ export const FinishingSectionView: React.FC<FinishingSectionViewProps> = ({
                           <span className="font-mono font-black text-xs text-amber-300 px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/30">
                             {sample.styleCode}
                           </span>
+                          <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
                           <span className="text-xs text-slate-400 font-medium">
                             PO: {sample.poNumber} • Line: {sample.lineCode}
                           </span>

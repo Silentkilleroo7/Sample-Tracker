@@ -1100,340 +1100,346 @@ export default function App() {
 
   return (
     <ImageZoomProvider onUpdateSampleThumbnail={handleUpdateSampleThumbnail}>
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-      {/* 1. Top Navbar */}
-      <Navbar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        notifications={notifications}
-        onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
-        onNewRequisition={() => setIsNewSampleModalOpen(true)}
-        lowStockCount={lowFabricCount}
-        onNavigateToLowStock={() => {
-          setCurrentView('fabric_inventory');
-        }}
-        onExportData={handleExportData}
-        onResetData={handleResetData}
-      />
+      <div
+        id="app-root-wrapper"
+        className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white print:min-h-0 print:bg-white print:text-black print:block"
+      >
+        <div id="app-screen-only-content" className="flex-1 flex flex-col min-h-screen print:hidden">
+          {/* 1. Top Navbar */}
+          <Navbar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            notifications={notifications}
+            onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
+            onNewRequisition={() => setIsNewSampleModalOpen(true)}
+            lowStockCount={lowFabricCount}
+            onNavigateToLowStock={() => {
+              setCurrentView('fabric_inventory');
+            }}
+            onExportData={handleExportData}
+            onResetData={handleResetData}
+          />
 
-      {/* 2. Main Full-Width View Container */}
-      <div className="flex-1 max-w-7xl w-full mx-auto">
-        <main className="p-4 sm:p-6 lg:p-8 pb-32 sm:pb-28 min-w-0">
-          {currentView === 'dashboard' && (
-            <DashboardView
-              samples={samples}
-              fabrics={fabrics}
-              tests={tests}
-              onNavigateToView={(view, filter) => {
-                setCurrentView(view);
-                if (filter?.stage) {
-                  setInitialStageFilter(filter.stage);
-                }
-              }}
-              onSelectSample={(sample) => {
-                setSelectedSampleForDetail(sample);
-                setIsDetailModalOpen(true);
-              }}
-              onAdvanceStage={handleTriggerAdvance}
-              onNewRequisition={() => setIsNewSampleModalOpen(true)}
-              onRestockFabric={(fabric) => {
-                setSelectedFabricForRestock(fabric);
-                setIsRestockModalOpen(true);
-              }}
-              onOpenFollowUp={handleOpenFollowUp}
-              onToggleWorkbookSent={handleToggleWorkbookSent}
-              onSendWhatsApp={handleSendWhatsAppNotification}
-              onUpdateApprovalDetails={handleUpdateApprovalDetails}
-            />
-          )}
+          {/* 2. Main Full-Width View Container */}
+          <div className="flex-1 max-w-7xl w-full mx-auto">
+            <main className="p-4 sm:p-6 lg:p-8 pb-32 sm:pb-28 min-w-0">
+              {currentView === 'dashboard' && (
+                <DashboardView
+                  samples={samples}
+                  fabrics={fabrics}
+                  tests={tests}
+                  onNavigateToView={(view, filter) => {
+                    setCurrentView(view);
+                    if (filter?.stage) {
+                      setInitialStageFilter(filter.stage);
+                    }
+                  }}
+                  onSelectSample={(sample) => {
+                    setSelectedSampleForDetail(sample);
+                    setIsDetailModalOpen(true);
+                  }}
+                  onAdvanceStage={handleTriggerAdvance}
+                  onNewRequisition={() => setIsNewSampleModalOpen(true)}
+                  onRestockFabric={(fabric) => {
+                    setSelectedFabricForRestock(fabric);
+                    setIsRestockModalOpen(true);
+                  }}
+                  onOpenFollowUp={handleOpenFollowUp}
+                  onToggleWorkbookSent={handleToggleWorkbookSent}
+                  onSendWhatsApp={handleSendWhatsAppNotification}
+                  onUpdateApprovalDetails={handleUpdateApprovalDetails}
+                />
+              )}
 
-          {currentView === 'all_samples' && (
-            <AllSamplesView
-              samples={samples}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onSelectSample={(sample) => {
-                setSelectedSampleForDetail(sample);
-                setIsDetailModalOpen(true);
-              }}
-              onAdvanceStage={handleTriggerAdvance}
-              onNewRequisition={() => {
-                setSelectedStyleForModification(null);
-                setIsNewSampleModalOpen(true);
-              }}
-              onModifyStoredStyle={handleSelectStoredStyleToModify}
-              onDeleteSample={handleDeleteSample}
-              initialStageFilter={initialStageFilter}
-              onOpenFollowUp={handleOpenFollowUp}
-              onToggleWorkbookSent={handleToggleWorkbookSent}
-              onSendWhatsApp={handleSendWhatsAppNotification}
-              onOpenRequisitionSlip={(sample) => {
-                setCompletedRequisitionSample(sample);
-                setIsRequisitionCompleteModalOpen(true);
-              }}
-            />
-          )}
+              {currentView === 'all_samples' && (
+                <AllSamplesView
+                  samples={samples}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  onSelectSample={(sample) => {
+                    setSelectedSampleForDetail(sample);
+                    setIsDetailModalOpen(true);
+                  }}
+                  onAdvanceStage={handleTriggerAdvance}
+                  onNewRequisition={() => {
+                    setSelectedStyleForModification(null);
+                    setIsNewSampleModalOpen(true);
+                  }}
+                  onModifyStoredStyle={handleSelectStoredStyleToModify}
+                  onDeleteSample={handleDeleteSample}
+                  initialStageFilter={initialStageFilter}
+                  onOpenFollowUp={handleOpenFollowUp}
+                  onToggleWorkbookSent={handleToggleWorkbookSent}
+                  onSendWhatsApp={handleSendWhatsAppNotification}
+                  onOpenRequisitionSlip={(sample) => {
+                    setCompletedRequisitionSample(sample);
+                    setIsRequisitionCompleteModalOpen(true);
+                  }}
+                />
+              )}
 
-          {currentView === 'wash' && (
-            <WashSectionView
-              samples={samples}
-              onSelectSample={(sample) => {
-                setSelectedSampleForDetail(sample);
-                setIsDetailModalOpen(true);
-              }}
-              onAdvanceStage={handleTriggerAdvance}
-            />
-          )}
+              {currentView === 'wash' && (
+                <WashSectionView
+                  samples={samples}
+                  onSelectSample={(sample) => {
+                    setSelectedSampleForDetail(sample);
+                    setIsDetailModalOpen(true);
+                  }}
+                  onAdvanceStage={handleTriggerAdvance}
+                />
+              )}
 
-          {currentView === 'finishing' && (
-            <FinishingSectionView
-              samples={samples}
-              onSelectSample={(sample) => {
-                setSelectedSampleForDetail(sample);
-                setIsDetailModalOpen(true);
-              }}
-              onAdvanceStage={handleTriggerAdvance}
-              onToggleChecklistItem={handleToggleFinishingChecklist}
-            />
-          )}
+              {currentView === 'finishing' && (
+                <FinishingSectionView
+                  samples={samples}
+                  onSelectSample={(sample) => {
+                    setSelectedSampleForDetail(sample);
+                    setIsDetailModalOpen(true);
+                  }}
+                  onAdvanceStage={handleTriggerAdvance}
+                  onToggleChecklistItem={handleToggleFinishingChecklist}
+                />
+              )}
 
-          {currentView === 'approvals' && (
-            <ApprovalParcelView
-              samples={samples}
-              onSelectSample={(sample) => {
-                setSelectedSampleForDetail(sample);
-                setIsDetailModalOpen(true);
-              }}
-              onAdvanceStage={handleTriggerAdvance}
-              onUpdateApprovalDetails={handleUpdateApprovalDetails}
-              onUpdateParcelDetails={handleUpdateParcelDetails}
-              onOpenFollowUp={handleOpenFollowUp}
-              onToggleWorkbookSent={handleToggleWorkbookSent}
-              onSendWhatsApp={handleSendWhatsAppNotification}
-            />
-          )}
+              {currentView === 'approvals' && (
+                <ApprovalParcelView
+                  samples={samples}
+                  onSelectSample={(sample) => {
+                    setSelectedSampleForDetail(sample);
+                    setIsDetailModalOpen(true);
+                  }}
+                  onAdvanceStage={handleTriggerAdvance}
+                  onUpdateApprovalDetails={handleUpdateApprovalDetails}
+                  onUpdateParcelDetails={handleUpdateParcelDetails}
+                  onOpenFollowUp={handleOpenFollowUp}
+                  onToggleWorkbookSent={handleToggleWorkbookSent}
+                  onSendWhatsApp={handleSendWhatsAppNotification}
+                />
+              )}
 
-          {currentView === 'test' && (
-            <TestSectionView
-              tests={tests}
-              samples={samples}
-              fabrics={fabrics}
-              onOpenNewTestModal={() => setIsNewTestModalOpen(true)}
-              onOpenUpdateResultModal={(test) => {
-                setSelectedTestForUpdate(test);
-                setIsUpdateResultModalOpen(true);
-              }}
-              onOpenResubmitModal={(test) => {
-                setSelectedTestForResubmit(test);
-                setIsResubmitTestModalOpen(true);
-              }}
-              onDeleteTest={handleDeleteBVTest}
-            />
-          )}
+              {currentView === 'test' && (
+                <TestSectionView
+                  tests={tests}
+                  samples={samples}
+                  fabrics={fabrics}
+                  onOpenNewTestModal={() => setIsNewTestModalOpen(true)}
+                  onOpenUpdateResultModal={(test) => {
+                    setSelectedTestForUpdate(test);
+                    setIsUpdateResultModalOpen(true);
+                  }}
+                  onOpenResubmitModal={(test) => {
+                    setSelectedTestForResubmit(test);
+                    setIsResubmitTestModalOpen(true);
+                  }}
+                  onDeleteTest={handleDeleteBVTest}
+                />
+              )}
 
-          {currentView === 'fabric_inventory' && (
-            <FabricInventoryView
-              fabrics={fabrics}
-              samples={samples}
-              onRestockFabric={(fabric) => {
-                setSelectedFabricForRestock(fabric);
-                setIsRestockModalOpen(true);
-              }}
-              onAddNewFabric={() => setIsAddFabricModalOpen(true)}
-              onDeductFabric={(fabric) => {
-                handleConfirmRestockFabric(fabric.id, -2.5);
-              }}
-              onSelectSampleByCode={(code) => {
-                const found = samples.find((s) => s.styleCode === code);
+              {currentView === 'fabric_inventory' && (
+                <FabricInventoryView
+                  fabrics={fabrics}
+                  samples={samples}
+                  onRestockFabric={(fabric) => {
+                    setSelectedFabricForRestock(fabric);
+                    setIsRestockModalOpen(true);
+                  }}
+                  onAddNewFabric={() => setIsAddFabricModalOpen(true)}
+                  onDeductFabric={(fabric) => {
+                    handleConfirmRestockFabric(fabric.id, -2.5);
+                  }}
+                  onSelectSampleByCode={(code) => {
+                    const found = samples.find((s) => s.styleCode === code);
+                    if (found) {
+                      setSelectedSampleForDetail(found);
+                      setIsDetailModalOpen(true);
+                    } else {
+                      setSearchQuery(code);
+                      setCurrentView('all_samples');
+                    }
+                  }}
+                />
+              )}
+            </main>
+          </div>
+
+          {/* 3. Main Tracking Modules in Bottom Side as Main Modules */}
+          <MainModulesBottom
+            currentView={currentView}
+            onSelectView={(view) => {
+              setCurrentView(view);
+              setInitialStageFilter('all');
+            }}
+            counts={counts}
+          />
+
+          {/* Floating Push Notification Toasts */}
+          <NotificationToastContainer
+            notifications={notifications}
+            onDismiss={(id) => {
+              setNotifications((prev) =>
+                prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+              );
+              void markNotificationReadInSupabase(id);
+            }}
+            onNotificationClick={(notif) => {
+              if (notif.sampleId) {
+                const found = samples.find((s) => s.id === notif.sampleId);
                 if (found) {
                   setSelectedSampleForDetail(found);
                   setIsDetailModalOpen(true);
-                } else {
-                  setSearchQuery(code);
-                  setCurrentView('all_samples');
                 }
-              }}
-            />
-          )}
-        </main>
-      </div>
+              } else if (notif.fabricCode) {
+                setCurrentView('fabric_inventory');
+              }
+            }}
+          />
 
-      {/* 3. Main Tracking Modules in Bottom Side as Main Modules */}
-      <MainModulesBottom
-        currentView={currentView}
-        onSelectView={(view) => {
-          setCurrentView(view);
-          setInitialStageFilter('all');
-        }}
-        counts={counts}
-      />
+          {/* Slide-over Notifications Drawer */}
+          <NotificationDrawer
+            isOpen={isNotificationDrawerOpen}
+            onClose={() => setIsNotificationDrawerOpen(false)}
+            notifications={notifications}
+            onMarkAllAsRead={() => {
+              setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+              void markAllNotificationsReadInSupabase();
+            }}
+            onClearNotifications={() => {
+              setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+              void clearAllNotificationsInSupabase();
+            }}
+            onNotificationClick={(notif) => {
+              setIsNotificationDrawerOpen(false);
+              if (notif.sampleId) {
+                const found = samples.find((s) => s.id === notif.sampleId);
+                if (found) {
+                  setSelectedSampleForDetail(found);
+                  setIsDetailModalOpen(true);
+                }
+              } else if (notif.fabricCode) {
+                setCurrentView('fabric_inventory');
+              }
+            }}
+          />
 
-      {/* Floating Push Notification Toasts */}
-      <NotificationToastContainer
-        notifications={notifications}
-        onDismiss={(id) => {
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-          );
-          void markNotificationReadInSupabase(id);
-        }}
-        onNotificationClick={(notif) => {
-          if (notif.sampleId) {
-            const found = samples.find((s) => s.id === notif.sampleId);
-            if (found) {
-              setSelectedSampleForDetail(found);
-              setIsDetailModalOpen(true);
-            }
-          } else if (notif.fabricCode) {
-            setCurrentView('fabric_inventory');
-          }
-        }}
-      />
+          {/* Modals */}
+          <NewSampleModal
+            isOpen={isNewSampleModalOpen}
+            onClose={() => {
+              setIsNewSampleModalOpen(false);
+              setSelectedStyleForModification(null);
+            }}
+            fabrics={fabrics}
+            samples={samples}
+            initialSelectedStyle={selectedStyleForModification}
+            onCreateSample={handleCreateSample}
+            onUpdateStoredStyle={handleUpdateStoredStyle}
+            onOpenAddFabric={() => setIsAddFabricModalOpen(true)}
+          />
 
-      {/* Slide-over Notifications Drawer */}
-      <NotificationDrawer
-        isOpen={isNotificationDrawerOpen}
-        onClose={() => setIsNotificationDrawerOpen(false)}
-        notifications={notifications}
-        onMarkAllAsRead={() => {
-          setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-          void markAllNotificationsReadInSupabase();
-        }}
-        onClearNotifications={() => {
-          setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-          void clearAllNotificationsInSupabase();
-        }}
-        onNotificationClick={(notif) => {
-          setIsNotificationDrawerOpen(false);
-          if (notif.sampleId) {
-            const found = samples.find((s) => s.id === notif.sampleId);
-            if (found) {
-              setSelectedSampleForDetail(found);
-              setIsDetailModalOpen(true);
-            }
-          } else if (notif.fabricCode) {
-            setCurrentView('fabric_inventory');
-          }
-        }}
-      />
+          <StageAdvanceModal
+            isOpen={isAdvanceModalOpen}
+            onClose={() => {
+              setIsAdvanceModalOpen(false);
+              setSelectedSampleForAdvance(null);
+            }}
+            sample={selectedSampleForAdvance}
+            onConfirmAdvance={handleConfirmAdvanceStage}
+          />
 
-      {/* Modals */}
-      <NewSampleModal
-        isOpen={isNewSampleModalOpen}
-        onClose={() => {
-          setIsNewSampleModalOpen(false);
-          setSelectedStyleForModification(null);
-        }}
-        fabrics={fabrics}
-        samples={samples}
-        initialSelectedStyle={selectedStyleForModification}
-        onCreateSample={handleCreateSample}
-        onUpdateStoredStyle={handleUpdateStoredStyle}
-        onOpenAddFabric={() => setIsAddFabricModalOpen(true)}
-      />
+          <SampleDetailModal
+            isOpen={isDetailModalOpen}
+            onClose={() => {
+              setIsDetailModalOpen(false);
+              setSelectedSampleForDetail(null);
+            }}
+            sample={selectedSampleForDetail}
+            onAdvanceStage={handleTriggerAdvance}
+            onOpenFollowUp={handleOpenFollowUp}
+            onToggleWorkbookSent={handleToggleWorkbookSent}
+            onSendWhatsApp={handleSendWhatsAppNotification}
+            onOpenRequisitionSlip={(sample) => {
+              setCompletedRequisitionSample(sample);
+              setIsRequisitionCompleteModalOpen(true);
+            }}
+            onModifyStoredStyle={(sample) => {
+              setIsDetailModalOpen(false);
+              handleSelectStoredStyleToModify(sample);
+            }}
+            onUpdateSampleThumbnail={handleUpdateSampleThumbnail}
+          />
 
-      <StageAdvanceModal
-        isOpen={isAdvanceModalOpen}
-        onClose={() => {
-          setIsAdvanceModalOpen(false);
-          setSelectedSampleForAdvance(null);
-        }}
-        sample={selectedSampleForAdvance}
-        onConfirmAdvance={handleConfirmAdvanceStage}
-      />
+          <FollowUpModal
+            isOpen={isFollowUpModalOpen}
+            onClose={() => {
+              setIsFollowUpModalOpen(false);
+              setSelectedSampleForFollowUp(null);
+            }}
+            sample={selectedSampleForFollowUp}
+            onSaveFollowUp={handleSaveFollowUp}
+            onSendWhatsApp={handleSendWhatsAppNotification}
+          />
 
-      <SampleDetailModal
-        isOpen={isDetailModalOpen}
-        onClose={() => {
-          setIsDetailModalOpen(false);
-          setSelectedSampleForDetail(null);
-        }}
-        sample={selectedSampleForDetail}
-        onAdvanceStage={handleTriggerAdvance}
-        onOpenFollowUp={handleOpenFollowUp}
-        onToggleWorkbookSent={handleToggleWorkbookSent}
-        onSendWhatsApp={handleSendWhatsAppNotification}
-        onOpenRequisitionSlip={(sample) => {
-          setCompletedRequisitionSample(sample);
-          setIsRequisitionCompleteModalOpen(true);
-        }}
-        onModifyStoredStyle={(sample) => {
-          setIsDetailModalOpen(false);
-          handleSelectStoredStyleToModify(sample);
-        }}
-        onUpdateSampleThumbnail={handleUpdateSampleThumbnail}
-      />
+          <RestockFabricModal
+            isOpen={isRestockModalOpen}
+            onClose={() => {
+              setIsRestockModalOpen(false);
+              setSelectedFabricForRestock(null);
+            }}
+            fabric={selectedFabricForRestock}
+            onConfirmRestock={handleConfirmRestockFabric}
+          />
 
-      <RequisitionCompleteModal
-        isOpen={isRequisitionCompleteModalOpen}
-        onClose={() => {
-          setIsRequisitionCompleteModalOpen(false);
-          setCompletedRequisitionSample(null);
-        }}
-        sample={completedRequisitionSample}
-        onSaveForm={handleSaveRequisitionForm}
-        onViewInPipeline={(sample) => {
-          setCurrentView('all_samples');
-          setSelectedSampleForDetail(sample);
-          setIsDetailModalOpen(true);
-        }}
-      />
+          <AddFabricModal
+            isOpen={isAddFabricModalOpen}
+            onClose={() => setIsAddFabricModalOpen(false)}
+            onAddFabric={handleAddNewFabric}
+          />
 
-      <FollowUpModal
-        isOpen={isFollowUpModalOpen}
-        onClose={() => {
-          setIsFollowUpModalOpen(false);
-          setSelectedSampleForFollowUp(null);
-        }}
-        sample={selectedSampleForFollowUp}
-        onSaveFollowUp={handleSaveFollowUp}
-        onSendWhatsApp={handleSendWhatsAppNotification}
-      />
+          {/* Bureau Veritas (BV) Test Modals */}
+          <NewBVTestModal
+            isOpen={isNewTestModalOpen}
+            onClose={() => setIsNewTestModalOpen(false)}
+            samples={samples}
+            fabrics={fabrics}
+            onCreateTest={handleCreateBVTest}
+          />
 
-      <RestockFabricModal
-        isOpen={isRestockModalOpen}
-        onClose={() => {
-          setIsRestockModalOpen(false);
-          setSelectedFabricForRestock(null);
-        }}
-        fabric={selectedFabricForRestock}
-        onConfirmRestock={handleConfirmRestockFabric}
-      />
+          <UpdateBVResultModal
+            isOpen={isUpdateResultModalOpen}
+            onClose={() => {
+              setIsUpdateResultModalOpen(false);
+              setSelectedTestForUpdate(null);
+            }}
+            test={selectedTestForUpdate}
+            onSaveResult={handleSaveBVTestResult}
+          />
 
-      <AddFabricModal
-        isOpen={isAddFabricModalOpen}
-        onClose={() => setIsAddFabricModalOpen(false)}
-        onAddFabric={handleAddNewFabric}
-      />
+          <ResubmitBVTestModal
+            isOpen={isResubmitTestModalOpen}
+            onClose={() => {
+              setIsResubmitTestModalOpen(false);
+              setSelectedTestForResubmit(null);
+            }}
+            test={selectedTestForResubmit}
+            onConfirmResubmit={handleResubmitBVTest}
+          />
+        </div>
 
-      {/* Bureau Veritas (BV) Test Modals */}
-      <NewBVTestModal
-        isOpen={isNewTestModalOpen}
-        onClose={() => setIsNewTestModalOpen(false)}
-        samples={samples}
-        fabrics={fabrics}
-        onCreateTest={handleCreateBVTest}
-      />
-
-      <UpdateBVResultModal
-        isOpen={isUpdateResultModalOpen}
-        onClose={() => {
-          setIsUpdateResultModalOpen(false);
-          setSelectedTestForUpdate(null);
-        }}
-        test={selectedTestForUpdate}
-        onSaveResult={handleSaveBVTestResult}
-      />
-
-      <ResubmitBVTestModal
-        isOpen={isResubmitTestModalOpen}
-        onClose={() => {
-          setIsResubmitTestModalOpen(false);
-          setSelectedTestForResubmit(null);
-        }}
-        test={selectedTestForResubmit}
-        onConfirmResubmit={handleResubmitBVTest}
-      />
+        {/* Printable Requisition Form Modal (Only component visible when printing) */}
+        <RequisitionCompleteModal
+          isOpen={isRequisitionCompleteModalOpen}
+          onClose={() => {
+            setIsRequisitionCompleteModalOpen(false);
+            setCompletedRequisitionSample(null);
+          }}
+          sample={completedRequisitionSample}
+          onSaveForm={handleSaveRequisitionForm}
+          onViewInPipeline={(sample) => {
+            setCurrentView('all_samples');
+            setSelectedSampleForDetail(sample);
+            setIsDetailModalOpen(true);
+          }}
+        />
       </div>
     </ImageZoomProvider>
   );

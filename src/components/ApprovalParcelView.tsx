@@ -11,6 +11,7 @@ import {
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
+import { SampleTypeBadge } from './SampleTypeBadge';
 import {
   PackageCheck,
   MessageSquare,
@@ -244,6 +245,7 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                         <span className="font-mono font-black text-xs text-indigo-400 px-2 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/30">
                           {sample.styleCode}
                         </span>
+                        <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
                         <span className="text-xs text-slate-400 font-medium">
                           PO: <span className="font-mono text-slate-300">{sample.poNumber}</span> • Buyer:{' '}
                           <strong className="text-slate-200">{sample.buyer}</strong>

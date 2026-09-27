@@ -5,8 +5,11 @@ import {
   SamplePriority,
   SampleType,
   PRESET_STYLE_IMAGES,
+  CORE_SEAL_SAMPLE_TYPES,
   getSampleImage,
+  getSampleTypeTone,
 } from '../types/sample';
+import { SampleTypeBadge } from './SampleTypeBadge';
 import {
   X,
   Plus,
@@ -460,7 +463,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     if (!styleCode.trim() || !styleName.trim() || !shipmentDate) return;
 
     const finalSize = effectiveSizeString || 'Standard';
-    const finalSampleType = (sampleType.trim() || 'Proto Sample') as SampleType;
+    const finalSampleType = (sampleType.trim() || 'Initial Sample') as SampleType;
     const finalBuyer = buyer.trim() || 'Direct Buyer';
     const finalLineCode = lineCode.trim().toUpperCase() || 'LINE-01';
     const finalColor = color.trim() || 'Standard';
@@ -1108,17 +1111,22 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               )}
             </div>
 
-            {/* 6. Sample Type (Type & Press Enter to List) */}
+            {/* 6. Sample Type (Gold Seal = Gold, Red Seal = Red, Initial = White Tone) */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="font-semibold text-slate-300">Sample Type</label>
+                <label className="font-semibold text-slate-300 flex items-center gap-1.5">
+                  <span>Sample Type</span>
+                  {sampleType.trim() && (
+                    <SampleTypeBadge sampleType={sampleType.trim()} size="xs" />
+                  )}
+                </label>
                 <span className="text-[10px] text-slate-400">Press Enter to list</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <input
                   type="text"
                   list="sampletype-datalist"
-                  placeholder="e.g. Proto, Fit, Red Seal, SMS..."
+                  placeholder="e.g. Initial Sample, Red Seal Sample, Gold Seal Sample..."
                   value={sampleType}
                   onChange={(e) => setSampleType(e.target.value)}
                   onKeyDown={(e) => {
@@ -1128,7 +1136,9 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                       handleListSampleTypeOnEnter();
                     }
                   }}
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  className={`flex-1 border rounded-xl p-2.5 placeholder-slate-500 focus:outline-none focus:ring-1 transition-all font-semibold ${
+                    getSampleTypeTone(sampleType).inputClass
+                  }`}
                 />
                 <button
                   type="button"
@@ -1139,28 +1149,30 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                 </button>
               </div>
               <datalist id="sampletype-datalist">
-                {options.sampleTypes.map((t) => (
+                {Array.from(new Set([...CORE_SEAL_SAMPLE_TYPES, ...options.sampleTypes])).map((t) => (
                   <option key={t} value={t} />
                 ))}
               </datalist>
-              {options.sampleTypes.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {options.sampleTypes.map((t) => (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {Array.from(new Set([...CORE_SEAL_SAMPLE_TYPES, ...options.sampleTypes])).map((t) => {
+                  const tone = getSampleTypeTone(t);
+                  const isSelected =
+                    sampleType.trim().toLowerCase() === t.toLowerCase();
+                  return (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setSampleType(t)}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors cursor-pointer ${
-                        sampleType === t
-                          ? 'bg-indigo-600 text-white border-indigo-400'
-                          : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-500'
+                      className={`px-2.5 py-1 rounded-lg text-[10px] border transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                        isSelected ? tone.activePillClass : tone.idlePillClass
                       }`}
                     >
-                      {t}
+                      <span className={`w-2 h-2 rounded-full ${tone.dotClass}`}></span>
+                      <span>{t}</span>
                     </button>
-                  ))}
-                </div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -1809,9 +1821,10 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                       <span className="font-mono font-black text-sm text-indigo-300 px-2 py-0.5 rounded bg-indigo-950 border border-indigo-500/40">
                         {styleCode.trim().toUpperCase()}
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-200 font-semibold text-[11px]">
-                        {sampleType.trim() || 'Proto Sample'}
-                      </span>
+                      <SampleTypeBadge
+                        sampleType={sampleType.trim() || 'Initial Sample'}
+                        size="sm"
+                      />
                       <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold text-[11px]">
                         Shipment: {shipmentDate}
                       </span>

@@ -40,6 +40,7 @@ import { FabricItem, isFabricLowStock } from '../types/fabric';
 import { BVTestItem } from '../types/test';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
+import { SampleTypeBadge } from './SampleTypeBadge';
 
 interface DashboardViewProps {
   samples: SampleItem[];
@@ -489,6 +490,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         >
                           {sample.styleName}
                         </span>
+                        <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
                         {sample.isRequisitionLocked && (
                           <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono flex items-center gap-1">
                             <Lock className="w-2.5 h-2.5 text-amber-400" />
@@ -981,10 +983,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs font-black text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-500/30">
                         {sample.styleCode}
                       </span>
+                      <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           STAGE_CONFIG[sample.stage].badgeBg

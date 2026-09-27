@@ -8,7 +8,9 @@
 
   html,
   body,
-  #root {
+  #root,
+  #app-root-wrapper {
+    background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
@@ -16,12 +18,15 @@
     min-height: 0 !important;
     height: auto !important;
     width: 100% !important;
+    display: block !important;
     overflow: visible !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide all main app views, navigation, headers, footers, and non-printable UI so ONLY the requisition form prints without any gap */
+  /* Hide all main app views, navigation, headers, footers, and non-printable UI so ONLY the requisition form prints without any black bar or gap */
+  #app-screen-only-content,
+  #app-root-wrapper > *:not(#requisition-print-modal-backdrop),
   nav,
   header,
   aside,
@@ -30,9 +35,12 @@
   .print\:hidden {
     display: none !important;
     height: 0 !important;
+    width: 0 !important;
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: hidden !important;
+    background: transparent !important;
   }
 
   #requisition-print-modal-backdrop,
@@ -46,8 +54,12 @@
     max-height: none !important;
     min-height: 0 !important;
     overflow: visible !important;
-    background: transparent !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
     border: none !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
   }
 
@@ -62,7 +74,9 @@
     box-shadow: none !important;
     color: #000000 !important;
     background: #ffffff !important;
+    background-color: #ffffff !important;
     border: 2px solid #000000 !important;
+    border-radius: 0 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }

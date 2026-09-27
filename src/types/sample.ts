@@ -9,13 +9,15 @@ export type SampleStage =
 export type SamplePriority = 'urgent' | 'high' | 'normal';
 
 export type SampleType = 
+  | 'Initial Sample'
+  | 'Red Seal Sample' 
+  | 'Gold Seal Sample'
   | 'Proto Sample' 
   | 'Fit Sample' 
   | 'Salesman Sample (SMS)' 
-  | 'Red Seal Sample' 
   | 'TOP Sample' 
-  | 'Gold Seal Sample'
-  | 'Pre-Production (PP)'; // legacy compatibility
+  | 'Pre-Production (PP)'
+  | string;
 
 export type ApprovalStatus = 'pending' | 'approved' | 'revision_requested' | 'rejected';
 
@@ -434,3 +436,112 @@ export const STAGE_CONFIG: Record<SampleStage, {
     prevStage: 'ready_for_parcel',
   },
 };
+
+export const CORE_SEAL_SAMPLE_TYPES = [
+  'Initial Sample',
+  'Red Seal Sample',
+  'Gold Seal Sample',
+] as const;
+
+export interface SampleTypeTone {
+  category: 'gold' | 'red' | 'initial' | 'default';
+  label: string;
+  badgeClass: string;
+  dotClass: string;
+  activePillClass: string;
+  idlePillClass: string;
+  inputClass: string;
+  rowTintClass: string;
+  cardTintClass: string;
+  printBadgeClass: string;
+}
+
+/**
+ * Returns the visual color tone configuration for a Sample Type:
+ * - Gold Seal -> Gold Color Tone
+ * - Red Seal -> Red Color Tone
+ * - Initial -> White Tone Color
+ */
+export function getSampleTypeTone(sampleType?: string): SampleTypeTone {
+  const raw = (sampleType || '').trim();
+  const lower = raw.toLowerCase();
+
+  if (lower.includes('gold')) {
+    return {
+      category: 'gold',
+      label: raw || 'Gold Seal Sample',
+      badgeClass:
+        'bg-gradient-to-r from-amber-500/30 via-yellow-400/25 to-amber-500/30 text-amber-200 border-amber-400/80 shadow-sm shadow-amber-500/20',
+      dotClass: 'bg-amber-400 ring-2 ring-amber-300/50',
+      activePillClass:
+        'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black border-amber-200 shadow-md shadow-amber-500/30 ring-2 ring-amber-300/50',
+      idlePillClass:
+        'bg-amber-950/60 text-amber-300 border-amber-500/50 hover:bg-amber-900/70 hover:border-amber-400',
+      inputClass:
+        'bg-amber-950/40 border-amber-400/80 text-amber-200 focus:ring-amber-400',
+      rowTintClass:
+        'bg-amber-950/15 hover:bg-amber-950/30 border-l-4 border-l-amber-400',
+      cardTintClass:
+        'border-amber-500/60 bg-gradient-to-br from-amber-950/30 via-slate-900/90 to-slate-900/90',
+      printBadgeClass: 'bg-amber-100 text-amber-950 border-amber-600',
+    };
+  }
+
+  if (lower.includes('red')) {
+    return {
+      category: 'red',
+      label: raw || 'Red Seal Sample',
+      badgeClass:
+        'bg-gradient-to-r from-rose-600/35 via-red-500/25 to-rose-600/35 text-rose-200 border-rose-400/80 shadow-sm shadow-rose-500/20',
+      dotClass: 'bg-rose-500 ring-2 ring-rose-300/50',
+      activePillClass:
+        'bg-gradient-to-r from-rose-600 to-red-600 text-white font-black border-rose-300 shadow-md shadow-rose-600/30 ring-2 ring-rose-400/50',
+      idlePillClass:
+        'bg-rose-950/60 text-rose-300 border-rose-500/50 hover:bg-rose-900/70 hover:border-rose-400',
+      inputClass:
+        'bg-rose-950/40 border-rose-500/80 text-rose-200 focus:ring-rose-500',
+      rowTintClass:
+        'bg-rose-950/15 hover:bg-rose-950/30 border-l-4 border-l-rose-500',
+      cardTintClass:
+        'border-rose-500/60 bg-gradient-to-br from-rose-950/30 via-slate-900/90 to-slate-900/90',
+      printBadgeClass: 'bg-rose-100 text-rose-950 border-rose-600',
+    };
+  }
+
+  if (lower.includes('initial') || lower === 'init') {
+    return {
+      category: 'initial',
+      label: raw || 'Initial Sample',
+      badgeClass:
+        'bg-white/95 text-slate-950 border-white shadow-sm shadow-white/20',
+      dotClass: 'bg-slate-900 ring-2 ring-slate-400/60',
+      activePillClass:
+        'bg-white text-slate-950 font-black border-white shadow-md shadow-white/30 ring-2 ring-white/60',
+      idlePillClass:
+        'bg-white/15 text-white border-white/50 hover:bg-white/25 hover:border-white',
+      inputClass:
+        'bg-white/15 border-white/80 text-white focus:ring-white',
+      rowTintClass:
+        'bg-white/[0.04] hover:bg-white/[0.08] border-l-4 border-l-white',
+      cardTintClass:
+        'border-white/50 bg-gradient-to-br from-white/[0.08] via-slate-900/90 to-slate-900/90',
+      printBadgeClass: 'bg-white text-black border-black',
+    };
+  }
+
+  return {
+    category: 'default',
+    label: raw || 'Standard Sample',
+    badgeClass: 'bg-slate-800 text-slate-200 border-slate-600',
+    dotClass: 'bg-indigo-400',
+    activePillClass: 'bg-indigo-600 text-white font-bold border-indigo-400',
+    idlePillClass:
+      'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-500',
+    inputClass:
+      'bg-slate-800 border-slate-700 text-white focus:ring-indigo-500',
+    rowTintClass: 'hover:bg-slate-800/40',
+    cardTintClass: 'border-slate-800 bg-slate-900/80',
+    printBadgeClass: 'bg-slate-100 text-black border-black',
+  };
+}
+

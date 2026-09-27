@@ -9,6 +9,7 @@ import {
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { useImageZoom } from './StyleProductImage';
+import { SampleTypeBadge } from './SampleTypeBadge';
 import { uploadStylePhoto } from '../lib/supabase';
 import {
   X,
@@ -104,15 +105,8 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
               <span>Buyer: <strong className="text-slate-200">{sample.buyer}</strong></span>
               <span>• PO: <span className="font-mono text-slate-300">{sample.poNumber}</span></span>
               <span>• Line: <span className="font-mono text-slate-300">{sample.lineCode}</span></span>
-              <span>• Type:{' '}
-                {sample.sampleType === 'Red Seal Sample' ? (
-                  <span className="inline-flex items-center gap-1 font-bold text-rose-300 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-500/40 text-xs">
-                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
-                    Red Seal Sample
-                  </span>
-                ) : (
-                  <span className="text-slate-200">{sample.sampleType}</span>
-                )}
+              <span className="inline-flex items-center gap-1.5">
+                • Type: <SampleTypeBadge sampleType={sample.sampleType} size="sm" />
               </span>
             </div>
           </div>

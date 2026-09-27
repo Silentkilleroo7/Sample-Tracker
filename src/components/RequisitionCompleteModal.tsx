@@ -4,8 +4,10 @@ import {
   VolarRequisitionForm,
   TrimsChecklist,
   getSampleImage,
+  getSampleTypeTone,
 } from '../types/sample';
 import { StyleProductImage } from './StyleProductImage';
+import { SampleTypeBadge } from './SampleTypeBadge';
 import {
   Printer,
   X,
@@ -267,11 +269,11 @@ Special Instructions: ${form.specialInstructions}
   return (
     <div
       id="requisition-print-modal-backdrop"
-      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm overflow-y-auto print:p-0 print:m-0 print:bg-white print:static print:block"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm overflow-y-auto print:p-0 print:m-0 print:bg-white print:backdrop-blur-none print:static print:block"
     >
       <div
         id="requisition-print-modal-container"
-        className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[96vh] overflow-y-auto text-xs text-slate-300 print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white print:text-black print:p-0 print:m-0 print:w-full"
+        className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[96vh] overflow-y-auto text-xs text-slate-300 print:max-h-none print:overflow-visible print:border-0 print:rounded-none print:shadow-none print:bg-white print:text-black print:p-0 print:m-0 print:w-full"
       >
         {/* Modal Top Control Bar (Hidden when Printing) */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-slate-800 print:hidden">
@@ -281,10 +283,11 @@ Special Instructions: ${form.specialInstructions}
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base sm:text-lg font-black text-white">
                   Sample Requisition Form
                 </h2>
+                <SampleTypeBadge sampleType={form.sampleType || sample.sampleType} size="xs" />
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
                   Volar Fashion Format
                 </span>
@@ -536,7 +539,18 @@ Special Instructions: ${form.specialInstructions}
                     className="w-full bg-indigo-50/50 px-1 py-0.5 border border-indigo-300 font-bold"
                   />
                 ) : (
-                  <span className="font-bold text-black">{form.sampleType}</span>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border font-black uppercase text-[11px] ${
+                      getSampleTypeTone(form.sampleType).printBadgeClass
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        getSampleTypeTone(form.sampleType).dotClass
+                      }`}
+                    ></span>
+                    <span>{form.sampleType}</span>
+                  </span>
                 )}
               </div>
             </div>
