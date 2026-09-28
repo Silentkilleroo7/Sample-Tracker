@@ -173,9 +173,9 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
       )}
 
       {/* Search & Filter Toolbar */}
-      <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+      <div className="bg-slate-900/80 p-3 sm:p-3.5 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 text-xs">
+        <div className="relative flex-1 min-w-0 sm:min-w-[240px]">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
@@ -184,14 +184,14 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
               setCurrentPage(1);
             }}
             placeholder="Search by Fabric Code, Name, Linked Style, Supplier..."
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full min-h-[42px] bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 sm:pb-0">
           <button
             onClick={() => setStockFilter('all')}
-            className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer ${
+            className={`min-h-[40px] px-3 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap cursor-pointer ${
               stockFilter === 'all'
                 ? 'bg-indigo-600 text-white shadow'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -201,7 +201,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
           </button>
           <button
             onClick={() => setStockFilter('critical')}
-            className={`px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`min-h-[40px] px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               stockFilter === 'critical'
                 ? 'bg-rose-600 text-white shadow'
                 : 'bg-slate-800 text-rose-400 hover:bg-rose-950/40 border border-rose-500/30'
@@ -214,7 +214,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
           </button>
           <button
             onClick={() => setStockFilter('sufficient')}
-            className={`px-3 py-1.5 rounded-xl font-semibold transition-all cursor-pointer ${
+            className={`min-h-[40px] px-3 py-1.5 rounded-xl font-semibold transition-all whitespace-nowrap cursor-pointer ${
               stockFilter === 'sufficient'
                 ? 'bg-indigo-600 text-white shadow'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
@@ -224,7 +224,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 text-slate-400">
+        <div className="flex items-center justify-end gap-1.5 text-slate-400">
           <span>Rows:</span>
           <select
             value={pageSize}
@@ -232,7 +232,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
               setPageSize(Number(e.target.value));
               setCurrentPage(1);
             }}
-            className="bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-slate-200 font-mono"
+            className="min-h-[40px] bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-slate-200 font-mono"
           >
             <option value={5}>5</option>
             <option value={10}>10</option>
@@ -241,9 +241,141 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
         </div>
       </div>
 
-      {/* Fabrics Table */}
+      {/* Fabrics Container: Mobile Card List + Desktop Table */}
       <div className="bg-slate-900/80 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
+        {/* MOBILE FABRIC CARDS (< md) */}
+        <div className="md:hidden divide-y divide-slate-800">
+          {paginatedFabrics.map((fabric) => {
+            const isCritical = isFabricLowStock(fabric);
+
+            return (
+              <div
+                key={fabric.id}
+                className={`p-3.5 space-y-3 ${
+                  isCritical
+                    ? 'bg-rose-950/20 border-l-4 border-l-rose-500'
+                    : ''
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`font-mono font-black text-xs px-2 py-0.5 rounded border ${
+                          isCritical
+                            ? 'bg-rose-600 text-white border-rose-400'
+                            : 'bg-slate-800 text-indigo-300 border-indigo-500/30'
+                        }`}
+                      >
+                        {fabric.code}
+                      </span>
+                      {isCritical && (
+                        <span className="text-[10px] font-bold text-rose-400 uppercase">
+                          ≤5 Yds Alert
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-bold text-white text-sm mt-1">
+                      {fabric.name}
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      {fabric.composition} · {fabric.gsm} GSM · {fabric.widthInches}" · {fabric.color}
+                    </p>
+                  </div>
+
+                  <div className="text-right font-mono shrink-0">
+                    <div
+                      className={`text-sm font-black tabular-nums ${
+                        isCritical ? 'text-rose-400' : 'text-emerald-400'
+                      }`}
+                    >
+                      {Number(fabric.availableYards.toFixed(2))} yds
+                    </div>
+                    <div className="text-[10px] text-slate-500 tabular-nums">
+                      Alloc: {Number(fabric.allocatedYards.toFixed(2))} yds
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-Pcs Consumption & Supplier */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  {fabric.perPcsConsumptionYards && fabric.perPcsConsumptionYards > 0 ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/50 border border-emerald-500/35 text-[10px] font-mono font-bold text-emerald-300">
+                      <Ruler className="w-3 h-3 text-emerald-400" />
+                      {fabric.perPcsConsumptionYards} yds/pc (Locked)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950/60 border border-slate-800 text-[10px] font-mono text-slate-500">
+                      <Ruler className="w-3 h-3 text-slate-500" />
+                      Set on 1st requisition
+                    </span>
+                  )}
+
+                  <span className="text-slate-400 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-slate-500" />
+                    {fabric.supplier} · {fabric.location}
+                  </span>
+                </div>
+
+                {/* Linked Styles */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] text-slate-400 mr-1">Styles:</span>
+                  {fabric.linkedStyleCodes.map((sc) => (
+                    <button
+                      key={sc}
+                      onClick={() => onSelectSampleByCode(sc)}
+                      className="min-h-[32px] font-mono text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                    >
+                      {sc}
+                    </button>
+                  ))}
+                  {fabric.linkedStyleCodes.length === 0 && (
+                    <span className="text-slate-500 text-[11px] italic">
+                      No style linked
+                    </span>
+                  )}
+                </div>
+
+                {/* Mobile Actions */}
+                <div className="pt-1 flex items-center justify-between gap-2">
+                  {!isViewOnly ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onRestockFabric(fabric)}
+                        className="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Restock Roll</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDeductFabric(fabric)}
+                        className="min-h-[42px] px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+                      >
+                        - Deduct
+                      </button>
+                    </>
+                  ) : (
+                    <div className="w-full min-h-[40px] px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-xs font-semibold flex items-center justify-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5 text-amber-400" />
+                      <span>View Mode Only (No Edit Access)</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {paginatedFabrics.length === 0 && (
+            <div className="py-12 px-4 text-center text-slate-400 text-xs">
+              No fabrics found matching the filter.
+            </div>
+          )}
+        </div>
+
+        {/* DESKTOP FABRICS TABLE (md and up) */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-300">
             <thead className="bg-slate-800/90 text-slate-400 uppercase text-[11px] font-bold tracking-wider border-b border-slate-700/80">
               <tr>

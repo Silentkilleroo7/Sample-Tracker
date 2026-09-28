@@ -40,6 +40,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
     {
       id: 'dashboard' as AppView,
       label: 'Dashboard',
+      mobileLabel: 'Dashboard',
       subtitle: 'Summary & KPIs',
       icon: LayoutDashboard,
       badge: counts.lowFabric > 0 ? `${counts.lowFabric} Alert` : undefined,
@@ -54,6 +55,12 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
           ? 'Requisition Samples'
           : userRole === 'wash'
           ? 'Sewing Status Samples'
+          : 'Samples',
+      mobileLabel:
+        userRole === 'sewing'
+          ? 'Requisitions'
+          : userRole === 'wash'
+          ? 'Sewing Samples'
           : 'Samples',
       subtitle:
         userRole === 'sewing'
@@ -74,6 +81,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
     {
       id: 'wash' as AppView,
       label: 'Wash',
+      mobileLabel: 'Wash Dept',
       subtitle:
         userRole === 'wash' ? 'Move Sewing → Wash → Finishing' : 'Wet Wash Status',
       icon: Waves,
@@ -84,6 +92,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
     {
       id: 'finishing' as AppView,
       label: 'Finishing',
+      mobileLabel: 'Finishing',
       subtitle: 'Ironing & QA',
       icon: Sparkles,
       count: counts.finishing,
@@ -93,6 +102,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
     {
       id: 'approvals' as AppView,
       label: 'Parcel & Approval',
+      mobileLabel: 'Approvals',
       subtitle: 'Courier & Comments',
       icon: PackageCheck,
       count: counts.readyForParcel + counts.approvals,
@@ -102,18 +112,28 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
     {
       id: 'test' as AppView,
       label: 'Test',
+      mobileLabel: 'BV Test',
       subtitle: 'BV Testing & 24h Re-Test',
       icon: FlaskConical,
-      badge: (counts.testOverdue && counts.testOverdue > 0) ? `${counts.testOverdue} 24h!` : undefined,
-      badgeVariant: (counts.testOverdue && counts.testOverdue > 0) ? 'critical' : 'neutral',
+      badge:
+        counts.testOverdue && counts.testOverdue > 0
+          ? `${counts.testOverdue} 24h!`
+          : undefined,
+      badgeVariant:
+        counts.testOverdue && counts.testOverdue > 0 ? 'critical' : 'neutral',
       count: counts.testCount,
-      color: (counts.testOverdue && counts.testOverdue > 0) ? 'text-rose-400' : 'text-blue-400',
+      color:
+        counts.testOverdue && counts.testOverdue > 0
+          ? 'text-rose-400'
+          : 'text-blue-400',
       allowedRoles: ['merchandiser'] as UserRole[],
     },
     {
       id: 'fabric_inventory' as AppView,
       label: userRole === 'sewing' ? 'Fabric (View Mode)' : 'Fabric',
-      subtitle: userRole === 'sewing' ? 'View Only • No Access' : 'Stock & Yardage',
+      mobileLabel: userRole === 'sewing' ? 'Fabric (View)' : 'Fabric',
+      subtitle:
+        userRole === 'sewing' ? 'View Only • No Access' : 'Stock & Yardage',
       icon: ScrollText,
       badge: counts.lowFabric > 0 ? `${counts.lowFabric} Low` : undefined,
       badgeVariant: counts.lowFabric > 0 ? 'critical' : 'neutral',
@@ -123,34 +143,43 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
   ];
 
   const modules = allModules.filter((m) => m.allowedRoles.includes(userRole));
+  const isCompactRole = modules.length <= 3;
 
   return (
-    <div className="sticky bottom-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl border-t-2 border-indigo-500/40 shadow-2xl shadow-black ring-1 ring-white/10">
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-2">
-        {/* Section Header / Category Tag */}
-        <div className="flex items-center justify-between px-2 mb-1.5 text-[10px] text-slate-400">
+    <nav
+      aria-label="Main modules navigation"
+      className="sticky bottom-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 shadow-2xl"
+    >
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2">
+        {/* Desktop-only Status Header (hidden on mobile to preserve 85%+ viewport space) */}
+        <div className="hidden sm:flex items-center justify-between px-2 mb-1.5 text-[10px] text-slate-400">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-mono font-black uppercase tracking-widest text-indigo-300">
-              MAIN TRACKING MODULES
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span className="font-semibold text-indigo-300">
+              Main Tracking Modules
             </span>
-            <span className="text-slate-500 hidden sm:inline">• Bottom Navigation Hub</span>
           </div>
           <div className="flex items-center gap-3 font-mono text-[10px]">
-            <span className="text-slate-400 hidden md:inline">
+            <span className="text-slate-400">
               In Pipeline: <strong className="text-white">{counts.total}</strong> styles
             </span>
             {counts.lowFabric > 0 && (
-              <span className="text-rose-400 font-bold flex items-center gap-1 animate-pulse">
+              <span className="text-rose-400 font-semibold flex items-center gap-1">
                 <AlertOctagon className="w-3 h-3" />
-                {counts.lowFabric} Fabric Alert!
+                {counts.lowFabric} Fabric Alert
               </span>
             )}
           </div>
         </div>
 
-        {/* Modules Grid / Dock */}
-        <div className="grid grid-cols-4 sm:grid-cols-7 gap-1 sm:gap-1.5">
+        {/* Single-Row Mobile Thumb Dock & Responsive Desktop Grid */}
+        <div
+          className={
+            isCompactRole
+              ? 'grid grid-cols-2 sm:grid-cols-2 gap-1.5'
+              : 'flex overflow-x-auto no-scrollbar gap-1.5 sm:grid sm:grid-cols-7'
+          }
+        >
           {modules.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id;
@@ -160,20 +189,21 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => onSelectView(item.id)}
-                className={`relative flex flex-col sm:flex-row items-center justify-center sm:justify-between px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-xl transition-all group cursor-pointer text-left ${
+                className={`relative min-h-[48px] ${
+                  isCompactRole ? 'w-full' : 'min-w-[78px] sm:min-w-0 shrink-0'
+                } flex flex-col sm:flex-row items-center justify-center sm:justify-between px-2.5 py-1.5 sm:py-2 rounded-xl transition-all group cursor-pointer text-left ${
                   isActive
-                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/40 ring-1 ring-indigo-400/50 scale-[1.02]'
-                    : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800/80 hover:border-slate-700'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/50'
+                    : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800/80'
                 }`}
               >
-                {/* Active indicator dot */}
                 {isActive && (
-                  <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-indigo-400 rounded-full shadow-sm shadow-indigo-300"></span>
+                  <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-indigo-300 rounded-full" />
                 )}
 
-                <div className="flex items-center gap-2 min-w-0">
+                <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 min-w-0">
                   <div
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110 ${
+                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 ${
                       isActive
                         ? 'bg-white/20 text-white'
                         : 'bg-slate-800 text-slate-300'
@@ -182,7 +212,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                     <Icon className={`w-4 h-4 ${isActive ? 'text-white' : item.color}`} />
                   </div>
                   <div className="hidden lg:block truncate min-w-0">
-                    <div className="font-bold text-xs truncate leading-tight">
+                    <div className="font-semibold text-xs truncate leading-tight">
                       {item.label}
                     </div>
                     <div
@@ -193,20 +223,20 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                       {item.subtitle}
                     </div>
                   </div>
-                  <span className="lg:hidden text-[11px] font-bold mt-1 sm:mt-0 truncate">
-                    {item.label}
+                  <span className="lg:hidden text-[10px] sm:text-[11px] font-semibold truncate whitespace-nowrap">
+                    {item.mobileLabel}
                   </span>
                 </div>
 
-                {/* Badge or Count */}
+                {/* Count / Badge Indicator */}
                 <div className="hidden sm:flex items-center ml-1 shrink-0">
                   {item.badge ? (
                     <span
-                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap ${
                         item.badgeVariant === 'critical'
                           ? isActive
                             ? 'bg-rose-500 text-white'
-                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
+                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
                           : 'bg-slate-800 text-slate-300'
                       }`}
                     >
@@ -214,7 +244,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                     </span>
                   ) : item.count !== undefined ? (
                     <span
-                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold ${
+                      className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold tabular-nums ${
                         isActive
                           ? 'bg-indigo-800 text-white'
                           : 'bg-slate-800 text-slate-400 group-hover:text-slate-200'
@@ -224,11 +254,24 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                     </span>
                   ) : null}
                 </div>
+
+                {/* Compact Mobile Count Dot */}
+                {item.count !== undefined && (
+                  <span
+                    className={`sm:hidden absolute top-1 right-1.5 text-[9px] font-mono font-bold tabular-nums px-1 rounded ${
+                      isActive
+                        ? 'bg-indigo-800/90 text-white'
+                        : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {item.count}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
       </div>
-    </div>
+    </nav>
   );
 };

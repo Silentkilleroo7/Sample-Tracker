@@ -333,7 +333,7 @@ export default function App() {
     } catch {
       // Ignore storage error
     }
-    void recordUserLoginInSupabase(user.id);
+    void recordUserLoginInSupabase(user.username);
 
     if (user.role === 'sewing') {
       setCurrentView('all_samples');
@@ -1231,7 +1231,7 @@ export default function App() {
 
   // Render Role-Based Login Gate if no user is currently authenticated
   if (!currentUser) {
-    return <LoginView users={appUsers} onLogin={handleLogin} />;
+    return <LoginView users={appUsers} onLoginSuccess={handleLogin} onLogin={handleLogin} />;
   }
 
   const isMerchandiser = currentUser.role === 'merchandiser';
@@ -1269,7 +1269,7 @@ export default function App() {
 
           {/* 2. Main Full-Width View Container */}
           <div className="flex-1 max-w-7xl w-full mx-auto">
-            <main className="p-4 sm:p-6 lg:p-8 pb-32 sm:pb-28 min-w-0">
+            <main className="p-3 sm:p-6 lg:p-8 pb-24 sm:pb-28 min-w-0">
               {currentView === 'dashboard' && isMerchandiser && (
                 <DashboardView
                   samples={samples}

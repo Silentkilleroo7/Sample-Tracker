@@ -68,17 +68,17 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
             Move Sewing Status samples into Wash, and move completed Wash samples into Finishing.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full md:w-auto">
           <button
             type="button"
             onClick={() => setActiveTab('sewing')}
-            className={`p-3 rounded-xl border text-center min-w-[135px] transition-all cursor-pointer ${
+            className={`p-3 rounded-xl border text-center sm:min-w-[135px] transition-all cursor-pointer ${
               activeTab === 'sewing'
                 ? 'bg-sky-950/90 border-sky-400 shadow-lg shadow-sky-500/20'
                 : 'bg-slate-900/90 border-slate-800 hover:border-sky-500/40'
             }`}
           >
-            <span className="text-2xl font-mono font-black text-sky-400">
+            <span className="text-xl sm:text-2xl font-mono font-black text-sky-400">
               {sewingSamples.length}
             </span>
             <div className="text-[10px] text-slate-300 uppercase font-bold mt-0.5">
@@ -88,13 +88,13 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
           <button
             type="button"
             onClick={() => setActiveTab('wash')}
-            className={`p-3 rounded-xl border text-center min-w-[135px] transition-all cursor-pointer ${
+            className={`p-3 rounded-xl border text-center sm:min-w-[135px] transition-all cursor-pointer ${
               activeTab === 'wash'
                 ? 'bg-cyan-950/90 border-cyan-400 shadow-lg shadow-cyan-500/20'
                 : 'bg-slate-900/90 border-slate-800 hover:border-cyan-500/40'
             }`}
           >
-            <span className="text-2xl font-mono font-black text-cyan-400">
+            <span className="text-xl sm:text-2xl font-mono font-black text-cyan-400">
               {washSamples.length}
             </span>
             <div className="text-[10px] text-slate-300 uppercase font-bold mt-0.5">
@@ -105,41 +105,41 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
       </div>
 
       {/* Search & Stage Switcher within Wash */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+      <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 bg-slate-900/80 p-3 sm:p-3.5 rounded-2xl border border-slate-800">
+        <div className="relative flex-1 min-w-0 sm:min-w-[240px] sm:max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={washSearch}
             onChange={(e) => setWashSearch(e.target.value)}
             placeholder="Search by Style, Recipe, Wash Tech, Buyer..."
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className="w-full min-h-[42px] bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-cyan-500"
           />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid grid-cols-2 sm:flex items-center gap-2">
           <button
             type="button"
             onClick={() => setActiveTab('sewing')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+            className={`min-h-[42px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
               activeTab === 'sewing'
                 ? 'bg-sky-600 text-white shadow'
                 : 'bg-slate-800 text-slate-300 hover:text-white'
             }`}
           >
-            <Scissors className="w-3.5 h-3.5" />
-            <span>1. Sewing Status ({sewingSamples.length}) → Move to Wash</span>
+            <Scissors className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">1. Sewing ({sewingSamples.length})</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('wash')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all ${
+            className={`min-h-[42px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
               activeTab === 'wash'
                 ? 'bg-cyan-600 text-white shadow'
                 : 'bg-slate-800 text-slate-300 hover:text-white'
             }`}
           >
-            <Waves className="w-3.5 h-3.5" />
-            <span>2. Wash Status ({washSamples.length}) → Move to Finishing</span>
+            <Waves className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">2. Wash ({washSamples.length})</span>
           </button>
         </div>
       </div>
@@ -252,7 +252,7 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
                 </div>
 
                 {/* Footer with Move to Wash or Move to Finishing button */}
-                <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
+                <div className="mt-4 pt-3 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
                     <Calendar className="w-3 h-3 text-slate-500" />
                     Target Parcel: {sample.targetParcelDate}
@@ -261,20 +261,20 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
                   {sample.stage === 'sewing' ? (
                     <button
                       onClick={() => onAdvanceStage(sample)}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer"
                     >
-                      <Waves className="w-3.5 h-3.5" />
+                      <Waves className="w-4 h-4 shrink-0" />
                       <span>Move Sewing → Wash Status</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <ArrowRight className="w-4 h-4 shrink-0" />
                     </button>
                   ) : (
                     <button
                       onClick={() => onAdvanceStage(sample)}
-                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold text-xs shadow-lg shadow-amber-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                      className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg shadow-amber-600/30 transition-all cursor-pointer"
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
+                      <Sparkles className="w-4 h-4 shrink-0" />
                       <span>Complete Wash → Move to Finishing</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <ArrowRight className="w-4 h-4 shrink-0" />
                     </button>
                   )}
                 </div>

@@ -461,7 +461,7 @@ BEGIN
       )
     INTO v_saved_per_pcs
     FROM public.requisition_options
-    WHERE id = 'global'
+    WHERE id = 'default'
     LIMIT 1;
   END IF;
 
@@ -501,9 +501,16 @@ CREATE TABLE IF NOT EXISTS public.app_users (
   role TEXT NOT NULL CHECK (role IN ('merchandiser', 'sewing', 'wash')),
   department TEXT DEFAULT '',
   permissions_summary TEXT DEFAULT '',
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   last_login_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.app_users
+  ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 -- Seed the 6 requested accounts:
 -- 4 Merchandisers: zahid, animesh, rakib, hasan

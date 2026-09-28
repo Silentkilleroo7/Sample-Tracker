@@ -109,12 +109,12 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl relative text-xs text-slate-300">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[92dvh] overflow-y-auto text-xs text-slate-300">
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-5 right-5 p-1 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+          className="absolute top-3.5 right-3.5 min-h-[40px] min-w-[40px] flex items-center justify-center text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -224,26 +224,26 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between">
+        <div className="mt-5 pt-4 border-t border-slate-800 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5">
           {prevStageKey ? (
             <button
               type="button"
               onClick={handleRollback}
-              className="px-3 py-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 border border-rose-500/30 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+              className="w-full sm:w-auto min-h-[44px] px-3.5 py-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 border border-rose-500/30 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               title="Return to previous stage for rework"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
+              <ArrowLeft className="w-4 h-4 shrink-0" />
               <span>Rollback to {STAGE_CONFIG[prevStageKey].shortLabel}</span>
             </button>
           ) : (
-            <div></div>
+            <div className="hidden sm:block"></div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
-              className="px-3.5 py-2 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+              className="min-h-[44px] px-4 py-2 bg-slate-800 sm:bg-transparent text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -251,10 +251,10 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
               <button
                 type="button"
                 onClick={handleAdvance}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                className="flex-1 sm:flex-initial min-h-[44px] px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
                 <span>Advance to {nextConfig.label}</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 shrink-0" />
               </button>
             ) : (
               <span className="text-slate-500 text-xs italic">

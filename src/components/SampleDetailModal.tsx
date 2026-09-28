@@ -79,8 +79,8 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative max-h-[92vh] overflow-y-auto text-xs text-slate-300">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-4 sm:p-6 shadow-2xl relative max-h-[92dvh] overflow-y-auto text-xs text-slate-300">
         {/* Top Header */}
         <div className="flex items-start justify-between gap-3 pb-4 mb-4 border-b border-slate-800">
           <div>
@@ -532,14 +532,14 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
         </div>
 
         {/* Action Footer */}
-        <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+        <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="text-[11px] text-slate-500">
             Created: {new Date(sample.createdAt).toLocaleDateString()}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+              className="min-h-[44px] px-4 py-2 bg-slate-800 sm:bg-transparent text-slate-300 hover:text-white rounded-xl transition-colors cursor-pointer"
             >
               Close
             </button>
@@ -550,10 +550,10 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
                     onClose();
                     onAdvanceStage(sample);
                   }}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                  className="flex-1 sm:flex-initial min-h-[44px] px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
                   <span>Advance to {STAGE_CONFIG[currentStageConfig.nextStage].label}</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowRight className="w-4 h-4 shrink-0" />
                 </button>
               )}
           </div>
