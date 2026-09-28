@@ -15,10 +15,11 @@ export interface AppUser {
 
 /**
  * Official 6 System Users:
- * - 4 Merchandiser users: zahid, animesh, rakib, hasan (full general user access)
- * - 1 Sewing user: sohag (sees Requisition status samples only + Fabric Inventory in View Mode; moves Requisition -> Sewing only)
+ * - 5 Merchandiser / General users: zahid, animesh, rakib, hasan, nishi (full general user access)
  * - 1 Wash user: arian (sees Sewing/Wash status samples only; moves Sewing -> Wash and Wash -> Finishing only)
  */
+export const REMOVED_USERNAMES = ['sohag'];
+
 export const SYSTEM_USERS: AppUser[] = [
   {
     id: 'usr-merchandiser-zahid',
@@ -61,14 +62,14 @@ export const SYSTEM_USERS: AppUser[] = [
       'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
   },
   {
-    id: 'usr-sewing-sohag',
-    username: 'sohag',
-    displayName: 'Sohag',
-    password: 'sohag5678',
-    role: 'sewing',
-    department: 'Sewing Floor Section',
+    id: 'usr-merchandiser-nishi',
+    username: 'nishi',
+    displayName: 'Nishi',
+    password: 'nishi5678',
+    role: 'merchandiser',
+    department: 'Merchandising Department',
     permissionsSummary:
-      'Sewing Restricted Access — View Requisition status samples only, move Requisition → Sewing Status only, and view Fabric Inventory (View-Only Mode, no edit access).',
+      'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
   },
   {
     id: 'usr-wash-arian',

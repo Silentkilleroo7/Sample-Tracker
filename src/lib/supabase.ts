@@ -10,7 +10,7 @@ import { FabricItem } from '../types/fabric';
 import { BVTestItem } from '../types/test';
 import { PushNotification } from '../types/notification';
 import { RequisitionOptions, INITIAL_REQUISITION_OPTIONS } from '../types/requisitionOptions';
-import { AppUser, SYSTEM_USERS } from '../types/auth';
+import { AppUser, SYSTEM_USERS, REMOVED_USERNAMES } from '../types/auth';
 
 const env = (import.meta.env || {}) as Record<string, string | undefined>;
 
@@ -704,13 +704,21 @@ export async function saveRequisitionOptionsToSupabase(options: RequisitionOptio
 }
 
 // ============================================================================
-// 3.5 ROLE-BASED USERS SYNC (Merchandiser: zahid, animesh, rakib, hasan | Sewing: sohag | Wash: arian)
+// 3.5 ROLE-BASED USERS SYNC (Merchandiser: zahid, animesh, rakib, hasan, nishi | Wash: arian)
 // ============================================================================
 
 export async function syncAppUsersWithSupabase(): Promise<AppUser[]> {
   if (!supabase) return SYSTEM_USERS;
   try {
-    // Ensure the 6 default users are seeded in public.app_users
+    // Deactivate removed users (e.g., sohag) in public.app_users
+    if (REMOVED_USERNAMES.length > 0) {
+      await supabase
+        .from('app_users')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .in('username', REMOVED_USERNAMES);
+    }
+
+    // Ensure the active default users (including nishi) are seeded in public.app_users
     const rowsToUpsert = SYSTEM_USERS.map((u) => ({
       id: u.id,
       username: u.username,
@@ -734,21 +742,30 @@ export async function syncAppUsersWithSupabase(): Promise<AppUser[]> {
       return SYSTEM_USERS;
     }
 
-    const mapped: AppUser[] = data.map((row: any) => ({
-      id: row.id || `usr-${row.username}`,
-      username: row.username,
-      displayName: row.display_name || row.username,
-      password: row.password,
-      role: row.role,
-      department: row.department || '',
-      permissionsSummary: row.permissions_summary || '',
-      lastLoginAt: row.last_login_at || undefined,
-    }));
+    const removedSet = new Set(REMOVED_USERNAMES.map((name) => name.toLowerCase()));
 
-    // Merge with SYSTEM_USERS so all 6 required users are always present
+    const mapped: AppUser[] = data
+      .filter((row: any) => row.username && !removedSet.has(String(row.username).toLowerCase()))
+      .map((row: any) => ({
+        id: row.id || `usr-${row.username}`,
+        username: row.username,
+        displayName: row.display_name || row.username,
+        password: row.password,
+        role: row.role,
+        department: row.department || '',
+        permissionsSummary: row.permissions_summary || '',
+        lastLoginAt: row.last_login_at || undefined,
+      }));
+
+    // Merge with SYSTEM_USERS so all required active users are always present
     const byUsername = new Map<string, AppUser>();
     SYSTEM_USERS.forEach((u) => byUsername.set(u.username.toLowerCase(), u));
-    mapped.forEach((u) => byUsername.set(u.username.toLowerCase(), u));
+    mapped.forEach((u) => {
+      const uname = u.username.toLowerCase();
+      if (!removedSet.has(uname)) {
+        byUsername.set(uname, u);
+      }
+    });
     return Array.from(byUsername.values());
   } catch {
     return SYSTEM_USERS;

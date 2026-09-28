@@ -512,11 +512,13 @@ ALTER TABLE public.app_users
   ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
--- Seed the 6 requested accounts:
--- 4 Merchandisers: zahid, animesh, rakib, hasan
--- 1 Sewing user: sohag
+-- Remove legacy sewing user 'sohag' completely
+DELETE FROM public.app_users WHERE LOWER(username) = 'sohag';
+
+-- Seed the 6 active accounts:
+-- 5 Merchandisers / General Users: zahid, animesh, rakib, hasan, nishi
 -- 1 Wash user: arian
-INSERT INTO public.app_users (id, username, display_name, password, role, department, permissions_summary)
+INSERT INTO public.app_users (id, username, display_name, password, role, department, permissions_summary, is_active)
 VALUES
   (
     'usr-merchandiser-zahid',
@@ -525,7 +527,8 @@ VALUES
     'zahid1234',
     'merchandiser',
     'Merchandising Department',
-    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.'
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
+    TRUE
   ),
   (
     'usr-merchandiser-animesh',
@@ -534,7 +537,8 @@ VALUES
     'animesh2345',
     'merchandiser',
     'Merchandising Department',
-    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.'
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
+    TRUE
   ),
   (
     'usr-merchandiser-rakib',
@@ -543,7 +547,8 @@ VALUES
     'rakib3456',
     'merchandiser',
     'Merchandising Department',
-    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.'
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
+    TRUE
   ),
   (
     'usr-merchandiser-hasan',
@@ -552,16 +557,18 @@ VALUES
     'hasan4567',
     'merchandiser',
     'Merchandising Department',
-    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.'
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
+    TRUE
   ),
   (
-    'usr-sewing-sohag',
-    'sohag',
-    'Sohag',
-    'sohag5678',
-    'sewing',
-    'Sewing Floor Section',
-    'Sewing Restricted Access — View Requisition status samples only, move Requisition → Sewing Status only, and view Fabric Inventory (View-Only Mode, no edit access).'
+    'usr-merchandiser-nishi',
+    'nishi',
+    'Nishi',
+    'nishi5678',
+    'merchandiser',
+    'Merchandising Department',
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
+    TRUE
   ),
   (
     'usr-wash-arian',
@@ -570,14 +577,17 @@ VALUES
     'arian6789',
     'wash',
     'Washing & Wet Processing Plant',
-    'Wash Restricted Access — View Sewing Status samples (and active Wash samples) only; move Sewing → Wash and Wash → Finishing only.'
+    'Wash Restricted Access — View Sewing Status samples (and active Wash samples) only; move Sewing → Wash and Wash → Finishing only.',
+    TRUE
   )
 ON CONFLICT (username) DO UPDATE SET
   display_name = EXCLUDED.display_name,
   password = EXCLUDED.password,
   role = EXCLUDED.role,
   department = EXCLUDED.department,
-  permissions_summary = EXCLUDED.permissions_summary;
+  permissions_summary = EXCLUDED.permissions_summary,
+  is_active = TRUE,
+  updated_at = NOW();
 
 -- Protect app_users from frontend deletion & enable RLS
 DROP TRIGGER IF EXISTS trg_no_frontend_delete_app_users ON public.app_users;

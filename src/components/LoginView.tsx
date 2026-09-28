@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppUser, SYSTEM_USERS } from '../types/auth';
+import { AppUser, SYSTEM_USERS, REMOVED_USERNAMES } from '../types/auth';
 import {
   Layers,
   Lock,
@@ -28,7 +28,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const effectiveUsers = users.length > 0 ? users : SYSTEM_USERS;
+  const removedSet = new Set(REMOVED_USERNAMES.map((u) => u.toLowerCase()));
+  const effectiveUsers = (users.length > 0 ? users : SYSTEM_USERS).filter(
+    (u) => !removedSet.has(u.username.toLowerCase())
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +42,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     if (!cleanUsername || !cleanPassword) {
       setError('Please enter both your Username and Password.');
+      return;
+    }
+
+    if (removedSet.has(cleanUsername)) {
+      setError('This user account has been removed from the system.');
       return;
     }
 
@@ -121,7 +129,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 spellCheck={false}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username (e.g. zahid, sohag, arian)"
+                placeholder="Enter username (e.g. zahid, nishi, arian)"
                 className="w-full min-h-[46px] bg-slate-800/90 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
               />
             </div>
@@ -179,19 +187,11 @@ export const LoginView: React.FC<LoginViewProps> = ({
           </div>
           <div className="space-y-2 text-[11px] leading-relaxed">
             <div>
-              <strong className="text-indigo-300">Merchandiser</strong>
+              <strong className="text-indigo-300">Merchandiser / General User</strong>
               <span className="text-slate-500 mx-1.5">·</span>
-              <span className="font-mono text-slate-300">zahid, animesh, rakib, hasan</span>
+              <span className="font-mono text-slate-300">zahid, animesh, rakib, hasan, nishi</span>
               <p className="text-slate-400 mt-0.5">
                 Full access to sample requisitions, workflow stages, approvals, and fabric inventory.
-              </p>
-            </div>
-            <div>
-              <strong className="text-purple-300">Sewing</strong>
-              <span className="text-slate-500 mx-1.5">·</span>
-              <span className="font-mono text-slate-300">sohag</span>
-              <p className="text-slate-400 mt-0.5">
-                Views Requisition status samples + Fabric Inventory (View-Only). Advances Requisition to Sewing only.
               </p>
             </div>
             <div>

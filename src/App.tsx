@@ -117,16 +117,22 @@ export default function App() {
     }
   }, []);
 
-  // 0. Role-Based User Authentication State (Merchandiser, Sewing, Wash)
+  // 0. Role-Based User Authentication State (Merchandiser, Wash)
   const [appUsers, setAppUsers] = useState<AppUser[]>(SYSTEM_USERS);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     try {
       const savedUser = localStorage.getItem('threadtrack_live_user_v1');
       if (savedUser) {
         const parsed = JSON.parse(savedUser) as AppUser;
-        if (parsed && parsed.username && parsed.role) {
+        if (
+          parsed &&
+          parsed.username &&
+          parsed.role &&
+          parsed.username.toLowerCase() !== 'sohag'
+        ) {
           return parsed;
         }
+        localStorage.removeItem('threadtrack_live_user_v1');
       }
     } catch {
       // Ignore storage error
