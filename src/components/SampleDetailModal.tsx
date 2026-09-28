@@ -7,7 +7,9 @@ import {
   getDaysUntilShipment,
   getGranularApprovalStatus,
   getEffectiveSizeBreakdown,
+  getEffectivePerPcsConsumption,
 } from '../types/sample';
+import { UserRole, canUserAdvanceStage } from '../types/auth';
 import { ProgressBar } from './ProgressBar';
 import { useImageZoom } from './StyleProductImage';
 import { SampleTypeBadge } from './SampleTypeBadge';
@@ -29,12 +31,14 @@ import {
   Upload,
   Lock,
   Edit3,
+  Ruler,
 } from 'lucide-react';
 
 interface SampleDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   sample: SampleItem | null;
+  userRole?: UserRole;
   onAdvanceStage: (sample: SampleItem) => void;
   onOpenFollowUp?: (sample: SampleItem) => void;
   onToggleWorkbookSent?: (sampleId: string) => void;
@@ -48,6 +52,7 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
   isOpen,
   onClose,
   sample,
+  userRole = 'merchandiser',
   onAdvanceStage,
   onOpenFollowUp,
   onToggleWorkbookSent,
@@ -62,6 +67,7 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
 
   if (!isOpen || !sample) return null;
 
+  const isMerchandiser = userRole === 'merchandiser';
   const currentStageConfig = STAGE_CONFIG[sample.stage];
   // Connect ONLY the single selected image with this style
   const selectedPhoto = getSampleImage(sample);
@@ -113,7 +119,7 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {onModifyStoredStyle && (
+            {onModifyStoredStyle && isMerchandiser && (
               <button
                 type="button"
                 onClick={() => onModifyStoredStyle(sample)}
@@ -271,9 +277,18 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
                 <span className="text-slate-400">Fabric Description:</span>
                 <span className="text-right font-medium max-w-[200px] truncate">{sample.fabricName}</span>
               </div>
+              <div className="flex justify-between items-center bg-emerald-950/35 px-2.5 py-1.5 rounded-lg border border-emerald-500/30">
+                <span className="text-emerald-300 font-semibold flex items-center gap-1">
+                  <Ruler className="w-3.5 h-3.5 text-emerald-400" />
+                  Per-Pcs Consumption (Locked):
+                </span>
+                <span className="font-mono text-emerald-400 font-extrabold">
+                  {getEffectivePerPcsConsumption(sample)} yds / pc
+                </span>
+              </div>
               <div className="flex justify-between">
-                <span className="text-slate-400">Required Yards:</span>
-                <span className="font-mono text-emerald-400 font-bold">{sample.fabricRequiredYards} yds</span>
+                <span className="text-slate-400">Total Deducted ({sample.quantity} pcs):</span>
+                <span className="font-mono text-amber-400 font-bold">{sample.fabricRequiredYards} yds</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Garment Color / Wash:</span>
@@ -528,18 +543,19 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
             >
               Close
             </button>
-            {currentStageConfig.nextStage && (
-              <button
-                onClick={() => {
-                  onClose();
-                  onAdvanceStage(sample);
-                }}
-                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
-              >
-                <span>Advance to {STAGE_CONFIG[currentStageConfig.nextStage].label}</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
+            {currentStageConfig.nextStage &&
+              canUserAdvanceStage(userRole, sample.stage, currentStageConfig.nextStage) && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    onAdvanceStage(sample);
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <span>Advance to {STAGE_CONFIG[currentStageConfig.nextStage].label}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
           </div>
         </div>
       </div>

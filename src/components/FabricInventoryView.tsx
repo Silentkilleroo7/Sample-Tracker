@@ -10,11 +10,15 @@ import {
   MapPin,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  Lock,
+  Ruler,
 } from 'lucide-react';
 
 interface FabricInventoryViewProps {
   fabrics: FabricItem[];
   samples: SampleItem[];
+  isViewOnly?: boolean;
   onRestockFabric: (fabric: FabricItem) => void;
   onAddNewFabric: () => void;
   onDeductFabric: (fabric: FabricItem) => void;
@@ -23,6 +27,7 @@ interface FabricInventoryViewProps {
 
 export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
   fabrics,
+  isViewOnly = false,
   onRestockFabric,
   onAddNewFabric,
   onDeductFabric,
@@ -85,6 +90,30 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* View-Only Banner for Sewing User */}
+      {isViewOnly && (
+        <div className="p-4 rounded-xl bg-amber-950/35 border border-amber-500/45 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <Eye className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-extrabold uppercase tracking-wider text-amber-300">
+                  Fabric Inventory — View Mode Only (No Edit Access)
+                </span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  <Lock className="w-2.5 h-2.5" /> Read-Only Access
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 mt-0.5">
+                Sewing Department users can inspect fabric stock, linked styles, and per-pcs consumption rates in view-only mode, with no modification access.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -96,18 +125,25 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
             Raw Material & Fabric Stock Inventory
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
-            Fabrics are dynamically linked with style codes. When fabric stock drops to 5 yards or less, an automated Red Alert is triggered on the Dashboard Report.
+            Fabrics are dynamically linked with style codes and per-piece consumption (yds/pc). Exact total yardage is automatically deducted when requisitions are placed.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={onAddNewFabric}
-            className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Add New Fabric</span>
-          </button>
+          {!isViewOnly ? (
+            <button
+              onClick={onAddNewFabric}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add New Fabric</span>
+            </button>
+          ) : (
+            <div className="px-3.5 py-2 rounded-xl bg-slate-950/90 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              View Mode (No Access)
+            </div>
+          )}
         </div>
       </div>
 
@@ -280,6 +316,17 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                       <div className="text-[11px] text-slate-400 mt-0.5">
                         {fabric.composition} • {fabric.gsm} GSM • {fabric.widthInches}" width • {fabric.color}
                       </div>
+                      {fabric.perPcsConsumptionYards && fabric.perPcsConsumptionYards > 0 ? (
+                        <div className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-md bg-emerald-950/50 border border-emerald-500/35 text-[10px] font-mono font-bold text-emerald-300">
+                          <Ruler className="w-3 h-3 text-emerald-400" />
+                          Per-Pcs Consumption: {fabric.perPcsConsumptionYards} yds/pc (Locked)
+                        </div>
+                      ) : (
+                        <div className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-md bg-slate-950/60 border border-slate-800 text-[10px] font-mono text-slate-500">
+                          <Ruler className="w-3 h-3 text-slate-500" />
+                          Consumption set on 1st requisition
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -309,10 +356,10 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                             isCritical ? 'text-rose-400 font-bold' : 'text-emerald-400'
                           }`}
                         >
-                          {fabric.availableYards.toFixed(1)} yds
+                          {Number(fabric.availableYards.toFixed(2))} yds
                         </span>
                         <span className="text-[11px] text-slate-500">
-                          (Allocated: {fabric.allocatedYards.toFixed(1)} yds)
+                          (Allocated: {Number(fabric.allocatedYards.toFixed(2))} yds)
                         </span>
                       </div>
                       <div className="w-28 bg-slate-800 rounded-full h-1.5 mt-1 overflow-hidden">
@@ -338,23 +385,29 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                     </td>
 
                     <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => onRestockFabric(fabric)}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1 shadow transition-all cursor-pointer"
-                          title="Receive new roll or add yardage"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Restock</span>
-                        </button>
-                        <button
-                          onClick={() => onDeductFabric(fabric)}
-                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
-                          title="Deduct sample cutting consumption"
-                        >
-                          - Deduct
-                        </button>
-                      </div>
+                      {!isViewOnly ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => onRestockFabric(fabric)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1 shadow transition-all cursor-pointer"
+                            title="Receive new roll or add yardage"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Restock</span>
+                          </button>
+                          <button
+                            onClick={() => onDeductFabric(fabric)}
+                            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+                            title="Deduct sample cutting consumption"
+                          >
+                            - Deduct
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 text-[11px] font-semibold">
+                          <Eye className="w-3 h-3 text-amber-400" /> View Mode Only
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );

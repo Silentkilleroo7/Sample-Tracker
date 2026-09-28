@@ -4,11 +4,13 @@ import {
   getSampleImage,
   getSampleTypeTone,
   getEffectiveSizeBreakdown,
+  getEffectivePerPcsConsumption,
 } from '../types/sample';
 import { FabricItem } from '../types/fabric';
 import { BVTestItem } from '../types/test';
 import { PushNotification } from '../types/notification';
 import { RequisitionOptions, INITIAL_REQUISITION_OPTIONS } from '../types/requisitionOptions';
+import { AppUser, SYSTEM_USERS } from '../types/auth';
 
 const env = (import.meta.env || {}) as Record<string, string | undefined>;
 
@@ -158,6 +160,8 @@ export function mapRowToSample(row: any): SampleItem {
     fabricId: row.fabric_id || '',
     fabricCode: row.fabric_code || '',
     fabricName: row.fabric_name || '',
+    perPcsConsumptionYards:
+      Number(row.per_pcs_consumption_yards ?? reqForm?.perPcsConsumptionYards ?? 0) || undefined,
     fabricRequiredYards: Number(row.fabric_required_yards ?? 0),
     threadNote: effectiveThreadNote,
     zipperNote: effectiveZipperNote,
@@ -285,10 +289,14 @@ export function mapSampleToRow(sample: SampleItem) {
   };
 
   const effectiveSizeBreakdown = getEffectiveSizeBreakdown(sample);
+  const effectivePerPcsConsumption = getEffectivePerPcsConsumption(sample);
 
   const enrichedRequisitionForm = sample.requisitionForm
     ? {
         ...sample.requisitionForm,
+        perPcsConsumptionYards:
+          sample.requisitionForm.perPcsConsumptionYards || effectivePerPcsConsumption,
+        fabricRequiredYards: sample.fabricRequiredYards,
         sizeBreakdown:
           sample.requisitionForm.sizeBreakdown &&
           sample.requisitionForm.sizeBreakdown.length > 0
@@ -307,6 +315,8 @@ export function mapSampleToRow(sample: SampleItem) {
         isLocked,
       }
     : {
+        perPcsConsumptionYards: effectivePerPcsConsumption,
+        fabricRequiredYards: sample.fabricRequiredYards,
         shipmentDate: effectiveShipmentDate,
         threadNote: effectiveThreadNote,
         zipperNote: effectiveZipperNote,
@@ -340,6 +350,7 @@ export function mapSampleToRow(sample: SampleItem) {
     fabric_id: sample.fabricId,
     fabric_code: sample.fabricCode,
     fabric_name: sample.fabricName,
+    per_pcs_consumption_yards: effectivePerPcsConsumption,
     fabric_required_yards: sample.fabricRequiredYards,
     thread_note: effectiveThreadNote,
     zipper_note: effectiveZipperNote,
@@ -375,6 +386,11 @@ export function mapRowToFabric(row: any): FabricItem {
     widthInches: Number(row.width_inches ?? 58),
     availableYards: Number(row.available_yards ?? 0),
     allocatedYards: Number(row.allocated_yards ?? 0),
+    perPcsConsumptionYards: Number(row.per_pcs_consumption_yards ?? 0) || undefined,
+    styleConsumptionMap:
+      row.style_consumption_map && typeof row.style_consumption_map === 'object'
+        ? row.style_consumption_map
+        : undefined,
     minimumThresholdYards: Number(row.minimum_threshold_yards ?? 5),
     supplier: row.supplier || '',
     location: row.location || '',
@@ -394,6 +410,8 @@ export function mapFabricToRow(fabric: FabricItem) {
     width_inches: fabric.widthInches,
     available_yards: fabric.availableYards,
     allocated_yards: fabric.allocatedYards,
+    per_pcs_consumption_yards: fabric.perPcsConsumptionYards ?? 0,
+    style_consumption_map: fabric.styleConsumptionMap || {},
     minimum_threshold_yards: fabric.minimumThresholdYards ?? 5,
     supplier: fabric.supplier,
     location: fabric.location,
@@ -544,7 +562,7 @@ export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> 
   const fullRow = mapSampleToRow(sample);
   const { error } = await supabase.from('samples').upsert(fullRow);
   if (error) {
-    // Fallback if new columns (thread_note, zipper_note, button_note, shipment_date, is_requisition_locked) are not yet added to table
+    // Fallback if new columns are not yet added to table
     const {
       thread_note,
       zipper_note,
@@ -552,6 +570,8 @@ export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> 
       shipment_date,
       is_requisition_locked,
       sample_color_tone,
+      size_breakdown,
+      per_pcs_consumption_yards,
       ...legacyRow
     } = fullRow;
     const { error: fallbackErr } = await supabase.from('samples').upsert(legacyRow);
@@ -571,8 +591,13 @@ export async function deleteSampleFromSupabase(_sampleId: string): Promise<void>
 
 export async function upsertFabricInSupabase(fabric: FabricItem): Promise<void> {
   if (!supabase) return;
-  const { error } = await supabase.from('fabrics').upsert(mapFabricToRow(fabric));
-  if (error) console.error('Supabase upsert fabric error:', error);
+  const fullRow = mapFabricToRow(fabric);
+  const { error } = await supabase.from('fabrics').upsert(fullRow);
+  if (error) {
+    const { per_pcs_consumption_yards, style_consumption_map, ...legacyRow } = fullRow;
+    const { error: fallbackErr } = await supabase.from('fabrics').upsert(legacyRow);
+    if (fallbackErr) console.error('Supabase upsert fabric error:', fallbackErr);
+  }
 }
 
 export async function deleteFabricFromSupabase(_fabricId: string): Promise<void> {
@@ -640,6 +665,11 @@ export async function fetchRequisitionOptionsFromSupabase(): Promise<Requisition
       colors: Array.isArray(data.colors) ? data.colors : INITIAL_REQUISITION_OPTIONS.colors,
       washTypes: Array.isArray(data.wash_types) ? data.wash_types : INITIAL_REQUISITION_OPTIONS.washTypes,
       couriers: Array.isArray(data.couriers) ? data.couriers : INITIAL_REQUISITION_OPTIONS.couriers,
+      perPcsConsumptionYards: Number(data.per_pcs_consumption_yards ?? 0) || 0,
+      styleConsumptionMap:
+        data.style_consumption_map && typeof data.style_consumption_map === 'object'
+          ? data.style_consumption_map
+          : {},
     };
   } catch (err) {
     console.error('Supabase fetch requisition_options error:', err);
@@ -650,7 +680,7 @@ export async function fetchRequisitionOptionsFromSupabase(): Promise<Requisition
 export async function saveRequisitionOptionsToSupabase(options: RequisitionOptions): Promise<void> {
   if (!supabase) return;
   try {
-    const { error } = await supabase.from('requisition_options').upsert({
+    const fullPayload = {
       id: 'default',
       buyers: options.buyers,
       line_codes: options.lineCodes,
@@ -659,11 +689,84 @@ export async function saveRequisitionOptionsToSupabase(options: RequisitionOptio
       colors: options.colors,
       wash_types: options.washTypes,
       couriers: options.couriers,
+      per_pcs_consumption_yards: options.perPcsConsumptionYards ?? 0,
+      style_consumption_map: options.styleConsumptionMap || {},
       updated_at: new Date().toISOString(),
-    });
-    if (error) console.error('Supabase save requisition_options error:', error);
+    };
+    const { error } = await supabase.from('requisition_options').upsert(fullPayload);
+    if (error) {
+      const { per_pcs_consumption_yards, style_consumption_map, ...legacyPayload } = fullPayload;
+      await supabase.from('requisition_options').upsert(legacyPayload);
+    }
   } catch (err) {
     console.error('Supabase save requisition_options exception:', err);
+  }
+}
+
+// ============================================================================
+// 3.5 ROLE-BASED USERS SYNC (Merchandiser: zahid, animesh, rakib, hasan | Sewing: sohag | Wash: arian)
+// ============================================================================
+
+export async function syncAppUsersWithSupabase(): Promise<AppUser[]> {
+  if (!supabase) return SYSTEM_USERS;
+  try {
+    // Ensure the 6 default users are seeded in public.app_users
+    const rowsToUpsert = SYSTEM_USERS.map((u) => ({
+      id: u.id,
+      username: u.username,
+      display_name: u.displayName,
+      password: u.password,
+      role: u.role,
+      department: u.department,
+      permissions_summary: u.permissionsSummary,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    }));
+
+    await supabase.from('app_users').upsert(rowsToUpsert, { onConflict: 'username' });
+
+    const { data, error } = await supabase
+      .from('app_users')
+      .select('*')
+      .eq('is_active', true);
+
+    if (error || !data || data.length === 0) {
+      return SYSTEM_USERS;
+    }
+
+    const mapped: AppUser[] = data.map((row: any) => ({
+      id: row.id || `usr-${row.username}`,
+      username: row.username,
+      displayName: row.display_name || row.username,
+      password: row.password,
+      role: row.role,
+      department: row.department || '',
+      permissionsSummary: row.permissions_summary || '',
+      lastLoginAt: row.last_login_at || undefined,
+    }));
+
+    // Merge with SYSTEM_USERS so all 6 required users are always present
+    const byUsername = new Map<string, AppUser>();
+    SYSTEM_USERS.forEach((u) => byUsername.set(u.username.toLowerCase(), u));
+    mapped.forEach((u) => byUsername.set(u.username.toLowerCase(), u));
+    return Array.from(byUsername.values());
+  } catch {
+    return SYSTEM_USERS;
+  }
+}
+
+export async function recordUserLoginInSupabase(username: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase
+      .from('app_users')
+      .update({
+        last_login_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('username', username.toLowerCase());
+  } catch {
+    // Ignore if table not yet migrated
   }
 }
 

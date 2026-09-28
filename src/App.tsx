@@ -18,10 +18,17 @@ import {
   VolarRequisitionForm,
   generateWhatsAppFollowUpLink,
   getSampleImage,
+  getEffectivePerPcsConsumption,
 } from './types/sample';
 import { FabricItem, isFabricLowStock } from './types/fabric';
 import { PushNotification } from './types/notification';
 import { BVTestItem, INITIAL_BV_TESTS, isTestOverdueForResubmission } from './types/test';
+import {
+  AppUser,
+  SYSTEM_USERS,
+  canUserAdvanceStage,
+  ROLE_BADGE_CONFIG,
+} from './types/auth';
 import {
   supabase,
   fetchAllSupabaseData,
@@ -35,9 +42,12 @@ import {
   markAllNotificationsReadInSupabase,
   clearAllNotificationsInSupabase,
   clearAllDatabaseTablesInSupabase,
+  syncAppUsersWithSupabase,
+  recordUserLoginInSupabase,
 } from './lib/supabase';
 
 import { Navbar } from './components/Navbar';
+import { LoginView } from './components/LoginView';
 import { StyleProductImage, ImageZoomProvider } from './components/StyleProductImage';
 import { AppView } from './components/Sidebar';
 import { MainModulesBottom } from './components/MainModulesBottom';
@@ -106,6 +116,23 @@ export default function App() {
       // Ignore storage access errors in restricted browsers
     }
   }, []);
+
+  // 0. Role-Based User Authentication State (Merchandiser, Sewing, Wash)
+  const [appUsers, setAppUsers] = useState<AppUser[]>(SYSTEM_USERS);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+    try {
+      const savedUser = localStorage.getItem('threadtrack_live_user_v1');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser) as AppUser;
+        if (parsed && parsed.username && parsed.role) {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore storage error
+    }
+    return null;
+  });
 
   // 1. Persistence State (Fresh Live Keys + Cloud Sync with Supabase)
   const [samples, setSamples] = useState<SampleItem[]>(() => {
@@ -176,6 +203,11 @@ export default function App() {
     let isMounted = true;
 
     async function loadCloudData() {
+      const syncedUsers = await syncAppUsersWithSupabase();
+      if (isMounted && syncedUsers.length > 0) {
+        setAppUsers(syncedUsers);
+      }
+
       const data = await fetchAllSupabaseData();
       if (!data || !isMounted) return;
 
@@ -281,9 +313,48 @@ export default function App() {
   }, [tests]);
 
   // 2. Navigation & Search State
-  const [currentView, setCurrentView] = useState<AppView>('dashboard');
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    if (currentUser?.role === 'sewing' || currentUser?.role === 'wash') {
+      return 'all_samples';
+    }
+    return 'dashboard';
+  });
   const [searchQuery, setSearchQuery] = useState('');
-  const [initialStageFilter, setInitialStageFilter] = useState<SampleStage | 'all'>('all');
+  const [initialStageFilter, setInitialStageFilter] = useState<SampleStage | 'all'>(() => {
+    if (currentUser?.role === 'sewing') return 'requisition';
+    if (currentUser?.role === 'wash') return 'sewing';
+    return 'all';
+  });
+
+  const handleLogin = (user: AppUser) => {
+    setCurrentUser(user);
+    try {
+      localStorage.setItem('threadtrack_live_user_v1', JSON.stringify(user));
+    } catch {
+      // Ignore storage error
+    }
+    void recordUserLoginInSupabase(user.id);
+
+    if (user.role === 'sewing') {
+      setCurrentView('all_samples');
+      setInitialStageFilter('requisition');
+    } else if (user.role === 'wash') {
+      setCurrentView('all_samples');
+      setInitialStageFilter('sewing');
+    } else {
+      setCurrentView('dashboard');
+      setInitialStageFilter('all');
+    }
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    try {
+      localStorage.removeItem('threadtrack_live_user_v1');
+    } catch {
+      // Ignore storage error
+    }
+  };
 
   // 3. Modals State
   const [isNewSampleModalOpen, setIsNewSampleModalOpen] = useState(false);
@@ -330,7 +401,7 @@ export default function App() {
     playNotificationChime(type);
   };
 
-  // 4. Sample Requisition Creation
+  // 4. Sample Requisition Creation (with Per-Pcs Fabric Consumption & Auto Inventory Deduction)
   const handleCreateSample = (
     sampleData: Partial<SampleItem>,
     deductYards: boolean
@@ -338,28 +409,54 @@ export default function App() {
     const newSample = sampleData as SampleItem;
     newSample.id = `smp-${Date.now()}`;
 
-    // Auto deduct fabric if requested
-    if (deductYards && newSample.fabricId) {
+    const effectivePerPcs = getEffectivePerPcsConsumption(newSample);
+    const totalQty = Math.max(1, Number(newSample.quantity || 1));
+    const exactDeductedYards = Number((effectivePerPcs * totalQty).toFixed(2));
+
+    newSample.perPcsConsumptionYards = effectivePerPcs;
+    newSample.fabricRequiredYards = exactDeductedYards;
+    if (newSample.requisitionForm) {
+      newSample.requisitionForm.perPcsConsumptionYards = effectivePerPcs;
+      newSample.requisitionForm.fabricRequiredYards = exactDeductedYards;
+    }
+
+    // Auto deduct exact fabric amount (Per-Pcs Consumption * Total Sample Pcs) from Fabric Inventory
+    // and lock perPcsConsumptionYards on the fabric roll so it is never asked again
+    if (deductYards || newSample.fabricId || newSample.fabricCode) {
       setFabrics((prev) =>
         prev.map((f) => {
-          if (f.id === newSample.fabricId) {
-            const updatedAvailable = Math.max(
-              0,
-              f.availableYards - newSample.fabricRequiredYards
+          const isMatchedFabric =
+            (newSample.fabricId && f.id === newSample.fabricId) ||
+            (!newSample.fabricId &&
+              newSample.fabricCode &&
+              f.code.trim().toLowerCase() === newSample.fabricCode.trim().toLowerCase());
+
+          if (isMatchedFabric) {
+            const updatedAvailable = Number(
+              Math.max(0, f.availableYards - exactDeductedYards).toFixed(2)
             );
-            const updatedAllocated =
-              f.allocatedYards + newSample.fabricRequiredYards;
+            const updatedAllocated = Number(
+              (f.allocatedYards + exactDeductedYards).toFixed(2)
+            );
 
             // Link style code if not already linked
             const updatedLinks = f.linkedStyleCodes.includes(newSample.styleCode)
               ? f.linkedStyleCodes
               : [...f.linkedStyleCodes, newSample.styleCode];
 
+            const normalizedStyleKey = (newSample.styleCode || '').trim().toUpperCase();
+            const updatedStyleMap: Record<string, number> = {
+              ...(f.styleConsumptionMap || {}),
+            };
+            if (normalizedStyleKey && !updatedStyleMap[normalizedStyleKey]) {
+              updatedStyleMap[normalizedStyleKey] = effectivePerPcs;
+            }
+
             // If newly falls <= 5 yds, trigger critical alert!
             if (updatedAvailable <= 5) {
               sendPushNotification(
                 'Critical Fabric Shortage Alert!',
-                `Fabric ${f.code} has fallen to ${updatedAvailable.toFixed(1)} yds (≤ 5 yds threshold). Linked to Style ${newSample.styleCode}.`,
+                `Fabric ${f.code} has fallen to ${updatedAvailable.toFixed(2)} yds (≤ 5 yds threshold) after deducting ${exactDeductedYards} yds (${effectivePerPcs} yds/pc × ${totalQty} pcs) for Style ${newSample.styleCode}.`,
                 'critical',
                 { fabricCode: f.code, styleCode: newSample.styleCode }
               );
@@ -369,6 +466,8 @@ export default function App() {
               ...f,
               availableYards: updatedAvailable,
               allocatedYards: updatedAllocated,
+              perPcsConsumptionYards: f.perPcsConsumptionYards || effectivePerPcs,
+              styleConsumptionMap: updatedStyleMap,
               linkedStyleCodes: updatedLinks,
             };
             void upsertFabricInSupabase(updatedFabric);
@@ -386,7 +485,7 @@ export default function App() {
 
     sendPushNotification(
       'New Sample Requisition Raised',
-      `Requisition for ${newSample.styleCode} (${newSample.styleName}) initialized in Requisition stage.`,
+      `Requisition for ${newSample.styleCode} (${totalQty} pcs × ${effectivePerPcs} yds/pc = ${exactDeductedYards} yds auto-deducted) initialized in Requisition stage.`,
       'info',
       { sampleId: newSample.id, styleCode: newSample.styleCode }
     );
@@ -597,7 +696,7 @@ export default function App() {
     }
   };
 
-  // 5. Stage Advancement Engine
+  // 5. Stage Advancement Engine (with Role-Based Guard)
   const handleConfirmAdvanceStage = (
     sampleId: string,
     targetStage: SampleStage,
@@ -605,6 +704,22 @@ export default function App() {
     operator: string,
     stageUpdates?: any
   ) => {
+    const sample = samples.find((s) => s.id === sampleId);
+    if (
+      sample &&
+      currentUser &&
+      !canUserAdvanceStage(currentUser.role, sample.stage, targetStage)
+    ) {
+      sendPushNotification(
+        'Role Permission Restricted',
+        `${ROLE_BADGE_CONFIG[currentUser.role].label} (${currentUser.displayName}) is not permitted to move from ${STAGE_CONFIG[sample.stage].label} to ${STAGE_CONFIG[targetStage].label}.`,
+        'warning'
+      );
+      return;
+    }
+
+    const effectiveOperator = operator?.trim() || currentUser?.displayName || 'Operator';
+
     setSamples((prev) =>
       prev.map((s) => {
         if (s.id === sampleId) {
@@ -614,7 +729,7 @@ export default function App() {
               stage: targetStage,
               timestamp: new Date().toISOString(),
               note,
-              operator,
+              operator: effectiveOperator,
             },
           ];
 
@@ -633,13 +748,12 @@ export default function App() {
       })
     );
 
-    const sample = samples.find((s) => s.id === sampleId);
     const styleCode = sample?.styleCode || 'Style';
     const targetLabel = STAGE_CONFIG[targetStage].label;
 
     sendPushNotification(
       `Status Advanced: ${targetLabel}`,
-      `Style ${styleCode} has successfully moved to "${targetLabel}".`,
+      `Style ${styleCode} has successfully moved to "${targetLabel}" by ${effectiveOperator}.`,
       targetStage === 'approval_comments' ? 'success' : 'info',
       { sampleId, styleCode }
     );
@@ -647,6 +761,22 @@ export default function App() {
 
   // Direct advance trigger helper
   const handleTriggerAdvance = (sample: SampleItem) => {
+    const nextStage = STAGE_CONFIG[sample.stage].nextStage;
+    if (
+      !nextStage ||
+      (currentUser && !canUserAdvanceStage(currentUser.role, sample.stage, nextStage))
+    ) {
+      sendPushNotification(
+        'Stage Move Restricted by Role',
+        currentUser?.role === 'sewing'
+          ? 'Sewing users can only move samples from Requisition Status to Sewing Status.'
+          : currentUser?.role === 'wash'
+          ? 'Wash users can only move samples from Sewing Status to Wash Status, and Wash Status to Finishing Status.'
+          : 'This stage transition is not available.',
+        'warning'
+      );
+      return;
+    }
     setSelectedSampleForAdvance(sample);
     setIsAdvanceModalOpen(true);
   };
@@ -1088,6 +1218,7 @@ export default function App() {
 
   const counts = {
     total: samples.length,
+    requisition: samples.filter((s) => s.stage === 'requisition').length,
     sewing: samples.filter((s) => s.stage === 'sewing').length,
     wash: samples.filter((s) => s.stage === 'wash').length,
     finishing: samples.filter((s) => s.stage === 'finishing').length,
@@ -1098,8 +1229,17 @@ export default function App() {
     testOverdue: overdueTestCount,
   };
 
+  // Render Role-Based Login Gate if no user is currently authenticated
+  if (!currentUser) {
+    return <LoginView users={appUsers} onLogin={handleLogin} />;
+  }
+
+  const isMerchandiser = currentUser.role === 'merchandiser';
+  const isSewingUser = currentUser.role === 'sewing';
+  const isWashUser = currentUser.role === 'wash';
+
   return (
-    <ImageZoomProvider onUpdateSampleThumbnail={handleUpdateSampleThumbnail}>
+    <ImageZoomProvider onUpdateSampleThumbnail={isMerchandiser ? handleUpdateSampleThumbnail : undefined}>
       <div
         id="app-root-wrapper"
         className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white print:min-h-0 print:bg-white print:text-black print:block"
@@ -1111,19 +1251,26 @@ export default function App() {
             onSearchChange={setSearchQuery}
             notifications={notifications}
             onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
-            onNewRequisition={() => setIsNewSampleModalOpen(true)}
+            onNewRequisition={() => {
+              if (!isMerchandiser) return;
+              setSelectedStyleForModification(null);
+              setIsNewSampleModalOpen(true);
+            }}
             lowStockCount={lowFabricCount}
             onNavigateToLowStock={() => {
+              if (isWashUser) return;
               setCurrentView('fabric_inventory');
             }}
             onExportData={handleExportData}
             onResetData={handleResetData}
+            currentUser={currentUser}
+            onLogout={handleLogout}
           />
 
           {/* 2. Main Full-Width View Container */}
           <div className="flex-1 max-w-7xl w-full mx-auto">
             <main className="p-4 sm:p-6 lg:p-8 pb-32 sm:pb-28 min-w-0">
-              {currentView === 'dashboard' && (
+              {currentView === 'dashboard' && isMerchandiser && (
                 <DashboardView
                   samples={samples}
                   fabrics={fabrics}
@@ -1151,10 +1298,14 @@ export default function App() {
                 />
               )}
 
-              {currentView === 'all_samples' && (
+              {(currentView === 'all_samples' ||
+                (!isMerchandiser &&
+                  currentView !== 'fabric_inventory' &&
+                  currentView !== 'wash')) && (
                 <AllSamplesView
                   samples={samples}
                   searchQuery={searchQuery}
+                  userRole={currentUser.role}
                   onSearchChange={setSearchQuery}
                   onSelectSample={(sample) => {
                     setSelectedSampleForDetail(sample);
@@ -1162,15 +1313,22 @@ export default function App() {
                   }}
                   onAdvanceStage={handleTriggerAdvance}
                   onNewRequisition={() => {
+                    if (!isMerchandiser) return;
                     setSelectedStyleForModification(null);
                     setIsNewSampleModalOpen(true);
                   }}
-                  onModifyStoredStyle={handleSelectStoredStyleToModify}
+                  onModifyStoredStyle={isMerchandiser ? handleSelectStoredStyleToModify : undefined}
                   onDeleteSample={handleDeleteSample}
-                  initialStageFilter={initialStageFilter}
-                  onOpenFollowUp={handleOpenFollowUp}
-                  onToggleWorkbookSent={handleToggleWorkbookSent}
-                  onSendWhatsApp={handleSendWhatsAppNotification}
+                  initialStageFilter={
+                    isSewingUser
+                      ? 'requisition'
+                      : isWashUser
+                      ? 'sewing'
+                      : initialStageFilter
+                  }
+                  onOpenFollowUp={isMerchandiser ? handleOpenFollowUp : undefined}
+                  onToggleWorkbookSent={isMerchandiser ? handleToggleWorkbookSent : undefined}
+                  onSendWhatsApp={isMerchandiser ? handleSendWhatsAppNotification : undefined}
                   onOpenRequisitionSlip={(sample) => {
                     setCompletedRequisitionSample(sample);
                     setIsRequisitionCompleteModalOpen(true);
@@ -1178,9 +1336,10 @@ export default function App() {
                 />
               )}
 
-              {currentView === 'wash' && (
+              {currentView === 'wash' && (isMerchandiser || isWashUser) && (
                 <WashSectionView
                   samples={samples}
+                  userRole={currentUser.role}
                   onSelectSample={(sample) => {
                     setSelectedSampleForDetail(sample);
                     setIsDetailModalOpen(true);
@@ -1189,7 +1348,7 @@ export default function App() {
                 />
               )}
 
-              {currentView === 'finishing' && (
+              {currentView === 'finishing' && isMerchandiser && (
                 <FinishingSectionView
                   samples={samples}
                   onSelectSample={(sample) => {
@@ -1201,7 +1360,7 @@ export default function App() {
                 />
               )}
 
-              {currentView === 'approvals' && (
+              {currentView === 'approvals' && isMerchandiser && (
                 <ApprovalParcelView
                   samples={samples}
                   onSelectSample={(sample) => {
@@ -1217,7 +1376,7 @@ export default function App() {
                 />
               )}
 
-              {currentView === 'test' && (
+              {currentView === 'test' && isMerchandiser && (
                 <TestSectionView
                   tests={tests}
                   samples={samples}
@@ -1235,21 +1394,35 @@ export default function App() {
                 />
               )}
 
-              {currentView === 'fabric_inventory' && (
+              {currentView === 'fabric_inventory' && (isMerchandiser || isSewingUser) && (
                 <FabricInventoryView
                   fabrics={fabrics}
                   samples={samples}
+                  isViewOnly={isSewingUser}
                   onRestockFabric={(fabric) => {
+                    if (isSewingUser) return;
                     setSelectedFabricForRestock(fabric);
                     setIsRestockModalOpen(true);
                   }}
-                  onAddNewFabric={() => setIsAddFabricModalOpen(true)}
+                  onAddNewFabric={() => {
+                    if (isSewingUser) return;
+                    setIsAddFabricModalOpen(true);
+                  }}
                   onDeductFabric={(fabric) => {
+                    if (isSewingUser) return;
                     handleConfirmRestockFabric(fabric.id, -2.5);
                   }}
                   onSelectSampleByCode={(code) => {
                     const found = samples.find((s) => s.styleCode === code);
                     if (found) {
+                      if (isSewingUser && found.stage !== 'requisition') {
+                        sendPushNotification(
+                          'Sewing Role View Scope',
+                          'Sewing users can only open Requisition Status samples.',
+                          'warning'
+                        );
+                        return;
+                      }
                       setSelectedSampleForDetail(found);
                       setIsDetailModalOpen(true);
                     } else {
@@ -1265,9 +1438,16 @@ export default function App() {
           {/* 3. Main Tracking Modules in Bottom Side as Main Modules */}
           <MainModulesBottom
             currentView={currentView}
+            userRole={currentUser.role}
             onSelectView={(view) => {
               setCurrentView(view);
-              setInitialStageFilter('all');
+              if (isSewingUser) {
+                setInitialStageFilter('requisition');
+              } else if (isWashUser) {
+                setInitialStageFilter(view === 'wash' ? 'wash' : 'sewing');
+              } else {
+                setInitialStageFilter('all');
+              }
             }}
             counts={counts}
           />
@@ -1323,7 +1503,7 @@ export default function App() {
 
           {/* Modals */}
           <NewSampleModal
-            isOpen={isNewSampleModalOpen}
+            isOpen={isNewSampleModalOpen && isMerchandiser}
             onClose={() => {
               setIsNewSampleModalOpen(false);
               setSelectedStyleForModification(null);
@@ -1331,6 +1511,7 @@ export default function App() {
             fabrics={fabrics}
             samples={samples}
             initialSelectedStyle={selectedStyleForModification}
+            currentUserName={currentUser.displayName}
             onCreateSample={handleCreateSample}
             onUpdateStoredStyle={handleUpdateStoredStyle}
             onOpenAddFabric={() => setIsAddFabricModalOpen(true)}
@@ -1353,19 +1534,24 @@ export default function App() {
               setSelectedSampleForDetail(null);
             }}
             sample={selectedSampleForDetail}
+            userRole={currentUser.role}
             onAdvanceStage={handleTriggerAdvance}
-            onOpenFollowUp={handleOpenFollowUp}
-            onToggleWorkbookSent={handleToggleWorkbookSent}
-            onSendWhatsApp={handleSendWhatsAppNotification}
+            onOpenFollowUp={isMerchandiser ? handleOpenFollowUp : undefined}
+            onToggleWorkbookSent={isMerchandiser ? handleToggleWorkbookSent : undefined}
+            onSendWhatsApp={isMerchandiser ? handleSendWhatsAppNotification : undefined}
             onOpenRequisitionSlip={(sample) => {
               setCompletedRequisitionSample(sample);
               setIsRequisitionCompleteModalOpen(true);
             }}
-            onModifyStoredStyle={(sample) => {
-              setIsDetailModalOpen(false);
-              handleSelectStoredStyleToModify(sample);
-            }}
-            onUpdateSampleThumbnail={handleUpdateSampleThumbnail}
+            onModifyStoredStyle={
+              isMerchandiser
+                ? (sample) => {
+                    setIsDetailModalOpen(false);
+                    handleSelectStoredStyleToModify(sample);
+                  }
+                : undefined
+            }
+            onUpdateSampleThumbnail={isMerchandiser ? handleUpdateSampleThumbnail : undefined}
           />
 
           <FollowUpModal

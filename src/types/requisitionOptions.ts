@@ -16,6 +16,8 @@ export interface RequisitionOptions {
   colors: string[];
   washTypes: string[];
   couriers: string[];
+  perPcsConsumptionYards?: number;
+  styleConsumptionMap?: Record<string, number>;
 }
 
 /**
@@ -30,6 +32,8 @@ export const INITIAL_REQUISITION_OPTIONS: RequisitionOptions = {
   colors: [],
   washTypes: [],
   couriers: [],
+  perPcsConsumptionYards: 0,
+  styleConsumptionMap: {},
 };
 
 const LEGACY_MOCK_BUYERS = new Set([
@@ -109,6 +113,14 @@ function sanitizeOptions(raw: Partial<RequisitionOptions> | null | undefined): R
   const couriers = Array.isArray(raw.couriers)
     ? raw.couriers.filter(Boolean)
     : [];
+  const perPcsConsumptionYards =
+    typeof raw.perPcsConsumptionYards === 'number' && raw.perPcsConsumptionYards > 0
+      ? raw.perPcsConsumptionYards
+      : 0;
+  const styleConsumptionMap =
+    raw.styleConsumptionMap && typeof raw.styleConsumptionMap === 'object'
+      ? raw.styleConsumptionMap
+      : {};
 
   return {
     buyers: Array.from(new Set(buyers)),
@@ -118,6 +130,8 @@ function sanitizeOptions(raw: Partial<RequisitionOptions> | null | undefined): R
     colors: Array.from(new Set(colors)),
     washTypes: Array.from(new Set(washTypes)),
     couriers: Array.from(new Set(couriers)),
+    perPcsConsumptionYards,
+    styleConsumptionMap,
   };
 }
 
@@ -156,6 +170,12 @@ export async function syncRequisitionOptionsFromCloud(): Promise<RequisitionOpti
       colors: Array.from(new Set([...cleanCloud.colors, ...localOptions.colors])),
       washTypes: Array.from(new Set([...cleanCloud.washTypes, ...localOptions.washTypes])),
       couriers: Array.from(new Set([...cleanCloud.couriers, ...localOptions.couriers])),
+      perPcsConsumptionYards:
+        cleanCloud.perPcsConsumptionYards || localOptions.perPcsConsumptionYards || 0,
+      styleConsumptionMap: {
+        ...(cleanCloud.styleConsumptionMap || {}),
+        ...(localOptions.styleConsumptionMap || {}),
+      },
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));

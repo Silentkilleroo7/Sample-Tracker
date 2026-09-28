@@ -5,11 +5,16 @@ import {
   Plus, 
   AlertTriangle, 
   Layers, 
-  Download
+  Download,
+  LogOut,
+  UserCheck,
 } from 'lucide-react';
 import { PushNotification } from '../types/notification';
+import { AppUser, ROLE_BADGE_CONFIG, canUserMakeAllChanges, canUserAccessFabricInventory } from '../types/auth';
 
 interface NavbarProps {
+  currentUser: AppUser;
+  onLogout: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   notifications: PushNotification[];
@@ -22,6 +27,8 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
+  currentUser,
+  onLogout,
   searchQuery,
   onSearchChange,
   notifications,
@@ -32,6 +39,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onExportData,
 }) => {
   const unreadCount = notifications.filter((n) => !n.read).length;
+  const isMerchandiser = canUserMakeAllChanges(currentUser.role);
+  const canViewFabric = canUserAccessFabricInventory(currentUser.role);
+  const roleBadge = ROLE_BADGE_CONFIG[currentUser.role];
 
   return (
     <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
@@ -81,36 +91,38 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Actions & Alerts */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Low Fabric Warning Pill if count > 0 */}
-          {lowStockCount > 0 && (
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Low Fabric Warning Pill if count > 0 and user can view fabric */}
+          {lowStockCount > 0 && canViewFabric && (
             <button
               onClick={onNavigateToLowStock}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-semibold hover:bg-rose-500/25 transition-all animate-pulse"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs font-semibold hover:bg-rose-500/25 transition-all animate-pulse cursor-pointer"
               title="Click to view fabric inventory below 5 yds threshold"
             >
               <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="hidden md:inline">Fabric Alert:</span>
+              <span className="hidden xl:inline">Fabric Alert:</span>
               <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white font-mono text-[11px]">
                 {lowStockCount} Critical
               </span>
             </button>
           )}
 
-          {/* Export / Reset Actions */}
-          <button
-            onClick={onExportData}
-            className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors hidden sm:flex items-center gap-1 text-xs border border-slate-800"
-            title="Export Samples & Fabric Data to JSON"
-          >
-            <Download className="w-4 h-4" />
-            <span className="hidden lg:inline">Export</span>
-          </button>
+          {/* Export Action (Merchandiser Only) */}
+          {isMerchandiser && (
+            <button
+              onClick={onExportData}
+              className="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition-colors hidden md:flex items-center gap-1 text-xs border border-slate-800 cursor-pointer"
+              title="Export Samples & Fabric Data to JSON"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden xl:inline">Export</span>
+            </button>
+          )}
 
           {/* Notifications Bell */}
           <button
             onClick={onOpenNotifications}
-            className="relative p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-800"
+            className="relative p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors border border-slate-800 cursor-pointer"
             title="Push Notifications & Alert Logs"
           >
             <Bell className="w-5 h-5" />
@@ -121,15 +133,44 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
-          {/* New Requisition Button */}
-          <button
-            onClick={onNewRequisition}
-            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span className="hidden sm:inline">New Requisition</span>
-            <span className="sm:hidden">New</span>
-          </button>
+          {/* New Requisition Button (Merchandiser Only) */}
+          {isMerchandiser && (
+            <button
+              onClick={onNewRequisition}
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-xl text-xs sm:text-sm font-semibold shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span className="hidden sm:inline">New Requisition</span>
+              <span className="sm:hidden">New</span>
+            </button>
+          )}
+
+          {/* Logged-In User Profile & Switch/Logout */}
+          <div className="flex items-center gap-1.5 pl-1.5 border-l border-slate-800">
+            <div
+              className={`px-2.5 py-1 rounded-xl border text-[11px] flex items-center gap-1.5 ${roleBadge.badgeClass}`}
+              title={currentUser.permissionsSummary}
+            >
+              <UserCheck className="w-3.5 h-3.5 shrink-0" />
+              <div className="leading-tight">
+                <span className="font-black text-white block sm:inline">
+                  {currentUser.displayName}
+                </span>
+                <span className="hidden lg:inline ml-1 text-[10px] opacity-90 font-mono">
+                  ({roleBadge.shortLabel})
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white border border-slate-700 hover:border-rose-500 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+              title="Switch User / Sign Out"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Switch User</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>

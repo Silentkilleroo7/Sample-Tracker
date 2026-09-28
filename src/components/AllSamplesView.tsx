@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   SampleItem,
   SampleStage,
@@ -10,7 +10,9 @@ import {
   getDaysUntilShipment,
   getSampleTypeTone,
   getEffectiveSizeBreakdown,
+  getEffectivePerPcsConsumption,
 } from '../types/sample';
+import { UserRole, canUserAdvanceStage, ROLE_BADGE_CONFIG } from '../types/auth';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage, useImageZoom } from './StyleProductImage';
 import { SampleTypeBadge } from './SampleTypeBadge';
@@ -32,11 +34,14 @@ import {
   ZoomIn,
   Lock,
   Edit3,
+  ShieldCheck,
+  Ruler,
 } from 'lucide-react';
 
 interface AllSamplesViewProps {
   samples: SampleItem[];
   searchQuery: string;
+  userRole?: UserRole;
   onSearchChange: (q: string) => void;
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
@@ -56,6 +61,7 @@ type SortOrder = 'asc' | 'desc';
 export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
   samples,
   searchQuery,
+  userRole = 'merchandiser',
   onSearchChange,
   onSelectSample,
   onAdvanceStage,
@@ -68,7 +74,24 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
   onOpenRequisitionSlip,
 }) => {
   const { openZoom } = useImageZoom();
-  const [selectedStage, setSelectedStage] = useState<SampleStage | 'all'>(initialStageFilter);
+  const isMerchandiser = userRole === 'merchandiser';
+  const isSewingUser = userRole === 'sewing';
+  const isWashUser = userRole === 'wash';
+
+  const [selectedStage, setSelectedStage] = useState<SampleStage | 'all'>(
+    isSewingUser ? 'requisition' : isWashUser ? 'sewing' : initialStageFilter
+  );
+
+  useEffect(() => {
+    if (isSewingUser) {
+      setSelectedStage('requisition');
+    } else if (isWashUser) {
+      setSelectedStage(initialStageFilter === 'wash' ? 'wash' : 'sewing');
+    } else {
+      setSelectedStage(initialStageFilter);
+    }
+  }, [userRole, initialStageFilter, isSewingUser, isWashUser]);
+
   const [selectedBuyer, setSelectedBuyer] = useState<string>('all');
   const [selectedPriority, setSelectedPriority] = useState<SamplePriority | 'all'>('all');
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
@@ -86,6 +109,21 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
   const filteredSamples = useMemo(() => {
     let result = [...samples];
 
+    // Strict role-based stage visibility:
+    // - Sewing user sees ONLY 'requisition' status samples
+    // - Wash user sees ONLY 'sewing' status samples (or 'wash' when moving Wash -> Finishing)
+    if (isSewingUser) {
+      result = result.filter((s) => s.stage === 'requisition');
+    } else if (isWashUser) {
+      if (selectedStage === 'wash') {
+        result = result.filter((s) => s.stage === 'wash');
+      } else {
+        result = result.filter((s) => s.stage === 'sewing');
+      }
+    } else if (selectedStage !== 'all') {
+      result = result.filter((s) => s.stage === selectedStage);
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
@@ -100,10 +138,6 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
           s.sampleType.toLowerCase().includes(q) ||
           (s.sewingOperator && s.sewingOperator.toLowerCase().includes(q))
       );
-    }
-
-    if (selectedStage !== 'all') {
-      result = result.filter((s) => s.stage === selectedStage);
     }
 
     if (selectedBuyer !== 'all') {
@@ -158,25 +192,67 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
     }
   };
 
-  const STAGES_LIST: SampleStage[] = [
-    'requisition',
-    'sewing',
-    'wash',
-    'finishing',
-    'ready_for_parcel',
-    'approval_comments',
-  ];
+  const STAGES_LIST: SampleStage[] = isSewingUser
+    ? ['requisition']
+    : isWashUser
+    ? ['sewing', 'wash']
+    : [
+        'requisition',
+        'sewing',
+        'wash',
+        'finishing',
+        'ready_for_parcel',
+        'approval_comments',
+      ];
 
   return (
     <div className="space-y-5">
+      {/* Role Access Notice Banner for Sewing & Wash Users */}
+      {!isMerchandiser && (
+        <div
+          className={`p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-3 shadow-md ${
+            isSewingUser
+              ? 'bg-sky-950/35 border-sky-500/40 text-sky-200'
+              : 'bg-cyan-950/35 border-cyan-500/40 text-cyan-200'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            <ShieldCheck className={`w-5 h-5 shrink-0 ${isSewingUser ? 'text-sky-400' : 'text-cyan-400'}`} />
+            <div>
+              <span className="text-xs font-extrabold uppercase tracking-wider block">
+                {ROLE_BADGE_CONFIG[userRole].label} Mode — Restricted Stage &amp; Action Scope
+              </span>
+              <span className="text-[11px] text-slate-300">
+                {isSewingUser
+                  ? 'You can view Requisition Status samples only (plus Fabric Inventory in View-Only mode). Allowed action: Move from Requisition Status → Sewing Status only.'
+                  : 'You can view Sewing Status samples (and Wash Status in Wash Section). Allowed actions: Move Sewing Status → Wash Status, and Wash Status → Finishing Status only.'}
+              </span>
+            </div>
+          </div>
+          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold border ${ROLE_BADGE_CONFIG[userRole].bgClass} ${ROLE_BADGE_CONFIG[userRole].textClass} ${ROLE_BADGE_CONFIG[userRole].borderClass}`}>
+            {isSewingUser ? 'Requisition → Sewing Only' : 'Sewing → Wash → Finishing Only'}
+          </span>
+        </div>
+      )}
+
       {/* Top Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            Sample Tracking Master Pipeline
+            {isSewingUser
+              ? 'Requisition Status Samples (Sewing Department)'
+              : isWashUser
+              ? selectedStage === 'wash'
+                ? 'Wash Status Samples (Move to Finishing)'
+                : 'Sewing Status Samples (Wash Department)'
+              : 'Sample Tracking Master Pipeline'}
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Total {samples.length} styles in workflow • Showing {filteredSamples.length} filtered styles
+            {isSewingUser
+              ? `Showing ${filteredSamples.length} Requisition Status sample(s) ready to move to Sewing Status`
+              : isWashUser
+              ? `Showing ${filteredSamples.length} sample(s) in ${selectedStage === 'wash' ? 'Wash Status (ready for Finishing)' : 'Sewing Status (ready for Wash)'}`
+              : `Total ${samples.length} styles in workflow • Showing ${filteredSamples.length} filtered styles`}
           </p>
         </div>
 
@@ -208,31 +284,35 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
             </button>
           </div>
 
-          <button
-            onClick={onNewRequisition}
-            className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>New Style</span>
-          </button>
+          {isMerchandiser && (
+            <button
+              onClick={onNewRequisition}
+              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>New Style</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* Stage Tab Filter Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-        <button
-          onClick={() => {
-            setSelectedStage('all');
-            setCurrentPage(1);
-          }}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-            selectedStage === 'all'
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60'
-          }`}
-        >
-          All Stages ({samples.length})
-        </button>
+        {isMerchandiser && (
+          <button
+            onClick={() => {
+              setSelectedStage('all');
+              setCurrentPage(1);
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
+              selectedStage === 'all'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60'
+            }`}
+          >
+            All Stages ({samples.length})
+          </button>
+        )}
 
         {STAGES_LIST.map((stage) => {
           const cfg = STAGE_CONFIG[stage];
@@ -474,8 +554,12 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                         <div className="text-[11px] text-slate-400 truncate max-w-[140px] mt-0.5">
                           {sample.fabricName}
                         </div>
-                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                          Req: {sample.fabricRequiredYards} yds
+                        <div className="text-[10px] text-emerald-400 font-mono font-bold mt-0.5 flex items-center gap-1">
+                          <Ruler className="w-2.5 h-2.5" />
+                          <span>{getEffectivePerPcsConsumption(sample)} yds/pc</span>
+                        </div>
+                        <div className="text-[10px] text-amber-300 font-mono mt-0.5">
+                          Deducted: {sample.fabricRequiredYards} yds ({sample.quantity} pcs)
                         </div>
                       </td>
 
@@ -505,7 +589,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                         <div className="text-[10px] text-slate-400 font-mono mt-1">
                           Parcel: {sample.parcelDetails.parcelDate || sample.targetParcelDate}
                         </div>
-                        {isParcelCompleted(sample) && (
+                        {isParcelCompleted(sample) && isMerchandiser && (
                           <div className="mt-1.5">
                             <button
                               type="button"
@@ -528,7 +612,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
 
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          {isParcelCompleted(sample) && (
+                          {isParcelCompleted(sample) && isMerchandiser && (
                             <>
                               <button
                                 type="button"
@@ -558,17 +642,25 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                               </button>
                             </>
                           )}
-                          {hasNextStage && (
+                          {hasNextStage && canUserAdvanceStage(userRole, sample.stage, stageConfig.nextStage!) && (
                             <button
                               onClick={() => onAdvanceStage(sample)}
                               className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow transition-all cursor-pointer"
                               title={`Advance to ${STAGE_CONFIG[stageConfig.nextStage!].label}`}
                             >
-                              <span>Next</span>
+                              <span>
+                                {isSewingUser
+                                  ? 'Move to Sewing'
+                                  : isWashUser
+                                  ? sample.stage === 'sewing'
+                                    ? 'Move to Wash'
+                                    : 'Move to Finishing'
+                                  : 'Next'}
+                              </span>
                               <ArrowRight className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          {onModifyStoredStyle && (
+                          {onModifyStoredStyle && isMerchandiser && (
                             <button
                               onClick={() => onModifyStoredStyle(sample)}
                               className="px-2 py-1 text-emerald-300 hover:text-white bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/40 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
@@ -776,9 +868,12 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                         <div>PO: <span className="font-mono text-slate-300">{sample.poNumber}</span></div>
                         <div>Line: <span className="font-mono text-slate-300">{sample.lineCode}</span></div>
                         <div>Fabric: <span className="font-mono text-slate-300">{sample.fabricCode}</span></div>
+                        <div className="text-emerald-400 font-mono text-[10px] font-bold">
+                          Cons: {getEffectivePerPcsConsumption(sample)} yds/pc • Ded: {sample.fabricRequiredYards} yds
+                        </div>
                       </div>
 
-                      {isParcelCompleted(sample) && (
+                      {isParcelCompleted(sample) && isMerchandiser && (
                         <div className="mt-2 pt-1.5 border-t border-slate-700/60 flex items-center justify-between text-[10px]">
                           <button
                             type="button"
@@ -829,7 +924,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                         <span className="text-slate-400 font-mono">
                           Parcel: {sample.parcelDetails.parcelDate || sample.targetParcelDate}
                         </span>
-                        {config.nextStage && (
+                        {config.nextStage && canUserAdvanceStage(userRole, sample.stage, config.nextStage) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

@@ -405,3 +405,196 @@ BEGIN
     ALTER PUBLICATION supabase_realtime ADD TABLE public.requisition_options;
   END IF;
 END $$;
+
+-- =====================================================================================
+-- 11. PER-PCS FABRIC CONSUMPTION (YDS) & AUTO INVENTORY DEDUCTION COLUMNS
+-- =====================================================================================
+ALTER TABLE public.samples
+  ADD COLUMN IF NOT EXISTS per_pcs_consumption_yards NUMERIC DEFAULT 1.5;
+
+ALTER TABLE public.fabrics
+  ADD COLUMN IF NOT EXISTS per_pcs_consumption_yards NUMERIC DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS style_consumption_map JSONB DEFAULT '{}'::jsonb;
+
+ALTER TABLE public.requisition_options
+  ADD COLUMN IF NOT EXISTS per_pcs_consumption_yards NUMERIC DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS style_consumption_map JSONB DEFAULT '{}'::jsonb;
+
+-- Backfill existing samples where per_pcs_consumption_yards is null or 0
+UPDATE public.samples
+SET per_pcs_consumption_yards = ROUND(
+  (COALESCE(fabric_required_yards, 1.5) / GREATEST(COALESCE(quantity, 1), 1))::numeric,
+  2
+)
+WHERE per_pcs_consumption_yards IS NULL OR per_pcs_consumption_yards <= 0;
+
+-- Database function: Automatically inherit saved per_pcs_consumption_yards on subsequent
+-- requisitions (never asking again) and calculate exact fabric_required_yards = per_pcs * quantity
+CREATE OR REPLACE FUNCTION public.fn_sync_sample_fabric_consumption()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_saved_per_pcs NUMERIC := 0;
+  v_style_key TEXT := UPPER(TRIM(COALESCE(NEW.style_code, '')));
+BEGIN
+  -- 1. Check if per_pcs_consumption_yards was already saved for this style or fabric
+  IF NEW.fabric_id IS NOT NULL AND NEW.fabric_id <> '' THEN
+    SELECT
+      COALESCE(
+        (style_consumption_map ->> v_style_key)::numeric,
+        NULLIF(per_pcs_consumption_yards, 0),
+        0
+      )
+    INTO v_saved_per_pcs
+    FROM public.fabrics
+    WHERE id = NEW.fabric_id
+    LIMIT 1;
+  END IF;
+
+  IF (v_saved_per_pcs IS NULL OR v_saved_per_pcs <= 0) THEN
+    SELECT
+      COALESCE(
+        (style_consumption_map ->> v_style_key)::numeric,
+        NULLIF(per_pcs_consumption_yards, 0),
+        0
+      )
+    INTO v_saved_per_pcs
+    FROM public.requisition_options
+    WHERE id = 'global'
+    LIMIT 1;
+  END IF;
+
+  -- 2. Lock onto saved consumption if available, else use newly provided per_pcs_consumption_yards
+  IF v_saved_per_pcs IS NOT NULL AND v_saved_per_pcs > 0 THEN
+    NEW.per_pcs_consumption_yards := v_saved_per_pcs;
+  ELSIF NEW.per_pcs_consumption_yards IS NULL OR NEW.per_pcs_consumption_yards <= 0 THEN
+    NEW.per_pcs_consumption_yards := ROUND(
+      (COALESCE(NEW.fabric_required_yards, 1.5) / GREATEST(COALESCE(NEW.quantity, 1), 1))::numeric,
+      2
+    );
+  END IF;
+
+  -- 3. Calculate exact total fabric required in yards = per_pcs_consumption_yards * total quantity
+  NEW.fabric_required_yards := ROUND(
+    (NEW.per_pcs_consumption_yards * GREATEST(COALESCE(NEW.quantity, 1), 1))::numeric,
+    2
+  );
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_sample_fabric_consumption ON public.samples;
+CREATE TRIGGER trg_sync_sample_fabric_consumption
+  BEFORE INSERT OR UPDATE ON public.samples
+  FOR EACH ROW EXECUTE FUNCTION public.fn_sync_sample_fabric_consumption();
+
+-- =====================================================================================
+-- 12. 3-ROLE USER LOGIN SYSTEM (MERCHANDISER, SEWING, WASH) & SEEDED ACCOUNTS
+-- =====================================================================================
+CREATE TABLE IF NOT EXISTS public.app_users (
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  display_name TEXT NOT NULL,
+  password TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('merchandiser', 'sewing', 'wash')),
+  department TEXT DEFAULT '',
+  permissions_summary TEXT DEFAULT '',
+  last_login_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Seed the 6 requested accounts:
+-- 4 Merchandisers: zahid, animesh, rakib, hasan
+-- 1 Sewing user: sohag
+-- 1 Wash user: arian
+INSERT INTO public.app_users (id, username, display_name, password, role, department, permissions_summary)
+VALUES
+  (
+    'usr-merchandiser-zahid',
+    'zahid',
+    'Zahid',
+    'zahid1234',
+    'merchandiser',
+    'Merchandising Department',
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.'
+  ),
+  (
+    'usr-merchandiser-animesh',
+    'animesh',
+    'Animesh',
+    'animesh2345',
+    'merchandiser',
+    'Merchandising Department',
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.'
+  ),
+  (
+    'usr-merchandiser-rakib',
+    'rakib',
+    'Rakib',
+    'rakib3456',
+    'merchandiser',
+    'Merchandising Department',
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.'
+  ),
+  (
+    'usr-merchandiser-hasan',
+    'hasan',
+    'Hasan',
+    'hasan4567',
+    'merchandiser',
+    'Merchandising Department',
+    'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.'
+  ),
+  (
+    'usr-sewing-sohag',
+    'sohag',
+    'Sohag',
+    'sohag5678',
+    'sewing',
+    'Sewing Floor Section',
+    'Sewing Restricted Access — View Requisition status samples only, move Requisition → Sewing Status only, and view Fabric Inventory (View-Only Mode, no edit access).'
+  ),
+  (
+    'usr-wash-arian',
+    'arian',
+    'Arian',
+    'arian6789',
+    'wash',
+    'Washing & Wet Processing Plant',
+    'Wash Restricted Access — View Sewing Status samples (and active Wash samples) only; move Sewing → Wash and Wash → Finishing only.'
+  )
+ON CONFLICT (username) DO UPDATE SET
+  display_name = EXCLUDED.display_name,
+  password = EXCLUDED.password,
+  role = EXCLUDED.role,
+  department = EXCLUDED.department,
+  permissions_summary = EXCLUDED.permissions_summary;
+
+-- Protect app_users from frontend deletion & enable RLS
+DROP TRIGGER IF EXISTS trg_no_frontend_delete_app_users ON public.app_users;
+CREATE TRIGGER trg_no_frontend_delete_app_users
+  BEFORE DELETE ON public.app_users
+  FOR EACH ROW EXECUTE FUNCTION public.prevent_frontend_delete();
+
+ALTER TABLE public.app_users ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Frontend select app_users" ON public.app_users;
+DROP POLICY IF EXISTS "Frontend insert app_users" ON public.app_users;
+DROP POLICY IF EXISTS "Frontend update app_users" ON public.app_users;
+
+CREATE POLICY "Frontend select app_users" ON public.app_users FOR SELECT TO anon, authenticated USING (true);
+CREATE POLICY "Frontend insert app_users" ON public.app_users FOR INSERT TO anon, authenticated WITH CHECK (true);
+CREATE POLICY "Frontend update app_users" ON public.app_users FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'app_users'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.app_users;
+  END IF;
+END $$;
+

@@ -10,12 +10,15 @@ import {
   FlaskConical,
 } from 'lucide-react';
 import { AppView } from './Sidebar';
+import { UserRole } from '../types/auth';
 
 interface MainModulesBottomProps {
   currentView: AppView;
   onSelectView: (view: AppView) => void;
+  userRole?: UserRole;
   counts: {
     total: number;
+    requisition?: number;
     sewing: number;
     wash: number;
     finishing: number;
@@ -30,9 +33,10 @@ interface MainModulesBottomProps {
 export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
   currentView,
   onSelectView,
+  userRole = 'merchandiser',
   counts,
 }) => {
-  const modules = [
+  const allModules = [
     {
       id: 'dashboard' as AppView,
       label: 'Dashboard',
@@ -41,22 +45,41 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
       badge: counts.lowFabric > 0 ? `${counts.lowFabric} Alert` : undefined,
       badgeVariant: counts.lowFabric > 0 ? 'critical' : 'neutral',
       color: 'text-indigo-400',
+      allowedRoles: ['merchandiser'] as UserRole[],
     },
     {
       id: 'all_samples' as AppView,
-      label: 'Samples',
-      subtitle: 'Pipeline & Requisition',
+      label:
+        userRole === 'sewing'
+          ? 'Requisition Samples'
+          : userRole === 'wash'
+          ? 'Sewing Status Samples'
+          : 'Samples',
+      subtitle:
+        userRole === 'sewing'
+          ? 'Move Req → Sewing Only'
+          : userRole === 'wash'
+          ? 'Move Sewing → Wash → Finishing'
+          : 'Pipeline & Requisition',
       icon: Layers,
-      count: counts.total,
+      count:
+        userRole === 'sewing'
+          ? counts.requisition ?? counts.total
+          : userRole === 'wash'
+          ? counts.sewing + counts.wash
+          : counts.total,
       color: 'text-purple-400',
+      allowedRoles: ['merchandiser', 'sewing', 'wash'] as UserRole[],
     },
     {
       id: 'wash' as AppView,
       label: 'Wash',
-      subtitle: 'Wet Wash Status',
+      subtitle:
+        userRole === 'wash' ? 'Move Sewing → Wash → Finishing' : 'Wet Wash Status',
       icon: Waves,
-      count: counts.wash,
+      count: userRole === 'wash' ? counts.sewing + counts.wash : counts.wash,
       color: 'text-cyan-400',
+      allowedRoles: ['merchandiser', 'wash'] as UserRole[],
     },
     {
       id: 'finishing' as AppView,
@@ -65,6 +88,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
       icon: Sparkles,
       count: counts.finishing,
       color: 'text-amber-400',
+      allowedRoles: ['merchandiser'] as UserRole[],
     },
     {
       id: 'approvals' as AppView,
@@ -73,6 +97,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
       icon: PackageCheck,
       count: counts.readyForParcel + counts.approvals,
       color: 'text-emerald-400',
+      allowedRoles: ['merchandiser'] as UserRole[],
     },
     {
       id: 'test' as AppView,
@@ -83,17 +108,21 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
       badgeVariant: (counts.testOverdue && counts.testOverdue > 0) ? 'critical' : 'neutral',
       count: counts.testCount,
       color: (counts.testOverdue && counts.testOverdue > 0) ? 'text-rose-400' : 'text-blue-400',
+      allowedRoles: ['merchandiser'] as UserRole[],
     },
     {
       id: 'fabric_inventory' as AppView,
-      label: 'Fabric',
-      subtitle: 'Stock & Yardage',
+      label: userRole === 'sewing' ? 'Fabric (View Mode)' : 'Fabric',
+      subtitle: userRole === 'sewing' ? 'View Only • No Access' : 'Stock & Yardage',
       icon: ScrollText,
       badge: counts.lowFabric > 0 ? `${counts.lowFabric} Low` : undefined,
       badgeVariant: counts.lowFabric > 0 ? 'critical' : 'neutral',
       color: counts.lowFabric > 0 ? 'text-rose-400' : 'text-slate-300',
+      allowedRoles: ['merchandiser', 'sewing'] as UserRole[],
     },
   ];
+
+  const modules = allModules.filter((m) => m.allowedRoles.includes(userRole));
 
   return (
     <div className="sticky bottom-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl border-t-2 border-indigo-500/40 shadow-2xl shadow-black ring-1 ring-white/10">

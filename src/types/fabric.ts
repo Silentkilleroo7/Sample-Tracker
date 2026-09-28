@@ -9,6 +9,8 @@ export interface FabricItem {
   widthInches: number;
   availableYards: number;
   allocatedYards: number;
+  perPcsConsumptionYards?: number; // saved per-piece fabric consumption in yds (set on 1st requisition)
+  styleConsumptionMap?: Record<string, number>;
   minimumThresholdYards: number; // default is 5
   supplier: string;
   location: string;

@@ -196,6 +196,8 @@ export interface VolarRequisitionForm {
   sizeBreakdown?: SizeBreakdownItem[];
   colorWash: string;
   fabricCode: string;
+  perPcsConsumptionYards?: number;
+  fabricRequiredYards?: number;
   fitting: string;
   threadInstruction: string;
   threadNote?: string;
@@ -230,7 +232,8 @@ export interface SampleItem {
   fabricId: string;
   fabricCode: string;
   fabricName: string;
-  fabricRequiredYards: number;
+  perPcsConsumptionYards?: number; // Per pcs fabric consumption in yds (mentioned on 1st requisition, never asked again)
+  fabricRequiredYards: number; // Total fabric deducted in yds = perPcsConsumptionYards * quantity
   threadNote?: string;
   zipperNote?: string;
   buttonNote?: string;
@@ -276,6 +279,26 @@ export function getEffectiveSizeBreakdown(sample: Partial<SampleItem>): SizeBrea
       ? Math.max(1, Math.floor(totalQty / parsedSizes.length))
       : 1;
   return parsedSizes.map((sz) => ({ size: sz, quantity: perSizeQty }));
+}
+
+/**
+ * Returns the effective per-piece fabric consumption in yards for a sample.
+ */
+export function getEffectivePerPcsConsumption(sample: Partial<SampleItem>): number {
+  if (sample.perPcsConsumptionYards && sample.perPcsConsumptionYards > 0) {
+    return sample.perPcsConsumptionYards;
+  }
+  if (
+    sample.requisitionForm?.perPcsConsumptionYards &&
+    sample.requisitionForm.perPcsConsumptionYards > 0
+  ) {
+    return sample.requisitionForm.perPcsConsumptionYards;
+  }
+  const qty = Math.max(1, sample.quantity || 1);
+  if (sample.fabricRequiredYards && sample.fabricRequiredYards > 0) {
+    return Number((sample.fabricRequiredYards / qty).toFixed(2));
+  }
+  return 0;
 }
 
 /**
