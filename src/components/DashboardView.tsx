@@ -26,6 +26,8 @@ import {
   FlaskConical,
   Lock,
   Clock,
+  Tag,
+  Ruler,
 } from 'lucide-react';
 import {
   SampleItem,
@@ -35,6 +37,11 @@ import {
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getGranularApprovalStatus,
+  getEffectiveSizeBreakdown,
+  getEffectiveSizeName,
+  getEffectiveRequisitionQuantity,
+  getEffectivePerPcsConsumption,
+  getPriorityTone,
 } from '../types/sample';
 import { FabricItem, isFabricLowStock } from '../types/fabric';
 import { BVTestItem } from '../types/test';
@@ -455,20 +462,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Ranked Priority Sample List */}
         {filteredPriorityApprovalSamples.length > 0 ? (
           <div className="space-y-2.5">
-            {filteredPriorityApprovalSamples.slice(0, 6).map((sample, idx) => {
+            {filteredPriorityApprovalSamples.map((sample, idx) => {
               const shipDate = getEffectiveShipmentDate(sample);
               const daysLeft = getDaysUntilShipment(sample);
               const status = getGranularApprovalStatus(sample);
               const isUrgentShip = daysLeft !== null && daysLeft <= 14;
+              const pTone = getPriorityTone(sample.priority);
+              const sizeRun = getEffectiveSizeBreakdown(sample);
+              const sizeName = getEffectiveSizeName(sample);
+              const totalReqQty = getEffectiveRequisitionQuantity(sample);
 
               return (
                 <div
                   key={sample.id}
                   className={`p-3.5 rounded-xl border transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
-                    idx === 0
-                      ? 'bg-slate-900/95 border-amber-400/80 ring-1 ring-amber-400/30 shadow-lg'
-                      : 'bg-slate-900/75 border-slate-800 hover:border-amber-500/40'
-                  }`}
+                    pTone.cardClass
+                  } ${idx === 0 ? 'ring-1 ring-amber-400/50' : ''}`}
                 >
                   <div className="flex items-start sm:items-center gap-3 min-w-0">
                     <div className="flex flex-col items-center justify-center px-2 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 font-mono font-black text-xs shrink-0">
@@ -490,6 +499,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         >
                           {sample.styleName}
                         </span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${pTone.badgeClass}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                          <span>{pTone.label}</span>
+                        </span>
                         <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
                         {sample.isRequisitionLocked && (
                           <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono flex items-center gap-1">
@@ -506,9 +521,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2.5 mt-1 text-[11px] text-slate-400">
+                      {/* Prominent Size Name & Total Requisition Quantity Callout */}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-950/90 border border-indigo-400/50 shadow-sm">
+                          <Tag className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
+                          <span className="text-[10px] uppercase tracking-wider text-indigo-300 font-bold">
+                            Size Name:
+                          </span>
+                          <span className="font-mono text-xs font-black text-white">
+                            {sizeName}
+                          </span>
+                        </div>
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 border border-emerald-400/50 shadow-sm">
+                          <span className="text-[10px] uppercase tracking-wider text-emerald-300 font-bold">
+                            Total Requisition Qty:
+                          </span>
+                          <span className="font-mono text-xs font-black text-emerald-200">
+                            {totalReqQty} Pcs
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5 text-[11px] text-slate-300">
                         <span>
-                          Buyer: <strong className="text-slate-200">{sample.buyer}</strong>
+                          Buyer: <strong className="text-white">{sample.buyer}</strong>
                         </span>
                         <span>•</span>
                         <span className="font-mono text-amber-300 font-bold flex items-center gap-1">
@@ -533,6 +569,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           </span>
                         )}
                       </div>
+
+                      {sizeRun.length > 1 && (
+                        <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                          <span className="text-[10px] text-amber-300 font-mono font-bold">
+                            Size Breakdown ({sizeRun.length} sizes):
+                          </span>
+                          {sizeRun.map((b, bIdx) => (
+                            <span
+                              key={`${b.size}-${bIdx}`}
+                              className="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-400/40 text-amber-200 font-mono text-[10px] font-bold"
+                            >
+                              {b.size}: {b.quantity}pc
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -707,23 +759,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           Active In Pipeline:
                         </span>
                         <div className="space-y-1">
-                          {linkedSamples.map((ls) => (
-                            <div
-                              key={ls.id}
-                              onClick={() => onSelectSample(ls)}
-                              className="flex items-center justify-between gap-2 text-[11px] p-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/40 border border-rose-500/20 cursor-pointer transition-colors"
-                            >
-                              <div className="flex items-center gap-2 min-w-0">
-                                <StyleProductImage sample={ls} size="xs" showBadge={false} />
-                                <span className="font-mono font-bold text-white truncate max-w-[120px]">
-                                  {ls.styleCode} - {ls.styleName}
-                                </span>
+                          {linkedSamples.map((ls) => {
+                            const lsSizeName = getEffectiveSizeName(ls);
+                            const lsTotalQty = getEffectiveRequisitionQuantity(ls);
+                            return (
+                              <div
+                                key={ls.id}
+                                onClick={() => onSelectSample(ls)}
+                                className="flex flex-col gap-1 text-[11px] p-2 rounded-lg bg-rose-950/40 hover:bg-rose-900/40 border border-rose-500/20 cursor-pointer transition-colors"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <StyleProductImage sample={ls} size="xs" showBadge={false} />
+                                    <span className="font-mono font-bold text-white truncate max-w-[140px]">
+                                      {ls.styleCode} - {ls.styleName}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-rose-900/80 text-rose-200 shrink-0">
+                                    {STAGE_CONFIG[ls.stage].shortLabel}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between gap-2 text-[10px] font-mono pt-1 border-t border-rose-500/20">
+                                  <span className="text-indigo-200 font-bold">
+                                    Size Name: <strong className="text-white">{lsSizeName}</strong>
+                                  </span>
+                                  <span className="text-emerald-300 font-black">
+                                    Total Qty: {lsTotalQty} Pcs
+                                  </span>
+                                </div>
                               </div>
-                              <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded bg-rose-900/80 text-rose-200 shrink-0">
-                                {STAGE_CONFIG[ls.stage].shortLabel}
-                              </span>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -970,22 +1036,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Summary Filtered Styles Live Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pt-2">
-          {filteredSummarySamples.slice(0, 6).map((sample) => {
+          {filteredSummarySamples.map((sample) => {
             const p = sample.parcelDetails;
             const isCompleted = isParcelCompleted(sample);
             const isWbSent = p.workbookSent;
             const phone = p.followUp?.whatsAppNumber || '+1 (215) 555-0199';
+            const pTone = getPriorityTone(sample.priority);
+            const sizeRun = getEffectiveSizeBreakdown(sample);
+            const sizeName = getEffectiveSizeName(sample);
+            const totalReqQty = getEffectiveRequisitionQuantity(sample);
 
             return (
               <div
                 key={sample.id}
-                className="p-4 rounded-xl bg-slate-800/60 hover:bg-slate-800/90 border border-slate-700/60 transition-all flex flex-col justify-between"
+                className={`p-4 rounded-xl border transition-all flex flex-col justify-between ${pTone.cardClass}`}
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-black text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-500/30">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono text-xs font-black text-indigo-300 bg-indigo-950/90 px-2 py-0.5 rounded border border-indigo-500/40">
                         {sample.styleCode}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${pTone.badgeClass}`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                        <span>{pTone.label}</span>
                       </span>
                       <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
                       <span
@@ -996,7 +1072,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {STAGE_CONFIG[sample.stage].badgeText}
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1">
+                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 shrink-0">
                       <Calendar className="w-3 h-3" />
                       {p.parcelDate || sample.targetParcelDate}
                     </span>
@@ -1012,9 +1088,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {sample.styleName}
                       </h4>
 
-                      <div className="text-[11px] text-slate-400 mt-1 space-y-0.5">
-                        <div>Buyer: <strong className="text-slate-200">{sample.buyer}</strong> • PO: {sample.poNumber}</div>
-                        <div>Line: <span className="font-mono text-slate-300">{sample.lineCode}</span> • Fabric: <span className="font-mono text-slate-300">{sample.fabricCode}</span></div>
+                      <div className="text-[11px] text-slate-300 mt-1 space-y-0.5">
+                        <div>Buyer: <strong className="text-white">{sample.buyer}</strong> • PO: {sample.poNumber}</div>
+                        <div>Line: <span className="font-mono text-slate-200">{sample.lineCode}</span> • Fabric: <span className="font-mono text-slate-200">{sample.fabricCode}</span></div>
                         {sample.stage === 'wash' && sample.washDetails && (
                           <div className="text-cyan-300 truncate">Recipe: {sample.washDetails.washType}</div>
                         )}
@@ -1022,6 +1098,56 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           <div className="text-purple-300 truncate">Operator: {sample.sewingOperator}</div>
                         )}
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Prominent Size Name & Total Requisition Quantity Display */}
+                  <div className="mt-3 p-2.5 rounded-xl bg-slate-950/90 border border-indigo-500/40 shadow-inner space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2 rounded-lg bg-indigo-950/60 border border-indigo-500/40">
+                        <div className="text-[9px] uppercase tracking-wider font-bold text-indigo-300 flex items-center gap-1">
+                          <Tag className="w-3 h-3 text-indigo-400 shrink-0" />
+                          <span>Size Name</span>
+                        </div>
+                        <div className="font-mono text-xs sm:text-sm font-black text-white mt-0.5 break-words">
+                          {sizeName}
+                        </div>
+                      </div>
+
+                      <div className="p-2 rounded-lg bg-emerald-950/60 border border-emerald-500/40">
+                        <div className="text-[9px] uppercase tracking-wider font-bold text-emerald-300">
+                          Total Requisition Qty
+                        </div>
+                        <div className="font-mono text-xs sm:text-sm font-black text-emerald-300 mt-0.5">
+                          {totalReqQty} Pcs
+                        </div>
+                      </div>
+                    </div>
+
+                    {sizeRun.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                        <span className="text-[9px] font-mono uppercase tracking-wider text-amber-300 font-bold">
+                          Size Qty Breakdown:
+                        </span>
+                        {sizeRun.map((b, bIdx) => (
+                          <span
+                            key={`${b.size}-${bIdx}`}
+                            className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-amber-200 font-mono text-[10px] font-bold"
+                          >
+                            {b.size}: {b.quantity} {b.quantity === 1 ? 'pc' : 'pcs'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1.5 border-t border-slate-800">
+                      <span className="flex items-center gap-1 text-emerald-400">
+                        <Ruler className="w-2.5 h-2.5" />
+                        Cons: {getEffectivePerPcsConsumption(sample)} yds/pc
+                      </span>
+                      <span className="text-amber-300">
+                        Total Ded: {sample.fabricRequiredYards} yds
+                      </span>
                     </div>
                   </div>
 
@@ -1156,20 +1282,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               const f = p.followUp;
               const isWbSent = p.workbookSent;
               const phone = f?.whatsAppNumber || '+1 (215) 555-0199';
+              const pTone = getPriorityTone(sample.priority);
 
               return (
                 <div
                   key={sample.id}
-                  className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/40 transition-all flex flex-col justify-between"
+                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${pTone.cardClass}`}
                 >
                   <div>
                     {/* Header: Style Name & Style Code */}
                     <div className="flex items-start gap-3 mb-2.5">
                       <StyleProductImage sample={sample} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-black text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-500/30">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-mono text-xs font-black text-indigo-300 bg-indigo-950/90 px-2 py-0.5 rounded border border-indigo-500/40">
                             {sample.styleCode}
+                          </span>
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] ${pTone.badgeClass}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                            <span>{pTone.label}</span>
                           </span>
                           <span
                             className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
@@ -1187,8 +1320,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         >
                           {sample.styleName}
                         </h4>
-                        <div className="text-[11px] text-slate-400">
-                          Buyer: <strong className="text-slate-200">{sample.buyer}</strong> • PO: {sample.poNumber}
+                        <div className="text-[11px] text-slate-300">
+                          Buyer: <strong className="text-white">{sample.buyer}</strong> • PO: {sample.poNumber}
+                        </div>
+                        <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-[10px] font-mono">
+                          <div className="bg-indigo-950/80 px-2 py-1 rounded border border-indigo-500/40">
+                            <span className="text-[9px] uppercase text-indigo-300 font-bold block">
+                              Size Name
+                            </span>
+                            <strong className="text-white text-xs">
+                              {getEffectiveSizeName(sample)}
+                            </strong>
+                          </div>
+                          <div className="bg-emerald-950/80 px-2 py-1 rounded border border-emerald-500/40">
+                            <span className="text-[9px] uppercase text-emerald-300 font-bold block">
+                              Total Req Qty
+                            </span>
+                            <strong className="text-emerald-300 text-xs font-black">
+                              {getEffectiveRequisitionQuantity(sample)} Pcs
+                            </strong>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1333,31 +1484,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="space-y-3">
-            {[...readyToParcel, ...commentsPending].slice(0, 4).map((sample) => {
+            {[...readyToParcel, ...commentsPending].map((sample) => {
               const isApprovalStage = sample.stage === 'approval_comments';
               const pDetails = sample.parcelDetails;
               const aDetails = sample.approvalDetails;
+              const pTone = getPriorityTone(sample.priority);
+              const sizeName = getEffectiveSizeName(sample);
+              const totalReqQty = getEffectiveRequisitionQuantity(sample);
 
               return (
                 <div
                   key={sample.id}
                   onClick={() => onSelectSample(sample)}
-                  className="p-4 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/60 transition-all cursor-pointer group"
+                  className={`p-4 rounded-xl border transition-all cursor-pointer group ${pTone.cardClass}`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 min-w-0">
                       <StyleProductImage sample={sample} size="xs" />
-                      <span className="font-mono text-xs font-black text-indigo-400 px-2 py-0.5 rounded bg-indigo-950/60 border border-indigo-500/30 shrink-0">
+                      <span className="font-mono text-xs font-black text-indigo-300 px-2 py-0.5 rounded bg-indigo-950/90 border border-indigo-500/40 shrink-0">
                         {sample.styleCode}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] shrink-0 ${pTone.badgeClass}`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                        <span>{pTone.label}</span>
                       </span>
                       <span className="text-xs font-bold text-white truncate max-w-xs">
                         {sample.styleName}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-medium shrink-0">
+                      <span className="text-[10px] text-slate-300 font-medium shrink-0">
                         • {sample.buyer}
                       </span>
+                      <span className="px-2.5 py-0.5 rounded-lg bg-indigo-950/90 border border-indigo-400/50 text-[11px] font-mono text-indigo-200 font-bold shrink-0">
+                        Size Name: <strong className="text-white">{sizeName}</strong>
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-400/50 text-[11px] font-mono text-emerald-300 font-black shrink-0">
+                        Total Req Qty: {totalReqQty} Pcs
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <span
                         className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           STAGE_CONFIG[sample.stage].badgeBg
@@ -1567,60 +1733,96 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         <div className="space-y-4">
-          {samples.slice(0, 5).map((sample) => (
-            <div
-              key={sample.id}
-              className="p-4 rounded-xl bg-slate-800/40 hover:bg-slate-800/80 border border-slate-700/60 transition-all"
-            >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                <div className="flex items-center gap-3">
-                  <StyleProductImage sample={sample} size="sm" />
-                  <div
-                    onClick={() => onSelectSample(sample)}
-                    className="cursor-pointer hover:underline"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-black text-indigo-400 bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-500/30">
-                        {sample.styleCode}
-                      </span>
-                      <span className="font-bold text-white text-xs sm:text-sm">
-                        {sample.styleName}
-                      </span>
+          {samples.map((sample) => {
+            const pTone = getPriorityTone(sample.priority);
+            const sizeRun = getEffectiveSizeBreakdown(sample);
+            const sizeName = getEffectiveSizeName(sample);
+            const totalReqQty = getEffectiveRequisitionQuantity(sample);
+            return (
+              <div
+                key={sample.id}
+                className={`p-4 rounded-xl border transition-all ${pTone.cardClass}`}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-3">
+                    <StyleProductImage sample={sample} size="sm" />
+                    <div
+                      onClick={() => onSelectSample(sample)}
+                      className="cursor-pointer hover:underline"
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs font-black text-indigo-300 bg-indigo-950/90 px-2 py-0.5 rounded border border-indigo-500/40">
+                          {sample.styleCode}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${pTone.badgeClass}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                          <span>{pTone.label}</span>
+                        </span>
+                        <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
+                        <span className="font-bold text-white text-xs sm:text-sm">
+                          {sample.styleName}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-300 mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                        <span>
+                          PO: <span className="font-mono text-white">{sample.poNumber}</span> • Line:{' '}
+                          <span className="font-mono text-white">{sample.lineCode}</span> • Buyer:{' '}
+                          <span className="text-white font-semibold">{sample.buyer}</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-indigo-950/90 border border-indigo-400/50 font-mono text-[11px] text-indigo-200 font-bold">
+                          <Tag className="w-3 h-3 text-indigo-300" />
+                          <span>
+                            Size Name: <strong className="text-white">{sizeName}</strong>
+                          </span>
+                        </span>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-400/50 font-mono text-[11px] text-emerald-300 font-black">
+                          Total Requisition Qty: {totalReqQty} Pcs
+                        </span>
+                      </div>
+                      {sizeRun.length > 1 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {sizeRun.map((b, bIdx) => (
+                            <span
+                              key={`${b.size}-${bIdx}`}
+                              className="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-400/40 text-amber-200 font-mono text-[9px] font-bold"
+                            >
+                              {b.size}: {b.quantity}pc
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      PO: <span className="font-mono text-slate-300">{sample.poNumber}</span> • Line:{' '}
-                      <span className="font-mono text-slate-300">{sample.lineCode}</span> • Buyer:{' '}
-                      <span className="text-slate-300">{sample.buyer}</span>
-                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
+                        STAGE_CONFIG[sample.stage].badgeBg
+                      }`}
+                    >
+                      {STAGE_CONFIG[sample.stage].badgeText}
+                    </span>
+
+                    {STAGE_CONFIG[sample.stage].nextStage && (
+                      <button
+                        onClick={() => onAdvanceStage(sample)}
+                        className="flex items-center gap-1 px-3 py-1 bg-indigo-600/90 hover:bg-indigo-600 text-white text-xs font-semibold rounded-lg shadow transition-all cursor-pointer"
+                        title={`Advance to ${STAGE_CONFIG[STAGE_CONFIG[sample.stage].nextStage!].label}`}
+                      >
+                        <span>Move to {STAGE_CONFIG[STAGE_CONFIG[sample.stage].nextStage!].shortLabel}</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className={`text-xs font-bold px-2.5 py-1 rounded-full border ${
-                      STAGE_CONFIG[sample.stage].badgeBg
-                    }`}
-                  >
-                    {STAGE_CONFIG[sample.stage].badgeText}
-                  </span>
-
-                  {STAGE_CONFIG[sample.stage].nextStage && (
-                    <button
-                      onClick={() => onAdvanceStage(sample)}
-                      className="flex items-center gap-1 px-3 py-1 bg-indigo-600/90 hover:bg-indigo-600 text-white text-xs font-semibold rounded-lg shadow transition-all cursor-pointer"
-                      title={`Advance to ${STAGE_CONFIG[STAGE_CONFIG[sample.stage].nextStage!].label}`}
-                    >
-                      <span>Move to {STAGE_CONFIG[STAGE_CONFIG[sample.stage].nextStage!].shortLabel}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+                {/* Progress bar visual tracking */}
+                <ProgressBar currentStage={sample.stage} size="standard" />
               </div>
-
-              {/* Progress bar visual tracking */}
-              <ProgressBar currentStage={sample.stage} size="standard" />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

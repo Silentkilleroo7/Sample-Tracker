@@ -7,6 +7,7 @@ import {
   GOLD_SEAL_SIZE_RUN_PRESETS,
   getSampleImage,
   getSampleTypeTone,
+  getPriorityTone,
   getEffectiveSizeBreakdown,
 } from '../types/sample';
 import { StyleProductImage } from './StyleProductImage';
@@ -145,7 +146,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
         requiredDate: formatVolarDate(sample.targetParcelDate),
         buyer: sample.buyer || '',
         requestedBy: '',
-        priorityType: sample.priority === 'urgent' ? 'urgent' : 'normal',
+        priorityType: sample.priority || 'normal',
         sampleType: sample.sampleType || '',
         descriptionCode: sample.styleCode || '',
         styleName: sample.styleName || '',
@@ -240,7 +241,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
       requiredDate: formatVolarDate(sample.targetParcelDate),
       buyer: sample.buyer || '',
       requestedBy: '',
-      priorityType: sample.priority === 'urgent' ? 'urgent' : 'normal',
+      priorityType: sample.priority || 'normal',
       sampleType: sample.sampleType || '',
       descriptionCode: sample.styleCode || '',
       styleName: sample.styleName || '',
@@ -303,6 +304,14 @@ Special Instructions: ${form.specialInstructions}
                 <h2 className="text-base sm:text-lg font-black text-white">
                   Sample Requisition Form
                 </h2>
+                <span
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${
+                    getPriorityTone(form.priorityType || sample.priority).badgeClass
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${getPriorityTone(form.priorityType || sample.priority).dotClass}`}></span>
+                  <span>{getPriorityTone(form.priorityType || sample.priority).label}</span>
+                </span>
                 <SampleTypeBadge sampleType={form.sampleType || sample.sampleType} size="xs" />
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
                   Volar Fashion Format
@@ -514,32 +523,51 @@ Special Instructions: ${form.specialInstructions}
               <div className="col-span-2 p-1.5 font-bold uppercase bg-slate-100 border-r border-black flex items-center">
                 PRIORITY:
               </div>
-              <div className="col-span-4 p-1 border-r border-black flex items-center gap-1.5">
+              <div className="col-span-4 p-1 border-r border-black flex flex-wrap items-center gap-1">
                 <button
                   type="button"
                   disabled={isRequisitionLocked}
                   onClick={() => !isRequisitionLocked && setForm({ ...form, priorityType: 'urgent' })}
-                  className={`px-2 py-1 border border-black font-bold text-[10px] flex items-center gap-1 ${
+                  className={`px-1.5 py-0.5 border border-black font-bold text-[9px] flex items-center gap-1 ${
                     isRequisitionLocked ? 'cursor-default' : 'cursor-pointer'
                   } ${
-                    form.priorityType === 'urgent' ? 'bg-black text-white font-black' : 'bg-white text-black'
+                    form.priorityType === 'urgent'
+                      ? 'bg-red-600 text-white font-black border-red-800'
+                      : 'bg-white text-black'
                   }`}
                 >
-                  <span>{form.priorityType === 'urgent' ? '[X]' : '[  ]'}</span>
+                  <span>{form.priorityType === 'urgent' ? '[X]' : '[ ]'}</span>
                   <span>URGENT (1 DAY)</span>
                 </button>
                 <button
                   type="button"
                   disabled={isRequisitionLocked}
-                  onClick={() => !isRequisitionLocked && setForm({ ...form, priorityType: 'normal' })}
-                  className={`px-2 py-1 border border-black font-bold text-[10px] flex items-center gap-1 ${
+                  onClick={() => !isRequisitionLocked && setForm({ ...form, priorityType: 'high' })}
+                  className={`px-1.5 py-0.5 border border-black font-bold text-[9px] flex items-center gap-1 ${
                     isRequisitionLocked ? 'cursor-default' : 'cursor-pointer'
                   } ${
-                    form.priorityType === 'normal' ? 'bg-black text-white font-black' : 'bg-white text-black'
+                    form.priorityType === 'high'
+                      ? 'bg-rose-200 text-rose-950 font-black border-rose-600'
+                      : 'bg-white text-black'
                   }`}
                 >
-                  <span>{form.priorityType === 'normal' ? '[X]' : '[  ]'}</span>
-                  <span>NORMAL(2 DAYS/ MORE)</span>
+                  <span>{form.priorityType === 'high' ? '[X]' : '[ ]'}</span>
+                  <span>HIGH</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={isRequisitionLocked}
+                  onClick={() => !isRequisitionLocked && setForm({ ...form, priorityType: 'normal' })}
+                  className={`px-1.5 py-0.5 border border-black font-bold text-[9px] flex items-center gap-1 ${
+                    isRequisitionLocked ? 'cursor-default' : 'cursor-pointer'
+                  } ${
+                    form.priorityType === 'normal'
+                      ? 'bg-white text-black font-black ring-2 ring-black'
+                      : 'bg-white text-black opacity-75'
+                  }`}
+                >
+                  <span>{form.priorityType === 'normal' ? '[X]' : '[ ]'}</span>
+                  <span>NORMAL (2D+)</span>
                 </button>
               </div>
 

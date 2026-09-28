@@ -4,6 +4,8 @@ import {
   getSampleImage,
   getSampleTypeTone,
   getEffectiveSizeBreakdown,
+  getEffectiveSizeName,
+  getEffectiveRequisitionQuantity,
   getEffectivePerPcsConsumption,
 } from '../types/sample';
 import { FabricItem } from '../types/fabric';
@@ -252,6 +254,9 @@ export function mapRowToSample(row: any): SampleItem {
   const selectedImg = sample.thumbnail?.trim() || (sample.images && sample.images[0]?.trim()) || '';
   sample.thumbnail = selectedImg || undefined;
   sample.images = selectedImg ? [selectedImg] : [];
+  sample.size = getEffectiveSizeName(sample);
+  sample.quantity = getEffectiveRequisitionQuantity(sample);
+  sample.sizeBreakdown = getEffectiveSizeBreakdown(sample);
   return sample;
 }
 
@@ -289,6 +294,8 @@ export function mapSampleToRow(sample: SampleItem) {
   };
 
   const effectiveSizeBreakdown = getEffectiveSizeBreakdown(sample);
+  const effectiveSizeName = getEffectiveSizeName(sample);
+  const effectiveReqQty = getEffectiveRequisitionQuantity(sample);
   const effectivePerPcsConsumption = getEffectivePerPcsConsumption(sample);
 
   const enrichedRequisitionForm = sample.requisitionForm
@@ -344,9 +351,9 @@ export function mapSampleToRow(sample: SampleItem) {
     sample_type: sample.sampleType,
     sample_color_tone: sampleColorTone,
     color: sample.color,
-    size: sample.size,
+    size: effectiveSizeName,
     size_breakdown: effectiveSizeBreakdown,
-    quantity: sample.quantity,
+    quantity: effectiveReqQty,
     fabric_id: sample.fabricId,
     fabric_code: sample.fabricCode,
     fabric_name: sample.fabricName,

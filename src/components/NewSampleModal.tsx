@@ -10,6 +10,7 @@ import {
   GOLD_SEAL_SIZE_RUN_PRESETS,
   getSampleImage,
   getSampleTypeTone,
+  getPriorityTone,
   getEffectiveSizeBreakdown,
   getEffectivePerPcsConsumption,
 } from '../types/sample';
@@ -332,11 +333,19 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
 
     const nextSizes = Array.from(new Set([...listedSizes, ...parts]));
     const nextQtyMap: Record<string, number> = { ...sizeQuantities };
-    nextSizes.forEach((sz) => {
-      if (!nextQtyMap[sz] || nextQtyMap[sz] < 1) {
-        nextQtyMap[sz] = 1;
-      }
-    });
+    if (listedSizes.length === 0 && quantity > 1 && nextSizes.length > 0) {
+      const perSize = Math.max(1, Math.floor(quantity / nextSizes.length));
+      const rem = Math.max(0, quantity - perSize * nextSizes.length);
+      nextSizes.forEach((sz, idx) => {
+        nextQtyMap[sz] = perSize + (idx < rem ? 1 : 0);
+      });
+    } else {
+      nextSizes.forEach((sz) => {
+        if (!nextQtyMap[sz] || nextQtyMap[sz] < 1) {
+          nextQtyMap[sz] = 1;
+        }
+      });
+    }
 
     setListedSizes(nextSizes);
     setSizeQuantities(nextQtyMap);
@@ -377,7 +386,9 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       handleRemoveListedSize(s);
     } else {
       const nextSizes = [...listedSizes, s];
-      const nextQtyMap = { ...sizeQuantities, [s]: sizeQuantities[s] || 1 };
+      const initialQtyForS =
+        listedSizes.length === 0 && quantity > 1 ? quantity : sizeQuantities[s] || 1;
+      const nextQtyMap = { ...sizeQuantities, [s]: initialQtyForS };
       setListedSizes(nextSizes);
       setSizeQuantities(nextQtyMap);
       syncTotalQuantityFromMap(nextSizes, nextQtyMap);
@@ -527,6 +538,15 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       pendingParts.length > 0
         ? Array.from(new Set([...listedSizes, ...pendingParts]))
         : listedSizes;
+    if (listedSizes.length === 0 && combined.length > 0) {
+      const totalToDistribute = Math.max(combined.length, quantity || 1);
+      const perSize = Math.max(1, Math.floor(totalToDistribute / combined.length));
+      const rem = Math.max(0, totalToDistribute - perSize * combined.length);
+      return combined.map((sz, idx) => ({
+        size: sz,
+        quantity: perSize + (idx < rem ? 1 : 0),
+      }));
+    }
     return combined.map((sz) => ({
       size: sz,
       quantity: Math.max(1, Number(sizeQuantities[sz] ?? 1)),
@@ -884,7 +904,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         shipmentDate,
         buyer: finalBuyer,
         requestedBy: requestedBy.trim() || currentUserName,
-        priorityType: priority === 'urgent' ? 'urgent' : 'normal',
+        priorityType: priority,
         sampleType: finalSampleType,
         descriptionCode: styleCode.trim().toUpperCase(),
         styleName: styleName.trim(),
@@ -1765,27 +1785,82 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                 onChange={(e) => {
                   const val = Math.max(1, Number(e.target.value) || 1);
                   setQuantity(val);
+                  if (listedSizes.length === 1) {
+                    setSizeQuantities({ [listedSizes[0]]: val });
+                  } else if (listedSizes.length > 1) {
+                    const perSize = Math.max(1, Math.floor(val / listedSizes.length));
+                    const rem = Math.max(0, val - perSize * listedSizes.length);
+                    const nextMap: Record<string, number> = {};
+                    listedSizes.forEach((sz, idx) => {
+                      nextMap[sz] = perSize + (idx < rem ? 1 : 0);
+                    });
+                    setSizeQuantities(nextMap);
+                  }
                 }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono font-bold"
               />
               {listedSizes.length > 1 && (
                 <span className="text-[9px] text-amber-300 font-mono block mt-0.5">
-                  Auto-summed across {listedSizes.length} sizes
+                  Summed across {listedSizes.length} sizes ({effectiveTotalQuantity} pcs total)
                 </span>
               )}
             </div>
 
-            {/* Priority */}
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1">Priority</label>
+            {/* Priority (Normal = White, High = Little Red, Urgent = Fully Red) */}
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-300 font-semibold flex items-center gap-1.5">
+                  <span>Requisition Priority</span>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] ${
+                      getPriorityTone(priority).badgeClass
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${getPriorityTone(priority).dotClass}`}></span>
+                    <span>{getPriorityTone(priority).label}</span>
+                  </span>
+                </label>
+                <span className="text-[10px] text-slate-400">
+                  Normal: White • High: Little Red • Urgent: Fully Red
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 mb-2">
+                {(['normal', 'high', 'urgent'] as SamplePriority[]).map((pLevel) => {
+                  const pTone = getPriorityTone(pLevel);
+                  const isSelected = priority === pLevel;
+                  return (
+                    <button
+                      key={pLevel}
+                      type="button"
+                      onClick={() => setPriority(pLevel)}
+                      className={`px-2.5 py-2 rounded-xl text-xs border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        isSelected ? pTone.activePillClass : pTone.idlePillClass
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${pTone.dotClass}`}></span>
+                      <span>{pTone.shortLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as SamplePriority)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-semibold"
+                className={`w-full border rounded-xl p-2 text-xs transition-all cursor-pointer focus:outline-none focus:ring-2 ${
+                  getPriorityTone(priority).selectClass
+                }`}
               >
-                <option value="normal">🔵 Normal</option>
-                <option value="high">🟠 High</option>
-                <option value="urgent">🔴 Urgent</option>
+                <option value="normal" className="bg-white text-slate-950 font-bold">
+                  ⚪ Normal (White Color)
+                </option>
+                <option value="high" className="bg-rose-950 text-rose-200 font-bold">
+                  🌸 High (Little Red Color)
+                </option>
+                <option value="urgent" className="bg-red-600 text-white font-black">
+                  🔴 Urgent (Fully Red Color)
+                </option>
               </select>
             </div>
           </div>
@@ -2395,7 +2470,11 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               </div>
 
               {/* Summary Card */}
-              <div className="p-4 rounded-xl bg-slate-800/70 border border-slate-700 space-y-3">
+              <div
+                className={`p-4 rounded-xl border space-y-3 ${
+                  getPriorityTone(priority).cardClass
+                }`}
+              >
                 <div className="flex items-center gap-3 pb-3 border-b border-slate-700/80">
                   {thumbnail && (
                     <img
@@ -2413,6 +2492,14 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                         sampleType={sampleType.trim() || 'Initial Sample'}
                         size="sm"
                       />
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] ${
+                          getPriorityTone(priority).badgeClass
+                        }`}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${getPriorityTone(priority).dotClass}`}></span>
+                        <span>{getPriorityTone(priority).label}</span>
+                      </span>
                       <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold text-[11px]">
                         Shipment: {shipmentDate}
                       </span>
@@ -2466,7 +2553,14 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                   </div>
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Priority Level</span>
-                    <span className="font-bold uppercase text-rose-300">{priority}</span>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] mt-0.5 ${
+                        getPriorityTone(priority).badgeClass
+                      }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${getPriorityTone(priority).dotClass}`}></span>
+                      <span>{getPriorityTone(priority).label}</span>
+                    </span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Thread Note</span>

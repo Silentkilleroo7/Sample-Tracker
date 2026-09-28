@@ -9,7 +9,10 @@ import {
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getSampleTypeTone,
+  getPriorityTone,
   getEffectiveSizeBreakdown,
+  getEffectiveSizeName,
+  getEffectiveRequisitionQuantity,
   getEffectivePerPcsConsumption,
 } from '../types/sample';
 import { UserRole, canUserAdvanceStage, ROLE_BADGE_CONFIG } from '../types/auth';
@@ -395,9 +398,9 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
             className="min-h-[40px] bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate"
           >
             <option value="all">All Priorities</option>
-            <option value="urgent">Urgent</option>
-            <option value="high">High</option>
-            <option value="normal">Normal</option>
+            <option value="urgent">🔴 Urgent (Fully Red)</option>
+            <option value="high">🌸 High (Little Red)</option>
+            <option value="normal">⚪ Normal (White)</option>
           </select>
 
           <div className="flex items-center justify-end sm:justify-start gap-1.5 text-slate-400">
@@ -430,13 +433,13 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
               const canAdvance =
                 hasNextStage &&
                 canUserAdvanceStage(userRole, sample.stage, stageConfig.nextStage!);
-              const typeTone = getSampleTypeTone(sample.sampleType);
+              const pTone = getPriorityTone(sample.priority);
               const sizeRun = getEffectiveSizeBreakdown(sample);
 
               return (
                 <div
                   key={sample.id}
-                  className={`p-3.5 space-y-3 transition-colors ${typeTone.rowTintClass}`}
+                  className={`p-3.5 space-y-3 transition-colors ${pTone.rowClass}`}
                 >
                   {/* Top Row: Thumbnail + Style Header + Stage Badge */}
                   <div className="flex items-start gap-3">
@@ -447,15 +450,16 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                     >
                       <div className="flex flex-wrap items-center justify-between gap-1.5">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-mono font-black text-indigo-400 px-1.5 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/30 text-xs">
+                          <span className="font-mono font-black text-indigo-300 px-1.5 py-0.5 rounded bg-indigo-950/90 border border-indigo-500/40 text-xs">
                             {sample.styleCode}
                           </span>
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border ${pTone.badgeClass}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                            <span>{pTone.label}</span>
+                          </span>
                           <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
-                          {sample.priority === 'urgent' && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                              URGENT
-                            </span>
-                          )}
                         </div>
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${stageConfig.badgeBg}`}
@@ -481,15 +485,17 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                       <div className="text-slate-400">
                         Color: <strong className="text-slate-200">{sample.color}</strong>
                       </div>
-                      <div className="text-slate-400 mt-0.5">
-                        Size:{' '}
-                        <strong className="text-slate-200 font-mono">{sample.size}</strong>
+                      <div className="text-indigo-200 mt-0.5 font-mono">
+                        Size Name:{' '}
+                        <strong className="text-white font-bold">{getEffectiveSizeName(sample)}</strong>
                         {sizeRun.length > 1 && (
                           <span className="ml-1 text-amber-300 font-mono">
                             ({sizeRun.length} sizes)
                           </span>
-                        )}{' '}
-                        · Qty: <strong className="text-white font-mono">{sample.quantity}</strong>
+                        )}
+                      </div>
+                      <div className="text-emerald-300 font-mono font-black mt-0.5">
+                        Total Req Qty: {getEffectiveRequisitionQuantity(sample)} Pcs
                       </div>
                     </div>
                     <div className="text-right">
@@ -640,12 +646,12 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                 {paginatedSamples.map((sample) => {
                   const stageConfig = STAGE_CONFIG[sample.stage];
                   const hasNextStage = !!stageConfig.nextStage;
-                  const typeTone = getSampleTypeTone(sample.sampleType);
+                  const pTone = getPriorityTone(sample.priority);
 
                   return (
                     <tr
                       key={sample.id}
-                      className={`transition-colors group ${typeTone.rowTintClass}`}
+                      className={`transition-colors group ${pTone.rowClass}`}
                     >
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
@@ -655,14 +661,15 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                             className="cursor-pointer min-w-0 flex-1"
                           >
                             <div className="flex items-center gap-2">
-                              <span className="font-mono font-black text-indigo-400 px-1.5 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/30 text-xs">
+                              <span className="font-mono font-black text-indigo-300 px-1.5 py-0.5 rounded bg-indigo-950/90 border border-indigo-500/40 text-xs">
                                 {sample.styleCode}
                               </span>
-                              {sample.priority === 'urgent' && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                                  URGENT
-                                </span>
-                              )}
+                              <span
+                                className={`inline-flex items-center gap-1 text-[10px] px-1.5 py-0.2 rounded border ${pTone.badgeClass}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                                <span>{pTone.label}</span>
+                              </span>
                               {sample.isRequisitionLocked && (
                                 <span
                                   className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 border border-amber-500/30 flex items-center gap-0.5"
@@ -676,17 +683,21 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                             <div className="font-semibold text-white mt-1 group-hover:text-indigo-300 transition-colors line-clamp-1">
                               {sample.styleName}
                             </div>
-                            <div className="text-[11px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                            <div className="text-[11px] text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
                               <span>
-                                Color: {sample.color} • Wash: {sample.washDetails?.washType || 'N/A'} • Size:{' '}
-                                <strong className="text-slate-200 font-mono">{sample.size}</strong>
+                                Color: {sample.color} • Wash: {sample.washDetails?.washType || 'N/A'}
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/40 font-mono text-[10px] text-indigo-200 font-bold">
+                                Size Name: <strong className="text-white">{getEffectiveSizeName(sample)}</strong>
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 font-mono text-[10px] text-emerald-300 font-black">
+                                Total Req Qty: {getEffectiveRequisitionQuantity(sample)} Pcs
                               </span>
                               {getEffectiveSizeBreakdown(sample).length > 1 && (
                                 <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-400/40 font-mono text-[9px] font-bold">
                                   {getEffectiveSizeBreakdown(sample).length} Sizes Run
                                 </span>
                               )}
-                              <span>• Qty: {sample.quantity}</span>
                             </div>
                           </div>
                         </div>
@@ -978,12 +989,12 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
 
                 <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 scrollbar-thin">
                   {stageSamples.map((sample) => {
-                    const typeTone = getSampleTypeTone(sample.sampleType);
+                    const pTone = getPriorityTone(sample.priority);
                     return (
                     <div
                       key={sample.id}
                       onClick={() => onSelectSample(sample)}
-                      className={`p-2.5 rounded-xl border hover:border-indigo-500/50 transition-all cursor-pointer shadow-md group ${typeTone.cardTintClass}`}
+                      className={`p-2.5 rounded-xl border hover:border-indigo-400 transition-all cursor-pointer shadow-md group ${pTone.cardClass}`}
                     >
                       {getSampleImage(sample) ? (
                         <div
@@ -1004,11 +1015,10 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                           <div className="absolute top-1.5 left-1.5 font-mono font-black text-indigo-300 text-[10px] px-1.5 py-0.5 rounded bg-black/75 backdrop-blur-xs border border-indigo-500/30">
                             {sample.styleCode}
                           </div>
-                          {sample.priority === 'urgent' && (
-                            <div className="absolute top-1.5 right-1.5 text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-600/90 text-white shadow">
-                              URGENT
-                            </div>
-                          )}
+                          <div className={`absolute top-1.5 right-1.5 text-[9px] px-1.5 py-0.2 rounded border inline-flex items-center gap-1 ${pTone.badgeClass}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                            <span>{pTone.label}</span>
+                          </div>
                           <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/75 text-indigo-200 text-[9px] font-bold flex items-center gap-1 opacity-85 group-hover/kimg:opacity-100 group-hover/kimg:bg-indigo-600 group-hover/kimg:text-white transition-all">
                             <ZoomIn className="w-2.5 h-2.5" />
                             <span>Double-click zoom</span>
@@ -1019,11 +1029,10 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                           <span className="font-mono font-black text-indigo-300 text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-indigo-500/30">
                             {sample.styleCode}
                           </span>
-                          {sample.priority === 'urgent' && (
-                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-600/90 text-white shadow">
-                              URGENT
-                            </span>
-                          )}
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded border inline-flex items-center gap-1 ${pTone.badgeClass}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                            <span>{pTone.label}</span>
+                          </span>
                         </div>
                       )}
                       <h4 className="font-bold text-white text-xs line-clamp-2 group-hover:text-indigo-300 transition-colors">
@@ -1036,6 +1045,16 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                         </div>
                         <div>PO: <span className="font-mono text-slate-300">{sample.poNumber}</span></div>
                         <div>Line: <span className="font-mono text-slate-300">{sample.lineCode}</span></div>
+                        <div className="grid grid-cols-2 gap-1 pt-1 font-mono text-[10px]">
+                          <div className="px-1.5 py-1 rounded bg-indigo-950/80 border border-indigo-500/40 text-indigo-200">
+                            <span className="text-[8px] uppercase block text-indigo-300 font-bold">Size Name</span>
+                            <strong className="text-white">{getEffectiveSizeName(sample)}</strong>
+                          </div>
+                          <div className="px-1.5 py-1 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
+                            <span className="text-[8px] uppercase block text-emerald-300 font-bold">Total Qty</span>
+                            <strong className="text-emerald-200 font-black">{getEffectiveRequisitionQuantity(sample)} Pcs</strong>
+                          </div>
+                        </div>
                         <div>Fabric: <span className="font-mono text-slate-300">{sample.fabricCode}</span></div>
                         <div className="text-emerald-400 font-mono text-[10px] font-bold">
                           Cons: {getEffectivePerPcsConsumption(sample)} yds/pc • Ded: {sample.fabricRequiredYards} yds

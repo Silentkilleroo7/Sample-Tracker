@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SampleItem, getEffectivePerPcsConsumption } from '../types/sample';
+import { SampleItem, getEffectivePerPcsConsumption, getPriorityTone } from '../types/sample';
 import { UserRole } from '../types/auth';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
@@ -149,11 +149,12 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filtered.map((sample) => {
             const wash = sample.washDetails;
+            const pTone = getPriorityTone(sample.priority);
 
             return (
               <div
                 key={sample.id}
-                className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-cyan-500/50 transition-all shadow-xl flex flex-col justify-between"
+                className={`p-5 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${pTone.cardClass}`}
               >
                 <div>
                   {/* Top Bar */}
@@ -165,15 +166,16 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
                           <span className="font-mono font-black text-xs text-cyan-300 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/30">
                             {sample.styleCode}
                           </span>
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${pTone.badgeClass}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                            <span>{pTone.label}</span>
+                          </span>
                           <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
-                          <span className="text-xs text-slate-400 font-medium">
+                          <span className="text-xs text-slate-300 font-medium">
                             PO: {sample.poNumber} • Line: {sample.lineCode}
                           </span>
-                          {sample.priority === 'urgent' && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                              URGENT
-                            </span>
-                          )}
                         </div>
                         <h3
                           onClick={() => onSelectSample(sample)}
@@ -181,8 +183,8 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
                         >
                           {sample.styleName}
                         </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Buyer: <strong className="text-slate-200">{sample.buyer}</strong> • Color: {sample.color} • Fabric: {sample.fabricCode}
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          Buyer: <strong className="text-white">{sample.buyer}</strong> • Color: {sample.color} • Size: <strong className="text-white font-mono">{sample.size}</strong> • Qty: <strong className="text-emerald-300 font-mono">{sample.quantity} Pcs</strong>
                         </p>
                         <div className="mt-1 inline-flex items-center gap-1.5 text-[10px] font-mono font-bold text-emerald-400">
                           <Ruler className="w-3 h-3" />

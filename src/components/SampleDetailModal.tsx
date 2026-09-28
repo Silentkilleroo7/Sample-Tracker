@@ -8,6 +8,7 @@ import {
   getGranularApprovalStatus,
   getEffectiveSizeBreakdown,
   getEffectivePerPcsConsumption,
+  getPriorityTone,
 } from '../types/sample';
 import { UserRole, canUserAdvanceStage } from '../types/auth';
 import { ProgressBar } from './ProgressBar';
@@ -93,11 +94,14 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
               >
                 {currentStageConfig.badgeText}
               </span>
-              {sample.priority === 'urgent' && (
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                  URGENT
-                </span>
-              )}
+              <span
+                className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${
+                  getPriorityTone(sample.priority).badgeClass
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${getPriorityTone(sample.priority).dotClass}`}></span>
+                <span>{getPriorityTone(sample.priority).label}</span>
+              </span>
               {sample.isRequisitionLocked && (
                 <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
                   <Lock className="w-3 h-3" />

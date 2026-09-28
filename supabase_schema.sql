@@ -619,3 +619,98 @@ BEGIN
   END IF;
 END $$;
 
+-- =====================================================================================
+-- 13. SIZE NAME, TOTAL REQUISITION QUANTITY & PRIORITY COLOR TONE SYNC + BACKFILL
+-- =====================================================================================
+ALTER TABLE public.samples
+  ADD COLUMN IF NOT EXISTS size TEXT NOT NULL DEFAULT 'Standard',
+  ADD COLUMN IF NOT EXISTS size_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS priority TEXT NOT NULL DEFAULT 'normal',
+  ADD COLUMN IF NOT EXISTS priority_color_tone TEXT NOT NULL DEFAULT 'white';
+
+-- Trigger function to automatically synchronize:
+--   1. size (Size Name string, e.g. '32, 34, 36' or 'M, L')
+--   2. quantity (Total Requisition Quantity in Pcs summed from size_breakdown or quantity)
+--   3. size_breakdown (Per-size breakdown JSONB array)
+--   4. priority_color_tone ('white' for normal, 'light_red' for high, 'red' for urgent)
+CREATE OR REPLACE FUNCTION public.fn_sync_sample_size_qty_and_priority()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_size_names TEXT;
+  v_total_qty INTEGER;
+BEGIN
+  -- Normalize priority ('normal', 'high', 'urgent') and set priority_color_tone
+  NEW.priority := LOWER(TRIM(COALESCE(NULLIF(NEW.priority, ''), 'normal')));
+  IF NEW.priority NOT IN ('normal', 'high', 'urgent') THEN
+    NEW.priority := 'normal';
+  END IF;
+
+  NEW.priority_color_tone := CASE
+    WHEN NEW.priority = 'urgent' THEN 'red'
+    WHEN NEW.priority = 'high' THEN 'light_red'
+    ELSE 'white'
+  END;
+
+  -- If size_breakdown is empty in column, check requisition_form->'sizeBreakdown'
+  IF (NEW.size_breakdown IS NULL OR jsonb_typeof(NEW.size_breakdown) <> 'array' OR jsonb_array_length(NEW.size_breakdown) = 0)
+     AND NEW.requisition_form IS NOT NULL
+     AND jsonb_typeof(NEW.requisition_form -> 'sizeBreakdown') = 'array'
+     AND jsonb_array_length(NEW.requisition_form -> 'sizeBreakdown') > 0 THEN
+    NEW.size_breakdown := NEW.requisition_form -> 'sizeBreakdown';
+  END IF;
+
+  -- Extract Size Name(s) and Total Requisition Quantity from size_breakdown if present
+  IF NEW.size_breakdown IS NOT NULL
+     AND jsonb_typeof(NEW.size_breakdown) = 'array'
+     AND jsonb_array_length(NEW.size_breakdown) > 0 THEN
+    SELECT
+      STRING_AGG(TRIM(COALESCE(elem ->> 'size', '')), ', '),
+      SUM(GREATEST(COALESCE((elem ->> 'quantity'):: integer, 1), 1))
+    INTO v_size_names, v_total_qty
+    FROM jsonb_array_elements(NEW.size_breakdown) AS elem
+    WHERE TRIM(COALESCE(elem ->> 'size', '')) <> '';
+
+    IF v_size_names IS NOT NULL AND v_size_names <> '' THEN
+      NEW.size := v_size_names;
+    END IF;
+
+    IF v_total_qty IS NOT NULL AND v_total_qty > 0 THEN
+      NEW.quantity := GREATEST(COALESCE(NEW.quantity, 1), v_total_qty);
+    END IF;
+  END IF;
+
+  -- Ensure size name and quantity are never empty or zero
+  NEW.size := COALESCE(NULLIF(TRIM(NEW.size), ''), 'Standard');
+  NEW.quantity := GREATEST(COALESCE(NEW.quantity, 1), 1);
+
+  -- If size_breakdown is still empty, build a default breakdown entry from size & quantity
+  IF NEW.size_breakdown IS NULL
+     OR jsonb_typeof(NEW.size_breakdown) <> 'array'
+     OR jsonb_array_length(NEW.size_breakdown) = 0 THEN
+    NEW.size_breakdown := jsonb_build_array(
+      jsonb_build_object('size', NEW.size, 'quantity', NEW.quantity)
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_sample_size_qty_and_priority ON public.samples;
+CREATE TRIGGER trg_sync_sample_size_qty_and_priority
+  BEFORE INSERT OR UPDATE ON public.samples
+  FOR EACH ROW EXECUTE FUNCTION public.fn_sync_sample_size_qty_and_priority();
+
+-- Backfill all existing samples so every style has Size Name, Total Requisition Quantity,
+-- Size Breakdown, and Priority Color Tone populated
+UPDATE public.samples
+SET
+  size = COALESCE(NULLIF(TRIM(size), ''), 'Standard'),
+  quantity = GREATEST(COALESCE(quantity, 1), 1),
+  priority = COALESCE(NULLIF(LOWER(TRIM(priority)), ''), 'normal'),
+  updated_at = NOW();
+
+

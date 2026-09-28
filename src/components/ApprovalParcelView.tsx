@@ -8,6 +8,7 @@ import {
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getGranularApprovalStatus,
+  getPriorityTone,
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
@@ -226,15 +227,12 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
             const aDetails = isEditing ? tempApproval! : sample.approvalDetails;
             const isReadyForParcel = sample.stage === 'ready_for_parcel';
             const isApprovalComments = sample.stage === 'approval_comments';
+            const pTone = getPriorityTone(sample.priority);
 
             return (
               <div
                 key={sample.id}
-                className={`p-5 rounded-2xl border transition-all shadow-xl ${
-                  isApprovalComments
-                    ? 'bg-slate-900/90 border-slate-800 hover:border-pink-500/50'
-                    : 'bg-slate-900/90 border-slate-800 hover:border-emerald-500/50'
-                }`}
+                className={`p-5 rounded-2xl border transition-all shadow-xl ${pTone.cardClass}`}
               >
                 {/* Header Information */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-800">
@@ -242,13 +240,21 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                     <StyleProductImage sample={sample} size="md" />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono font-black text-xs text-indigo-400 px-2 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/30">
+                        <span className="font-mono font-black text-xs text-indigo-300 px-2 py-0.5 rounded bg-indigo-950/90 border border-indigo-500/40">
                           {sample.styleCode}
                         </span>
+                        <span
+                          className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${pTone.badgeClass}`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                          <span>{pTone.label}</span>
+                        </span>
                         <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
-                        <span className="text-xs text-slate-400 font-medium">
-                          PO: <span className="font-mono text-slate-300">{sample.poNumber}</span> • Buyer:{' '}
-                          <strong className="text-slate-200">{sample.buyer}</strong>
+                        <span className="text-xs text-slate-300 font-medium">
+                          PO: <span className="font-mono text-white">{sample.poNumber}</span> • Buyer:{' '}
+                          <strong className="text-white">{sample.buyer}</strong> • Size:{' '}
+                          <strong className="text-white font-mono">{sample.size}</strong> • Qty:{' '}
+                          <strong className="text-emerald-300 font-mono">{sample.quantity} Pcs</strong>
                         </span>
                         <span
                           className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${

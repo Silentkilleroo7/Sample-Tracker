@@ -188,7 +188,7 @@ export interface VolarRequisitionForm {
   shipmentDate?: string;
   buyer: string;
   requestedBy: string;
-  priorityType: 'urgent' | 'normal';
+  priorityType: SamplePriority;
   sampleType: string;
   descriptionCode: string;
   styleName: string;
@@ -268,7 +268,15 @@ export function getEffectiveSizeBreakdown(sample: Partial<SampleItem>): SizeBrea
   ) {
     return sample.requisitionForm.sizeBreakdown;
   }
-  const parsedSizes = (sample.size || '')
+  let rawSizeStr = (sample.size || '').trim();
+  if (!rawSizeStr && sample.requisitionForm?.sampleSizeLabel) {
+    const label = sample.requisitionForm.sampleSizeLabel;
+    const sizeMatch = label.match(/Size:\s*([^\n(]+)/i);
+    if (sizeMatch && sizeMatch[1]) {
+      rawSizeStr = sizeMatch[1].trim();
+    }
+  }
+  const parsedSizes = rawSizeStr
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
@@ -278,7 +286,83 @@ export function getEffectiveSizeBreakdown(sample: Partial<SampleItem>): SizeBrea
     parsedSizes.length > 0 && totalQty >= parsedSizes.length
       ? Math.max(1, Math.floor(totalQty / parsedSizes.length))
       : 1;
-  return parsedSizes.map((sz) => ({ size: sz, quantity: perSizeQty }));
+  const remainder =
+    parsedSizes.length > 0 && totalQty > parsedSizes.length
+      ? totalQty - perSizeQty * parsedSizes.length
+      : 0;
+  return parsedSizes.map((sz, idx) => ({
+    size: sz,
+    quantity: perSizeQty + (idx < remainder ? 1 : 0),
+  }));
+}
+
+/**
+ * Returns the clear, human-readable Size Name(s) for a sample across all stored fields
+ */
+export function getEffectiveSizeName(sample: Partial<SampleItem>): string {
+  const breakdown =
+    sample.sizeBreakdown && sample.sizeBreakdown.length > 0
+      ? sample.sizeBreakdown
+      : sample.requisitionForm?.sizeBreakdown &&
+        sample.requisitionForm.sizeBreakdown.length > 0
+      ? sample.requisitionForm.sizeBreakdown
+      : [];
+
+  if (breakdown.length > 0) {
+    const fromBreakdown = breakdown
+      .map((b) => (b.size || '').trim())
+      .filter(Boolean)
+      .join(', ');
+    if (fromBreakdown) return fromBreakdown;
+  }
+
+  if (sample.size && sample.size.trim()) {
+    return sample.size.trim();
+  }
+
+  if (sample.requisitionForm?.sampleSizeLabel) {
+    const label = sample.requisitionForm.sampleSizeLabel;
+    const sizeMatch = label.match(/Size:\s*([^\n(]+)/i);
+    if (sizeMatch && sizeMatch[1] && sizeMatch[1].trim()) {
+      return sizeMatch[1].trim();
+    }
+  }
+
+  return 'Standard';
+}
+
+/**
+ * Returns the effective Total Requisition Quantity (in pcs) for a sample
+ */
+export function getEffectiveRequisitionQuantity(sample: Partial<SampleItem>): number {
+  const breakdown =
+    sample.sizeBreakdown && sample.sizeBreakdown.length > 0
+      ? sample.sizeBreakdown
+      : sample.requisitionForm?.sizeBreakdown &&
+        sample.requisitionForm.sizeBreakdown.length > 0
+      ? sample.requisitionForm.sizeBreakdown
+      : [];
+
+  const breakdownSum =
+    breakdown.length > 0
+      ? breakdown.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0)
+      : 0;
+
+  const directQty = Number(sample.quantity || 0);
+
+  let parsedTextQty = 0;
+  if (sample.requisitionForm?.quantityText) {
+    const m = sample.requisitionForm.quantityText.match(/(\d+)/);
+    if (m && m[1]) {
+      parsedTextQty = Number(m[1]) || 0;
+    }
+  }
+
+  if (breakdown.length > 1 && breakdownSum > 0) {
+    return Math.max(breakdownSum, directQty, parsedTextQty, 1);
+  }
+
+  return Math.max(directQty, breakdownSum, parsedTextQty, 1);
 }
 
 /**
@@ -644,4 +728,97 @@ export function getSampleTypeTone(sampleType?: string): SampleTypeTone {
     printBadgeClass: 'bg-slate-100 text-black border-black',
   };
 }
+
+export interface PriorityTone {
+  priority: SamplePriority;
+  label: string;
+  shortLabel: string;
+  description: string;
+  badgeClass: string;
+  dotClass: string;
+  activePillClass: string;
+  idlePillClass: string;
+  selectClass: string;
+  cardClass: string;
+  rowClass: string;
+  printBadgeClass: string;
+}
+
+/**
+ * Returns the visual color tone configuration for a Requisition Priority:
+ * - Normal ('normal') -> White color
+ * - High ('high') -> Little Red (soft/light red) color
+ * - Urgent ('urgent') -> Fully Red (solid vibrant red) color
+ */
+export function getPriorityTone(priority?: SamplePriority | string): PriorityTone {
+  const p = (priority || 'normal').toLowerCase();
+
+  if (p === 'urgent') {
+    return {
+      priority: 'urgent',
+      label: 'URGENT',
+      shortLabel: 'Urgent',
+      description: 'Fully Red — Immediate 1-Day Priority',
+      badgeClass:
+        'bg-red-600 text-white border-red-400 shadow-md shadow-red-600/50 font-black',
+      dotClass: 'bg-white ring-2 ring-red-200/80 animate-pulse',
+      activePillClass:
+        'bg-red-600 text-white font-black border-red-300 shadow-lg shadow-red-600/40 ring-2 ring-red-400/70',
+      idlePillClass:
+        'bg-red-950/70 text-red-300 border-red-500/50 hover:bg-red-900/80 hover:border-red-400',
+      selectClass:
+        'bg-red-600 text-white border-red-300 font-black shadow-md shadow-red-600/40 focus:ring-red-400',
+      cardClass:
+        'bg-gradient-to-r from-red-950/90 via-rose-950/85 to-red-950/90 hover:from-red-900/90 hover:to-red-900/90 border-red-500 border-l-4 border-l-red-500 shadow-lg shadow-red-950/50 ring-1 ring-red-500/40',
+      rowClass:
+        'bg-red-950/65 hover:bg-red-900/75 border-l-4 border-l-red-500',
+      printBadgeClass: 'bg-red-600 text-white border-red-800 font-black',
+    };
+  }
+
+  if (p === 'high') {
+    return {
+      priority: 'high',
+      label: 'HIGH',
+      shortLabel: 'High',
+      description: 'Little Red — Elevated Priority',
+      badgeClass:
+        'bg-rose-500/25 text-rose-200 border-rose-400/70 shadow-sm shadow-rose-500/20 font-bold',
+      dotClass: 'bg-rose-400 ring-2 ring-rose-300/50',
+      activePillClass:
+        'bg-rose-500/35 text-rose-100 font-black border-rose-400 shadow-md shadow-rose-500/25 ring-2 ring-rose-400/50',
+      idlePillClass:
+        'bg-rose-950/45 text-rose-300 border-rose-500/40 hover:bg-rose-900/60 hover:border-rose-400',
+      selectClass:
+        'bg-rose-950/65 text-rose-200 border-rose-400/80 font-bold shadow-sm shadow-rose-500/20 focus:ring-rose-400',
+      cardClass:
+        'bg-rose-950/35 hover:bg-rose-950/50 border-rose-400/60 border-l-4 border-l-rose-400 shadow-md shadow-rose-950/30',
+      rowClass:
+        'bg-rose-950/25 hover:bg-rose-950/40 border-l-4 border-l-rose-400',
+      printBadgeClass: 'bg-rose-100 text-rose-900 border-rose-500 font-bold',
+    };
+  }
+
+  return {
+    priority: 'normal',
+    label: 'NORMAL',
+    shortLabel: 'Normal',
+    description: 'White — Standard Requisition',
+    badgeClass:
+      'bg-white text-slate-950 border-white shadow-sm shadow-white/25 font-black',
+    dotClass: 'bg-slate-900 ring-2 ring-slate-400/60',
+    activePillClass:
+      'bg-white text-slate-950 font-black border-white shadow-md shadow-white/30 ring-2 ring-white/70',
+    idlePillClass:
+      'bg-white/10 text-white border-white/40 hover:bg-white/20 hover:border-white',
+    selectClass:
+      'bg-white text-slate-950 border-white font-black shadow-sm shadow-white/20 focus:ring-white',
+    cardClass:
+      'bg-white/[0.07] hover:bg-white/[0.11] border-white/60 border-l-4 border-l-white shadow-md shadow-white/5',
+    rowClass:
+      'bg-white/[0.05] hover:bg-white/[0.09] border-l-4 border-l-white',
+    printBadgeClass: 'bg-white text-black border-black font-black',
+  };
+}
+
 

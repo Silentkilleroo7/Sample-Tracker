@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SampleItem } from '../types/sample';
+import { SampleItem, getPriorityTone } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
 import { SampleTypeBadge } from './SampleTypeBadge';
@@ -93,11 +93,12 @@ export const FinishingSectionView: React.FC<FinishingSectionViewProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filtered.map((sample) => {
             const fin = sample.finishingDetails;
+            const pTone = getPriorityTone(sample.priority);
 
             return (
               <div
                 key={sample.id}
-                className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-amber-500/50 transition-all shadow-xl flex flex-col justify-between"
+                className={`p-5 rounded-2xl border transition-all shadow-xl flex flex-col justify-between ${pTone.cardClass}`}
               >
                 <div>
                   {/* Top Bar */}
@@ -109,8 +110,14 @@ export const FinishingSectionView: React.FC<FinishingSectionViewProps> = ({
                           <span className="font-mono font-black text-xs text-amber-300 px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/30">
                             {sample.styleCode}
                           </span>
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border ${pTone.badgeClass}`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
+                            <span>{pTone.label}</span>
+                          </span>
                           <SampleTypeBadge sampleType={sample.sampleType} size="xs" />
-                          <span className="text-xs text-slate-400 font-medium">
+                          <span className="text-xs text-slate-300 font-medium">
                             PO: {sample.poNumber} • Line: {sample.lineCode}
                           </span>
                         </div>
@@ -120,8 +127,8 @@ export const FinishingSectionView: React.FC<FinishingSectionViewProps> = ({
                         >
                           {sample.styleName}
                         </h3>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Buyer: <strong className="text-slate-200">{sample.buyer}</strong> • Size: {sample.size} • Fabric: {sample.fabricCode}
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          Buyer: <strong className="text-white">{sample.buyer}</strong> • Size: <strong className="text-white font-mono">{sample.size}</strong> • Qty: <strong className="text-emerald-300 font-mono">{sample.quantity} Pcs</strong> • Fabric: {sample.fabricCode}
                         </p>
                       </div>
                     </div>
