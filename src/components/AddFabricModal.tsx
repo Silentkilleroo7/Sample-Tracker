@@ -20,6 +20,7 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
   const [gsm, setGsm] = useState<string>('');
   const [widthInches, setWidthInches] = useState<string>('58');
   const [availableYards, setAvailableYards] = useState<string>('');
+  const [perPcsConsumption, setPerPcsConsumption] = useState<string>('');
   const [supplier, setSupplier] = useState('');
   const [location, setLocation] = useState('');
   const [styleInput, setStyleInput] = useState('');
@@ -50,6 +51,13 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
       .map((s) => s.trim().toUpperCase())
       .filter(Boolean);
     const finalLinkedStyles = Array.from(new Set([...linkedStyles, ...pendingStyles]));
+    const parsedPerPcs = Math.max(0, Number(perPcsConsumption) || 0);
+    const styleConsMap: Record<string, number> = {};
+    if (parsedPerPcs > 0) {
+      finalLinkedStyles.forEach((sc) => {
+        styleConsMap[sc] = parsedPerPcs;
+      });
+    }
 
     const newFabric: FabricItem = {
       id: `fab-${Date.now()}`,
@@ -62,6 +70,8 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
       availableYards: Number(availableYards) || 0,
       allocatedYards: 0,
       minimumThresholdYards: 5,
+      perPcsConsumptionYards: parsedPerPcs > 0 ? parsedPerPcs : undefined,
+      styleConsumptionMap: Object.keys(styleConsMap).length > 0 ? styleConsMap : undefined,
       supplier: supplier.trim(),
       location: location.trim(),
       linkedStyleCodes: finalLinkedStyles,
@@ -76,6 +86,7 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
     setGsm('');
     setWidthInches('58');
     setAvailableYards('');
+    setPerPcsConsumption('');
     setSupplier('');
     setLocation('');
     setStyleInput('');
@@ -214,6 +225,21 @@ export const AddFabricModal: React.FC<AddFabricModalProps> = ({
                   ⚠️ ≤5 yds will show Red on Dashboard Report!
                 </span>
               )}
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block font-semibold text-indigo-300 mb-1">
+                Per-Pcs Sample Fabric Consumption (in Yds) — Optional Manual Default
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Enter yds per 1 pc sample (e.g. 1.50)"
+                value={perPcsConsumption}
+                onChange={(e) => setPerPcsConsumption(e.target.value)}
+                className="w-full bg-slate-800 border border-indigo-500/40 rounded-xl p-2 text-white font-mono placeholder-slate-500"
+              />
             </div>
 
             <div>

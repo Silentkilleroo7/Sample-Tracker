@@ -17,6 +17,7 @@ export interface RequisitionOptions {
   washTypes: string[];
   couriers: string[];
   perPcsConsumptionYards?: number;
+  perPcsConsumptionOptions?: number[];
   styleConsumptionMap?: Record<string, number>;
 }
 
@@ -33,6 +34,7 @@ export const INITIAL_REQUISITION_OPTIONS: RequisitionOptions = {
   washTypes: [],
   couriers: [],
   perPcsConsumptionYards: 0,
+  perPcsConsumptionOptions: [],
   styleConsumptionMap: {},
 };
 
@@ -117,6 +119,15 @@ function sanitizeOptions(raw: Partial<RequisitionOptions> | null | undefined): R
     typeof raw.perPcsConsumptionYards === 'number' && raw.perPcsConsumptionYards > 0
       ? raw.perPcsConsumptionYards
       : 0;
+  const perPcsConsumptionOptions = Array.isArray(raw.perPcsConsumptionOptions)
+    ? Array.from(
+        new Set(
+          raw.perPcsConsumptionOptions
+            .map((v) => Number(Number(v).toFixed(2)))
+            .filter((v) => Number.isFinite(v) && v > 0)
+        )
+      )
+    : [];
   const styleConsumptionMap =
     raw.styleConsumptionMap && typeof raw.styleConsumptionMap === 'object'
       ? raw.styleConsumptionMap
@@ -131,6 +142,7 @@ function sanitizeOptions(raw: Partial<RequisitionOptions> | null | undefined): R
     washTypes: Array.from(new Set(washTypes)),
     couriers: Array.from(new Set(couriers)),
     perPcsConsumptionYards,
+    perPcsConsumptionOptions,
     styleConsumptionMap,
   };
 }
@@ -172,6 +184,12 @@ export async function syncRequisitionOptionsFromCloud(): Promise<RequisitionOpti
       couriers: Array.from(new Set([...cleanCloud.couriers, ...localOptions.couriers])),
       perPcsConsumptionYards:
         cleanCloud.perPcsConsumptionYards || localOptions.perPcsConsumptionYards || 0,
+      perPcsConsumptionOptions: Array.from(
+        new Set([
+          ...(cleanCloud.perPcsConsumptionOptions || []),
+          ...(localOptions.perPcsConsumptionOptions || []),
+        ])
+      ),
       styleConsumptionMap: {
         ...(cleanCloud.styleConsumptionMap || {}),
         ...(localOptions.styleConsumptionMap || {}),

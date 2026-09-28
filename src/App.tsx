@@ -454,7 +454,7 @@ export default function App() {
             const updatedStyleMap: Record<string, number> = {
               ...(f.styleConsumptionMap || {}),
             };
-            if (normalizedStyleKey && !updatedStyleMap[normalizedStyleKey]) {
+            if (normalizedStyleKey && effectivePerPcs > 0) {
               updatedStyleMap[normalizedStyleKey] = effectivePerPcs;
             }
 
@@ -472,7 +472,7 @@ export default function App() {
               ...f,
               availableYards: updatedAvailable,
               allocatedYards: updatedAllocated,
-              perPcsConsumptionYards: f.perPcsConsumptionYards || effectivePerPcs,
+              perPcsConsumptionYards: effectivePerPcs || f.perPcsConsumptionYards,
               styleConsumptionMap: updatedStyleMap,
               linkedStyleCodes: updatedLinks,
             };

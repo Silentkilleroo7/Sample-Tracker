@@ -666,6 +666,11 @@ export async function fetchRequisitionOptionsFromSupabase(): Promise<Requisition
       washTypes: Array.isArray(data.wash_types) ? data.wash_types : INITIAL_REQUISITION_OPTIONS.washTypes,
       couriers: Array.isArray(data.couriers) ? data.couriers : INITIAL_REQUISITION_OPTIONS.couriers,
       perPcsConsumptionYards: Number(data.per_pcs_consumption_yards ?? 0) || 0,
+      perPcsConsumptionOptions: Array.isArray(data.per_pcs_consumption_options)
+        ? data.per_pcs_consumption_options
+            .map((v: any) => Number(Number(v).toFixed(2)))
+            .filter((v: number) => Number.isFinite(v) && v > 0)
+        : [],
       styleConsumptionMap:
         data.style_consumption_map && typeof data.style_consumption_map === 'object'
           ? data.style_consumption_map
@@ -690,12 +695,18 @@ export async function saveRequisitionOptionsToSupabase(options: RequisitionOptio
       wash_types: options.washTypes,
       couriers: options.couriers,
       per_pcs_consumption_yards: options.perPcsConsumptionYards ?? 0,
+      per_pcs_consumption_options: options.perPcsConsumptionOptions || [],
       style_consumption_map: options.styleConsumptionMap || {},
       updated_at: new Date().toISOString(),
     };
     const { error } = await supabase.from('requisition_options').upsert(fullPayload);
     if (error) {
-      const { per_pcs_consumption_yards, style_consumption_map, ...legacyPayload } = fullPayload;
+      const {
+        per_pcs_consumption_yards,
+        per_pcs_consumption_options,
+        style_consumption_map,
+        ...legacyPayload
+      } = fullPayload;
       await supabase.from('requisition_options').upsert(legacyPayload);
     }
   } catch (err) {

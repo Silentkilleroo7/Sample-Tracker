@@ -86,6 +86,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const [customFabricCode, setCustomFabricCode] = useState('');
   const [customFabricName, setCustomFabricName] = useState('');
   const [perPcsConsumptionInput, setPerPcsConsumptionInput] = useState<string>('');
+  const [consumptionMode, setConsumptionMode] = useState<'saved' | 'manual'>('saved');
   const [requiredYards, setRequiredYards] = useState<number>(1);
   const [priority, setPriority] = useState<SamplePriority>('normal');
   const [targetParcelDate, setTargetParcelDate] = useState(() => {
@@ -539,8 +540,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       ? effectiveSizeBreakdown.reduce((sum, item) => sum + item.quantity, 0)
       : quantity;
 
-  // Determine if Per-Pcs Fabric Consumption (in yds) was ALREADY mentioned in a prior requisition:
-  // Once mentioned in the 1st requisition, the system NEVER asks for fabric consumption again!
+  // Determine if Per-Pcs Fabric Consumption (in yds) was saved for this style/fabric or in presets
   const savedPerPcsConsumption: number = (() => {
     const cleanCode = styleCode.trim().toUpperCase();
     if (selectedStoredSample) {
@@ -568,28 +568,83 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         return selectedFabric.perPcsConsumptionYards;
       }
     }
-    // Check if any previous requisition in the system already recorded perPcsConsumptionYards
-    const anyPriorSampleWithConsumption = samples.find(
-      (s) => s.perPcsConsumptionYards && s.perPcsConsumptionYards > 0
-    );
-    if (anyPriorSampleWithConsumption?.perPcsConsumptionYards) {
-      return anyPriorSampleWithConsumption.perPcsConsumptionYards;
-    }
     if (options.perPcsConsumptionYards && options.perPcsConsumptionYards > 0) {
       return options.perPcsConsumptionYards;
     }
     return 0;
   })();
 
-  const isConsumptionLockedFromPriorRequisition = savedPerPcsConsumption > 0;
+  // All saved per-pcs consumption presets so the user can choose a saved consumption OR add a new manual one
+  const savedConsumptionList: number[] = (() => {
+    const rawValues: number[] = [];
+    if (savedPerPcsConsumption > 0) rawValues.push(savedPerPcsConsumption);
+    if (Array.isArray(options.perPcsConsumptionOptions)) {
+      rawValues.push(...options.perPcsConsumptionOptions);
+    }
+    if (options.styleConsumptionMap) {
+      rawValues.push(...Object.values(options.styleConsumptionMap));
+    }
+    fabrics.forEach((f) => {
+      if (f.perPcsConsumptionYards && f.perPcsConsumptionYards > 0) {
+        rawValues.push(f.perPcsConsumptionYards);
+      }
+    });
+    samples.forEach((s) => {
+      const c = getEffectivePerPcsConsumption(s);
+      if (c > 0) rawValues.push(c);
+    });
+    return Array.from(
+      new Set(
+        rawValues
+          .map((v) => Number(Number(v).toFixed(2)))
+          .filter((v) => Number.isFinite(v) && v > 0)
+      )
+    );
+  })();
 
-  const effectivePerPcsConsumption: number = isConsumptionLockedFromPriorRequisition
-    ? savedPerPcsConsumption
-    : Math.max(0, Number(perPcsConsumptionInput) || 0);
+  const hasSavedConsumption = savedPerPcsConsumption > 0 || savedConsumptionList.length > 0;
+  const isConsumptionLockedFromPriorRequisition =
+    consumptionMode === 'saved' && savedPerPcsConsumption > 0;
+
+  const manualParsedConsumption = Math.max(0, Number(perPcsConsumptionInput) || 0);
+
+  const effectivePerPcsConsumption: number =
+    consumptionMode === 'manual'
+      ? manualParsedConsumption
+      : manualParsedConsumption > 0
+      ? manualParsedConsumption
+      : savedPerPcsConsumption > 0
+      ? savedPerPcsConsumption
+      : savedConsumptionList[0] || 0;
 
   const effectiveTotalRequiredYards: number = Number(
     (effectivePerPcsConsumption * effectiveTotalQuantity).toFixed(2)
   );
+
+  const handleSaveManualConsumption = () => {
+    const val = Number(Number(perPcsConsumptionInput).toFixed(2));
+    if (!Number.isFinite(val) || val <= 0) {
+      setValidationError('Please enter a valid Per-Pcs Fabric Consumption in yards (e.g. 1.50).');
+      return;
+    }
+    setValidationError(null);
+    const cleanCode = styleCode.trim().toUpperCase();
+    const nextOptions: RequisitionOptions = {
+      ...options,
+      perPcsConsumptionYards: val,
+      perPcsConsumptionOptions: Array.from(
+        new Set([...(options.perPcsConsumptionOptions || []), val])
+      ),
+      styleConsumptionMap: {
+        ...(options.styleConsumptionMap || {}),
+        ...(cleanCode ? { [cleanCode]: val } : {}),
+      },
+    };
+    setOptions(nextOptions);
+    saveRequisitionOptions(nextOptions);
+    setPerPcsConsumptionInput(String(val));
+    triggerSaveNotification(`Saved Per-Pcs Fabric Consumption: ${val.toFixed(2)} yds/pc!`);
+  };
 
   const willTriggerLowStock =
     selectedFabric &&
@@ -606,9 +661,9 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       setValidationError('Please enter the Style Name & Description.');
       return;
     }
-    if (!isConsumptionLockedFromPriorRequisition && effectivePerPcsConsumption <= 0) {
+    if (effectivePerPcsConsumption <= 0) {
       setValidationError(
-        'Please enter the Per Pcs Fabric Consumption (in Yds) for this initial requisition (it will never be asked again on future requisitions).'
+        'Please select a saved Per-Pcs Fabric Consumption or enter a manual Per-Pcs Consumption (in Yds).'
       );
       return;
     }
@@ -623,6 +678,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     }
 
     const cleanCode = styleCode.trim().toUpperCase();
+    const roundedCons = Number(effectivePerPcsConsumption.toFixed(2));
 
     // Save any newly typed options AND the per-pcs fabric consumption into persistent storage
     const nextOptions: RequisitionOptions = {
@@ -650,12 +706,14 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       couriers: courier.trim()
         ? Array.from(new Set([...options.couriers, courier.trim()]))
         : options.couriers,
-      perPcsConsumptionYards: effectivePerPcsConsumption || options.perPcsConsumptionYards || 0,
+      perPcsConsumptionYards: roundedCons || options.perPcsConsumptionYards || 0,
+      perPcsConsumptionOptions:
+        roundedCons > 0
+          ? Array.from(new Set([...(options.perPcsConsumptionOptions || []), roundedCons]))
+          : options.perPcsConsumptionOptions || [],
       styleConsumptionMap: {
         ...(options.styleConsumptionMap || {}),
-        ...(cleanCode && effectivePerPcsConsumption > 0
-          ? { [cleanCode]: effectivePerPcsConsumption }
-          : {}),
+        ...(cleanCode && roundedCons > 0 ? { [cleanCode]: roundedCons } : {}),
       },
     };
     setOptions(nextOptions);
@@ -1738,18 +1796,13 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               <h3 className="font-bold text-white flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-indigo-400" />
                 <span>
-                  Fabric Inventory Linkage &amp; Per-Pcs Consumption (Auto-Deducts Exact Yards)
+                  Fabric Inventory Linkage &amp; Per-Pcs Consumption (Saved or Manual Entry)
                 </span>
               </h3>
-              <div className="flex items-center gap-2">
-                {isConsumptionLockedFromPriorRequisition ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {savedPerPcsConsumption > 0 && (
                   <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono text-[10px] font-bold flex items-center gap-1">
-                    <Lock className="w-3 h-3" />
-                    <span>Saved Cons: {savedPerPcsConsumption.toFixed(2)} yds/pc (Never Asked Again)</span>
-                  </span>
-                ) : (
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono text-[10px] font-bold">
-                    1st Requisition: Set Per-Pcs Consumption (Yds)
+                    <span>Saved Cons: {savedPerPcsConsumption.toFixed(2)} yds/pc</span>
                   </span>
                 )}
                 {onOpenAddFabric && (
@@ -1819,75 +1872,163 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               )}
             </div>
 
-            {/* PER PCS CONSUMPTION: Asked ONLY on 1st requisition, NEVER asked again on subsequent requisitions */}
-            {isConsumptionLockedFromPriorRequisition ? (
-              <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/50 space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs">
-                    <Lock className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>
-                      Per-Pcs Fabric Consumption Remembered ({savedPerPcsConsumption.toFixed(2)} yds/pc) — Never Asked Again!
-                    </span>
-                  </div>
-                  <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-200 border border-emerald-400/50 font-mono font-black text-xs">
-                    Auto-Deduct: {effectiveTotalRequiredYards.toFixed(2)} yds
+            {/* PER PCS CONSUMPTION: Use Saved Consumption OR Add New Manual Consumption */}
+            <div className="p-3.5 rounded-xl bg-slate-900/90 border border-indigo-500/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="font-bold text-indigo-300 text-xs block">
+                    Per-Pcs Sample Fabric Consumption (in Yds) *
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Select a saved per-pcs consumption or manually enter &amp; save a new consumption rate.
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[11px]">
-                  <div className="p-2 rounded-lg bg-slate-900/90 border border-slate-800 flex items-center justify-between">
-                    <span className="text-slate-400">Saved Per-Pcs Cons:</span>
-                    <span className="font-mono font-black text-emerald-300">
-                      {savedPerPcsConsumption.toFixed(2)} yds / pc
-                    </span>
+
+                {hasSavedConsumption && (
+                  <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConsumptionMode('saved');
+                        if (savedPerPcsConsumption > 0) {
+                          setPerPcsConsumptionInput(String(savedPerPcsConsumption));
+                        } else if (savedConsumptionList[0]) {
+                          setPerPcsConsumptionInput(String(savedConsumptionList[0]));
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        consumptionMode === 'saved'
+                          ? 'bg-emerald-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      Use Saved Cons.
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConsumptionMode('manual');
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                        consumptionMode === 'manual'
+                          ? 'bg-indigo-600 text-white shadow'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      + Add Manual Cons.
+                    </button>
                   </div>
-                  <div className="p-2 rounded-lg bg-slate-900/90 border border-slate-800 flex items-center justify-between">
-                    <span className="text-slate-400">Total Sample Pcs:</span>
-                    <span className="font-mono font-black text-amber-300">
-                      {effectiveTotalQuantity} Pcs
-                    </span>
+                )}
+              </div>
+
+              {/* Saved Consumption Quick-Select Chips */}
+              {hasSavedConsumption && (
+                <div className="p-2.5 rounded-xl bg-emerald-950/25 border border-emerald-500/30 space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-1 text-[10px] text-emerald-300 font-semibold">
+                    <span>Saved Per-Pcs Consumption Rates (Tap to Use):</span>
+                    {savedPerPcsConsumption > 0 && (
+                      <span className="font-mono">
+                        Style/Fabric Default: {savedPerPcsConsumption.toFixed(2)} yds/pc
+                      </span>
+                    )}
                   </div>
-                  <div className="p-2 rounded-lg bg-slate-900/90 border border-emerald-500/40 flex items-center justify-between">
-                    <span className="text-slate-300 font-semibold">Exact Deducted:</span>
-                    <span className="font-mono font-black text-white">
-                      {effectiveTotalRequiredYards.toFixed(2)} yds
-                    </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {savedConsumptionList.map((val) => {
+                      const isSelected =
+                        Number(effectivePerPcsConsumption.toFixed(2)) ===
+                        Number(val.toFixed(2));
+                      const isStyleDefault =
+                        savedPerPcsConsumption > 0 &&
+                        Number(savedPerPcsConsumption.toFixed(2)) ===
+                          Number(val.toFixed(2));
+
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => {
+                            setConsumptionMode('saved');
+                            setPerPcsConsumptionInput(String(val));
+                            triggerSaveNotification(
+                              `Applied Saved Consumption: ${val.toFixed(2)} yds/pc`
+                            );
+                          }}
+                          className={`min-h-[34px] px-2.5 py-1 rounded-lg font-mono text-xs font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                            isSelected
+                              ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/20'
+                              : 'bg-slate-900 text-emerald-200 border-emerald-500/40 hover:bg-emerald-950/60'
+                          }`}
+                        >
+                          <span>{val.toFixed(2)} yds/pc</span>
+                          {isStyleDefault && (
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-black/30 text-emerald-200">
+                              Default
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="p-3.5 rounded-xl bg-indigo-950/30 border border-indigo-500/40 space-y-2.5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-                  <div>
-                    <label className="block font-bold text-indigo-300 mb-1 text-xs">
-                      Per Pcs Fabric Consumption (in Yds) *
-                    </label>
+              )}
+
+              {/* Manual Per-Pcs Consumption Input + Save Button + Calculation Summary */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                <div>
+                  <label className="block font-bold text-slate-200 mb-1 text-xs">
+                    Manual Per-Pcs Fabric Consumption (in Yds)
+                  </label>
+                  <div className="flex items-center gap-2">
                     <input
                       type="number"
                       step="0.01"
                       min="0.01"
                       max="100"
-                      placeholder="Enter yds per 1 pc (e.g. 1.50)"
+                      placeholder={
+                        savedPerPcsConsumption > 0
+                          ? `Saved: ${savedPerPcsConsumption.toFixed(2)} yds/pc (or type new)`
+                          : 'Enter yds per 1 pc (e.g. 1.50)'
+                      }
                       value={perPcsConsumptionInput}
-                      onChange={(e) => setPerPcsConsumptionInput(e.target.value)}
-                      className="w-full bg-slate-900 border border-indigo-400/60 rounded-xl p-2.5 text-white font-mono font-bold placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      onChange={(e) => {
+                        setConsumptionMode('manual');
+                        setPerPcsConsumptionInput(e.target.value);
+                      }}
+                      className="flex-1 min-h-[42px] bg-slate-950 border border-indigo-400/60 rounded-xl px-3 py-2 text-white font-mono font-bold placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     />
-                    <span className="text-[10px] text-slate-400 block mt-1">
-                      Mentioned once on 1st requisition — system will never ask again on new requisitions.
+                    <button
+                      type="button"
+                      onClick={handleSaveManualConsumption}
+                      className="min-h-[42px] px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center gap-1 shadow transition-all cursor-pointer whitespace-nowrap"
+                      title="Save this Per-Pcs Consumption for future requisitions"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Save Cons.</span>
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-400 block mt-1">
+                    Type any manual consumption (yds/pc) or click &ldquo;Save Cons.&rdquo; to store it for future samples.
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-950/90 border border-emerald-500/40 space-y-1">
+                  <div className="text-[10px] text-slate-400 flex items-center justify-between">
+                    <span>
+                      Calculation ({effectiveTotalQuantity} Pcs ×{' '}
+                      {effectivePerPcsConsumption.toFixed(2)} yds/pc):
+                    </span>
+                    <span className="text-emerald-400 font-bold">
+                      {consumptionMode === 'manual' && manualParsedConsumption > 0
+                        ? 'Manual Rate'
+                        : 'Saved Rate'}
                     </span>
                   </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/40 space-y-1">
-                    <div className="text-[10px] text-slate-400 flex items-center justify-between">
-                      <span>Calculation ({effectiveTotalQuantity} Pcs × {effectivePerPcsConsumption.toFixed(2)} yds/pc):</span>
-                      <span className="text-emerald-400 font-bold">Auto-Deduct</span>
-                    </div>
-                    <div className="text-sm font-mono font-black text-emerald-300">
-                      Exact Fabric Deducted: {effectiveTotalRequiredYards.toFixed(2)} yds
-                    </div>
+                  <div className="text-sm font-mono font-black text-emerald-300">
+                    Exact Fabric Deducted: {effectiveTotalRequiredYards.toFixed(2)} yds
                   </div>
                 </div>
               </div>
-            )}
+            </div>
 
             {willTriggerLowStock && (
               <div className="p-2.5 rounded-lg bg-rose-950/60 border border-rose-500/50 text-rose-200 text-xs flex items-center gap-2">

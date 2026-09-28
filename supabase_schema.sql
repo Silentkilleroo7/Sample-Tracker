@@ -418,6 +418,7 @@ ALTER TABLE public.fabrics
 
 ALTER TABLE public.requisition_options
   ADD COLUMN IF NOT EXISTS per_pcs_consumption_yards NUMERIC DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS per_pcs_consumption_options JSONB DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS style_consumption_map JSONB DEFAULT '{}'::jsonb;
 
 -- Backfill existing samples where per_pcs_consumption_yards is null or 0
@@ -428,8 +429,9 @@ SET per_pcs_consumption_yards = ROUND(
 )
 WHERE per_pcs_consumption_yards IS NULL OR per_pcs_consumption_yards <= 0;
 
--- Database function: Automatically inherit saved per_pcs_consumption_yards on subsequent
--- requisitions (never asking again) and calculate exact fabric_required_yards = per_pcs * quantity
+-- Database function: Respects manual per_pcs_consumption_yards when entered by user,
+-- or falls back to saved per_pcs_consumption_yards for the style/fabric,
+-- and calculates exact fabric_required_yards = per_pcs_consumption_yards * quantity
 CREATE OR REPLACE FUNCTION public.fn_sync_sample_fabric_consumption()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -438,7 +440,7 @@ DECLARE
   v_saved_per_pcs NUMERIC := 0;
   v_style_key TEXT := UPPER(TRIM(COALESCE(NEW.style_code, '')));
 BEGIN
-  -- 1. Check if per_pcs_consumption_yards was already saved for this style or fabric
+  -- 1. Look up saved per_pcs_consumption_yards for this style or fabric
   IF NEW.fabric_id IS NOT NULL AND NEW.fabric_id <> '' THEN
     SELECT
       COALESCE(
@@ -465,10 +467,12 @@ BEGIN
     LIMIT 1;
   END IF;
 
-  -- 2. Lock onto saved consumption if available, else use newly provided per_pcs_consumption_yards
-  IF v_saved_per_pcs IS NOT NULL AND v_saved_per_pcs > 0 THEN
-    NEW.per_pcs_consumption_yards := v_saved_per_pcs;
-  ELSIF NEW.per_pcs_consumption_yards IS NULL OR NEW.per_pcs_consumption_yards <= 0 THEN
+  -- 2. Use manual per_pcs_consumption_yards if provided (> 0), otherwise use saved consumption
+  IF NEW.per_pcs_consumption_yards IS NOT NULL AND NEW.per_pcs_consumption_yards > 0 THEN
+    NEW.per_pcs_consumption_yards := ROUND(NEW.per_pcs_consumption_yards::numeric, 2);
+  ELSIF v_saved_per_pcs IS NOT NULL AND v_saved_per_pcs > 0 THEN
+    NEW.per_pcs_consumption_yards := ROUND(v_saved_per_pcs::numeric, 2);
+  ELSE
     NEW.per_pcs_consumption_yards := ROUND(
       (COALESCE(NEW.fabric_required_yards, 1.5) / GREATEST(COALESCE(NEW.quantity, 1), 1))::numeric,
       2
