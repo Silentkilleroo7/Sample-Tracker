@@ -781,4 +781,114 @@ SET
   priority = COALESCE(NULLIF(LOWER(TRIM(priority)), ''), 'normal'),
   updated_at = NOW();
 
+-- =====================================================================================
+-- 14. FABRIC SHORTAGE SUPPLIER AWB TRACKING & AUTO-RESTOCK ON ARRIVAL
+-- =====================================================================================
+-- 1. Add AWB tracking columns to public.fabrics
+ALTER TABLE public.fabrics
+  ADD COLUMN IF NOT EXISTS pending_awb_number TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE public.fabrics
+  ADD COLUMN IF NOT EXISTS pending_awb_yards NUMERIC(10, 2) NOT NULL DEFAULT 0;
+
+ALTER TABLE public.fabrics
+  ADD COLUMN IF NOT EXISTS awb_shipments JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- 2. Trigger function to keep pending_awb_number and pending_awb_yards synced with awb_shipments
+CREATE OR REPLACE FUNCTION public.fn_sync_fabric_awb_shipments()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_latest_awb TEXT;
+  v_total_pending_yards NUMERIC(10, 2);
+BEGIN
+  IF NEW.awb_shipments IS NULL OR jsonb_typeof(NEW.awb_shipments) <> 'array' THEN
+    NEW.awb_shipments := '[]'::jsonb;
+  END IF;
+
+  -- Find the latest in-transit AWB number and total in-transit yards
+  SELECT
+    (
+      SELECT TRIM(COALESCE(elem ->> 'awbNumber', ''))
+      FROM jsonb_array_elements(NEW.awb_shipments) AS elem
+      WHERE COALESCE(elem ->> 'status', 'in_transit') = 'in_transit'
+        AND TRIM(COALESCE(elem ->> 'awbNumber', '')) <> ''
+      LIMIT 1
+    ),
+    COALESCE(
+      SUM(GREATEST(COALESCE((elem ->> 'expectedYards')::numeric, 0), 0))
+      FILTER (
+        WHERE COALESCE(elem ->> 'status', 'in_transit') = 'in_transit'
+          AND TRIM(COALESCE(elem ->> 'awbNumber', '')) <> ''
+      ),
+      0
+    )
+  INTO v_latest_awb, v_total_pending_yards
+  FROM jsonb_array_elements(NEW.awb_shipments) AS elem;
+
+  NEW.pending_awb_number := COALESCE(v_latest_awb, '');
+  NEW.pending_awb_yards := COALESCE(v_total_pending_yards, 0);
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_fabric_awb_shipments ON public.fabrics;
+CREATE TRIGGER trg_sync_fabric_awb_shipments
+  BEFORE INSERT OR UPDATE ON public.fabrics
+  FOR EACH ROW EXECUTE FUNCTION public.fn_sync_fabric_awb_shipments();
+
+-- 3. Helper SQL Function to confirm a specific AWB arrival and automatically add its yards to available_yards
+CREATE OR REPLACE FUNCTION public.confirm_fabric_awb_arrival(
+  p_fabric_id TEXT,
+  p_awb_number TEXT
+)
+RETURNS public.fabrics
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_fabric public.fabrics;
+  v_added_yards NUMERIC(10, 2) := 0;
+  v_updated_shipments JSONB := '[]'::jsonb;
+  v_elem JSONB;
+BEGIN
+  SELECT * INTO v_fabric
+  FROM public.fabrics
+  WHERE id = p_fabric_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Fabric % not found', p_fabric_id;
+  END IF;
+
+  FOR v_elem IN SELECT * FROM jsonb_array_elements(COALESCE(v_fabric.awb_shipments, '[]'::jsonb))
+  LOOP
+    IF COALESCE(v_elem ->> 'status', 'in_transit') = 'in_transit'
+       AND (
+         LOWER(TRIM(COALESCE(v_elem ->> 'awbNumber', ''))) = LOWER(TRIM(p_awb_number))
+         OR TRIM(COALESCE(v_elem ->> 'id', '')) = TRIM(p_awb_number)
+       ) THEN
+      v_added_yards := v_added_yards + GREATEST(COALESCE((v_elem ->> 'expectedYards')::numeric, 0), 0);
+      v_elem := jsonb_set(v_elem, '{status}', '"arrived"'::jsonb, true);
+      v_elem := jsonb_set(v_elem, '{arrivedAt}', to_jsonb(NOW()::text), true);
+    END IF;
+    v_updated_shipments := v_updated_shipments || jsonb_build_array(v_elem);
+  END LOOP;
+
+  UPDATE public.fabrics
+  SET
+    available_yards = ROUND((COALESCE(available_yards, 0) + v_added_yards)::numeric, 2),
+    last_restocked_date = TO_CHAR(NOW(), 'YYYY-MM-DD'),
+    awb_shipments = v_updated_shipments,
+    updated_at = NOW()
+  WHERE id = p_fabric_id
+  RETURNING * INTO v_fabric;
+
+  RETURN v_fabric;
+END;
+$$;
+
+
 

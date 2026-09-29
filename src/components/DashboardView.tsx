@@ -45,7 +45,11 @@ import {
   getEffectivePerPcsConsumption,
   getPriorityTone,
 } from '../types/sample';
-import { FabricItem, isFabricLowStock } from '../types/fabric';
+import {
+  FabricItem,
+  isFabricLowStock,
+  getPendingAwbShipments,
+} from '../types/fabric';
 import { BVTestItem } from '../types/test';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
@@ -60,6 +64,7 @@ interface DashboardViewProps {
   onAdvanceStage: (sample: SampleItem) => void;
   onNewRequisition: () => void;
   onRestockFabric: (fabric: FabricItem) => void;
+  onConfirmFabricAwbArrival?: (fabricId: string, awbIdOrNumber: string) => void;
   onOpenFollowUp?: (sample: SampleItem) => void;
   onToggleWorkbookSent?: (sampleId: string) => void;
   onSendWhatsApp?: (sample: SampleItem, phone: string, customMessage?: string) => void;
@@ -75,6 +80,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onAdvanceStage,
   onNewRequisition,
   onRestockFabric,
+  onConfirmFabricAwbArrival,
   onOpenFollowUp,
   onToggleWorkbookSent,
   onSendWhatsApp,
@@ -717,11 +723,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           </div>
 
-          {/* Cards for each low fabric with Code, Style, and Remaining yards */}
+          {/* Cards for each low fabric with Code, Style, AWB Tracking, and Remaining yards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-4">
             {lowFabrics.map((fabric) => {
               // Find matching samples linked with this fabric
-              const linkedSamples = samples.filter((s) => s.fabricId === fabric.id || fabric.linkedStyleCodes.includes(s.styleCode));
+              const linkedSamples = samples.filter(
+                (s) => s.fabricId === fabric.id || fabric.linkedStyleCodes.includes(s.styleCode)
+              );
+              const pendingAwbs = getPendingAwbShipments(fabric);
+
               return (
                 <div
                   key={fabric.id}
@@ -753,6 +763,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </span>
                       </div>
                     </div>
+
+                    {/* Active In-Transit Supplier AWB Shipments for this Shortage Fabric */}
+                    {pendingAwbs.length > 0 && (
+                      <div className="mt-2.5 p-2.5 rounded-xl bg-cyan-950/60 border border-cyan-400/50 space-y-1.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300 block">
+                          Supplier AWB In-Transit ({pendingAwbs.length}):
+                        </span>
+                        {pendingAwbs.map((awb) => (
+                          <div
+                            key={awb.id}
+                            className="p-2 rounded-lg bg-slate-950/90 border border-cyan-500/40 flex items-center justify-between gap-2"
+                          >
+                            <div>
+                              <div className="font-mono font-black text-xs text-cyan-200">
+                                AWB: {awb.awbNumber}
+                              </div>
+                              <div className="text-[10px] font-mono text-emerald-300 font-bold">
+                                Amount: +{Number(awb.expectedYards).toFixed(1)} yds
+                              </div>
+                            </div>
+                            {onConfirmFabricAwbArrival && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onConfirmFabricAwbArrival(fabric.id, awb.id || awb.awbNumber)
+                                }
+                                className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] flex items-center gap-1 shadow cursor-pointer shrink-0 transition-all hover:scale-105"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Confirm Arrived (+{awb.expectedYards}y)</span>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Associated styles in production */}
                     {linkedSamples.length > 0 && (
@@ -800,9 +846,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <div className="mt-3 pt-2 flex items-center justify-end gap-2">
                     <button
                       onClick={() => onRestockFabric(fabric)}
-                      className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold shadow transition-all cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[11px] font-black shadow transition-all cursor-pointer"
                     >
-                      + Reorder / Receive Yards
+                      ✈️ Inform Supplier &amp; Add AWB / Restock
                     </button>
                   </div>
                 </div>

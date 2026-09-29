@@ -1,5 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { FabricItem, isFabricLowStock } from '../types/fabric';
+import {
+  FabricItem,
+  isFabricLowStock,
+  getPendingAwbShipments,
+  getArrivedAwbShipments,
+} from '../types/fabric';
 import { SampleItem } from '../types/sample';
 import {
   ScrollText,
@@ -13,6 +18,9 @@ import {
   Eye,
   Lock,
   Ruler,
+  Plane,
+  CheckCircle2,
+  Truck,
 } from 'lucide-react';
 
 interface FabricInventoryViewProps {
@@ -23,6 +31,18 @@ interface FabricInventoryViewProps {
   onAddNewFabric: () => void;
   onDeductFabric: (fabric: FabricItem) => void;
   onSelectSampleByCode: (styleCode: string) => void;
+  onRegisterFabricAwb?: (
+    fabricId: string,
+    awbData: {
+      awbNumber: string;
+      expectedYards: number;
+      courier?: string;
+      supplier?: string;
+      expectedArrivalDate?: string;
+      notes?: string;
+    }
+  ) => void;
+  onConfirmFabricAwbArrival?: (fabricId: string, awbIdOrNumber: string) => void;
 }
 
 export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
@@ -32,14 +52,35 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
   onAddNewFabric,
   onDeductFabric,
   onSelectSampleByCode,
+  onRegisterFabricAwb,
+  onConfirmFabricAwbArrival,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [stockFilter, setStockFilter] = useState<'all' | 'critical' | 'sufficient'>('all');
+  const [stockFilter, setStockFilter] = useState<'all' | 'critical' | 'sufficient' | 'awb_transit'>('all');
   const [sortField, setSortField] = useState<'code' | 'availableYards' | 'name'>('availableYards');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
+
+  // Quick inline AWB entry state for any fabric row
+  const [inlineAwbFabricId, setInlineAwbFabricId] = useState<string | null>(null);
+  const [inlineAwbNumber, setInlineAwbNumber] = useState<string>('');
+  const [inlineAwbYards, setInlineAwbYards] = useState<number>(30);
+  const [inlineAwbCourier, setInlineAwbCourier] = useState<string>('DHL Express');
+
+  const handleQuickInlineAwbSubmit = (fabric: FabricItem) => {
+    const cleanAwb = inlineAwbNumber.trim().toUpperCase();
+    if (!cleanAwb || !inlineAwbYards || inlineAwbYards <= 0 || !onRegisterFabricAwb) return;
+    onRegisterFabricAwb(fabric.id, {
+      awbNumber: cleanAwb,
+      expectedYards: Number(Number(inlineAwbYards).toFixed(2)),
+      courier: inlineAwbCourier.trim() || 'DHL Express',
+      supplier: fabric.supplier,
+    });
+    setInlineAwbNumber('');
+    setInlineAwbFabricId(null);
+  };
 
   const filteredFabrics = useMemo(() => {
     let result = [...fabrics];
@@ -53,6 +94,8 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
           f.supplier.toLowerCase().includes(q) ||
           f.composition.toLowerCase().includes(q) ||
           f.color.toLowerCase().includes(q) ||
+          (f.pendingAwbNumber && f.pendingAwbNumber.toLowerCase().includes(q)) ||
+          getPendingAwbShipments(f).some((a) => a.awbNumber.toLowerCase().includes(q)) ||
           f.linkedStyleCodes.some((sc) => sc.toLowerCase().includes(q))
       );
     }
@@ -61,6 +104,8 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
       result = result.filter(isFabricLowStock);
     } else if (stockFilter === 'sufficient') {
       result = result.filter((f) => !isFabricLowStock(f));
+    } else if (stockFilter === 'awb_transit') {
+      result = result.filter((f) => getPendingAwbShipments(f).length > 0);
     }
 
     result.sort((a, b) => {
@@ -79,6 +124,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
   }, [fabrics, searchQuery, stockFilter, sortField, sortOrder]);
 
   const criticalCount = fabrics.filter(isFabricLowStock).length;
+  const awbInTransitCount = fabrics.filter((f) => getPendingAwbShipments(f).length > 0).length;
   const totalItems = filteredFabrics.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const validCurrentPage = Math.min(currentPage, totalPages);
@@ -119,13 +165,13 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold mb-2">
             <ScrollText className="w-3.5 h-3.5" />
-            Fabric Inventory & Style Linkage Control
+            Fabric Inventory, Shortage AWB Tracking &amp; Style Linkage
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight">
-            Raw Material & Fabric Stock Inventory
+            Raw Material &amp; Supplier AWB Fabric Inventory
           </h1>
-          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
-            Fabrics are dynamically linked with style codes and per-piece consumption (yds/pc). Exact total yardage is automatically deducted when requisitions are placed.
+          <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-2xl">
+            When a fabric is in shortage, inform the supplier and insert their <strong>AWB Number</strong> &amp; <strong>Expected Yards</strong>. Once that AWB arrives, click <strong>Confirm AWB Arrived</strong> to automatically add those yards to inventory.
           </p>
         </div>
 
@@ -156,10 +202,10 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
             </div>
             <div>
               <h4 className="text-sm font-black uppercase tracking-wide flex items-center gap-2 text-white">
-                Dashboard Report: {criticalCount} Fabric{criticalCount > 1 ? 's' : ''} with ≤ 5 Yds Stock (Critical Red)
+                Shortage Alert: {criticalCount} Fabric{criticalCount > 1 ? 's' : ''} with ≤ 5 Yds Stock (Inform Supplier &amp; Add AWB)
               </h4>
               <p className="text-xs text-rose-200 mt-0.5">
-                These materials need immediate mill reorder to prevent sample cutting delays for linked styles.
+                Insert the supplier&apos;s AWB number and yardage on any shortage fabric below, then confirm when the AWB arrives to automatically add the yardage.
               </p>
             </div>
           </div>
@@ -167,7 +213,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
             onClick={() => setStockFilter('critical')}
             className="px-3 py-1.5 rounded-lg bg-white text-rose-950 font-bold text-xs hover:bg-rose-100 transition-colors shadow shrink-0 cursor-pointer"
           >
-            Filter Critical Only
+            Filter Shortage Fabrics
           </button>
         </div>
       )}
@@ -183,7 +229,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
               setSearchQuery(e.target.value);
               setCurrentPage(1);
             }}
-            placeholder="Search by Fabric Code, Name, Linked Style, Supplier..."
+            placeholder="Search by Fabric Code, AWB Number, Name, Linked Style, Supplier..."
             className="w-full min-h-[42px] bg-slate-800 border border-slate-700 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
         </div>
@@ -207,9 +253,23 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                 : 'bg-slate-800 text-rose-400 hover:bg-rose-950/40 border border-rose-500/30'
             }`}
           >
-            <span>≤ 5 Yds (Red Alert)</span>
+            <span>≤ 5 Yds Shortage</span>
             <span className="font-mono px-1.5 py-0.2 rounded bg-rose-950 text-white text-[10px]">
               {criticalCount}
+            </span>
+          </button>
+          <button
+            onClick={() => setStockFilter('awb_transit')}
+            className={`min-h-[40px] px-3 py-1.5 rounded-xl font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              stockFilter === 'awb_transit'
+                ? 'bg-cyan-600 text-slate-950 font-black shadow'
+                : 'bg-slate-800 text-cyan-300 hover:bg-cyan-950/40 border border-cyan-500/30'
+            }`}
+          >
+            <Plane className="w-3.5 h-3.5" />
+            <span>AWB In-Transit</span>
+            <span className="font-mono px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-200 text-[10px]">
+              {awbInTransitCount}
             </span>
           </button>
           <button
@@ -247,14 +307,14 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
         <div className="md:hidden divide-y divide-slate-800">
           {paginatedFabrics.map((fabric) => {
             const isCritical = isFabricLowStock(fabric);
+            const pendingAwbs = getPendingAwbShipments(fabric);
+            const arrivedAwbs = getArrivedAwbShipments(fabric);
 
             return (
               <div
                 key={fabric.id}
                 className={`p-3.5 space-y-3 ${
-                  isCritical
-                    ? 'bg-rose-950/20 border-l-4 border-l-rose-500'
-                    : ''
+                  isCritical ? 'bg-rose-950/20 border-l-4 border-l-rose-500' : ''
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -271,15 +331,13 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                       </span>
                       {isCritical && (
                         <span className="text-[10px] font-bold text-rose-400 uppercase">
-                          ≤5 Yds Alert
+                          Shortage ≤5 Yds
                         </span>
                       )}
                     </div>
-                    <h3 className="font-bold text-white text-sm mt-1">
-                      {fabric.name}
-                    </h3>
+                    <h3 className="font-bold text-white text-sm mt-1">{fabric.name}</h3>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      {fabric.composition} · {fabric.gsm} GSM · {fabric.widthInches}" · {fabric.color}
+                      {fabric.composition} · {fabric.gsm} GSM · {fabric.widthInches}&quot; · {fabric.color}
                     </p>
                   </div>
 
@@ -297,25 +355,42 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                   </div>
                 </div>
 
-                {/* Per-Pcs Consumption & Supplier */}
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                  {fabric.perPcsConsumptionYards && fabric.perPcsConsumptionYards > 0 ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-950/50 border border-emerald-500/35 text-[10px] font-mono font-bold text-emerald-300">
-                      <Ruler className="w-3 h-3 text-emerald-400" />
-                      {fabric.perPcsConsumptionYards} yds/pc (Locked)
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950/60 border border-slate-800 text-[10px] font-mono text-slate-500">
-                      <Ruler className="w-3 h-3 text-slate-500" />
-                      Set on 1st requisition
-                    </span>
-                  )}
-
-                  <span className="text-slate-400 flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-slate-500" />
-                    {fabric.supplier} · {fabric.location}
-                  </span>
-                </div>
+                {/* Supplier AWB In-Transit Section on Mobile */}
+                {pendingAwbs.length > 0 && (
+                  <div className="p-2.5 rounded-xl bg-cyan-950/40 border border-cyan-500/50 space-y-2">
+                    <div className="text-[10px] font-black text-cyan-300 uppercase flex items-center gap-1">
+                      <Truck className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Supplier AWB In-Transit ({pendingAwbs.length}):</span>
+                    </div>
+                    {pendingAwbs.map((awb) => (
+                      <div
+                        key={awb.id}
+                        className="p-2 rounded-lg bg-slate-900/90 border border-cyan-500/30 flex items-center justify-between gap-2"
+                      >
+                        <div>
+                          <div className="font-mono font-black text-xs text-cyan-200">
+                            AWB: {awb.awbNumber}
+                          </div>
+                          <div className="text-[10px] font-mono text-emerald-300 font-bold">
+                            Amount: +{Number(awb.expectedYards).toFixed(2)} yds ({awb.courier || 'Courier'})
+                          </div>
+                        </div>
+                        {!isViewOnly && onConfirmFabricAwbArrival && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onConfirmFabricAwbArrival(fabric.id, awb.id || awb.awbNumber)
+                            }
+                            className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] flex items-center gap-1 shadow cursor-pointer shrink-0"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Confirm Arrived (+{awb.expectedYards}y)</span>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Linked Styles */}
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -324,16 +399,11 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                     <button
                       key={sc}
                       onClick={() => onSelectSampleByCode(sc)}
-                      className="min-h-[32px] font-mono text-[11px] font-bold px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                      className="min-h-[30px] font-mono text-[11px] font-bold px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white border border-slate-700 transition-colors cursor-pointer"
                     >
                       {sc}
                     </button>
                   ))}
-                  {fabric.linkedStyleCodes.length === 0 && (
-                    <span className="text-slate-500 text-[11px] italic">
-                      No style linked
-                    </span>
-                  )}
                 </div>
 
                 {/* Mobile Actions */}
@@ -343,15 +413,15 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                       <button
                         type="button"
                         onClick={() => onRestockFabric(fabric)}
-                        className="flex-1 min-h-[42px] px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer"
+                        className="flex-1 min-h-[40px] px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer"
                       >
-                        <Plus className="w-4 h-4" />
-                        <span>Restock Roll</span>
+                        <Plane className="w-3.5 h-3.5" />
+                        <span>Inform Shortage / Add AWB</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => onDeductFabric(fabric)}
-                        className="min-h-[42px] px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
+                        className="min-h-[40px] px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
                       >
                         - Deduct
                       </button>
@@ -359,7 +429,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                   ) : (
                     <div className="w-full min-h-[40px] px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-xs font-semibold flex items-center justify-center gap-1.5">
                       <Eye className="w-3.5 h-3.5 text-amber-400" />
-                      <span>View Mode Only (No Edit Access)</span>
+                      <span>View Mode Only</span>
                     </div>
                   )}
                 </div>
@@ -391,7 +461,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
-                <th className="py-3 px-4">Fabric Description & Specs</th>
+                <th className="py-3 px-4">Fabric Description &amp; Specs</th>
                 <th className="py-3 px-4">Linked Styles</th>
                 <th
                   onClick={() => {
@@ -405,13 +475,16 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
-                <th className="py-3 px-4">Supplier & Location</th>
-                <th className="py-3 px-4 text-right">Quick Stock Actions</th>
+                <th className="py-3 px-4">Supplier AWB Tracking &amp; Arrival Confirmation</th>
+                <th className="py-3 px-4 text-right">Shortage AWB &amp; Stock Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
               {paginatedFabrics.map((fabric) => {
                 const isCritical = isFabricLowStock(fabric);
+                const pendingAwbs = getPendingAwbShipments(fabric);
+                const arrivedAwbs = getArrivedAwbShipments(fabric);
+                const isInlineOpen = inlineAwbFabricId === fabric.id;
 
                 return (
                   <tr
@@ -435,23 +508,28 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                         </span>
                         {isCritical && (
                           <span className="text-[10px] font-bold text-rose-400 animate-pulse uppercase">
-                            ≤5 YDS
+                            SHORTAGE ≤5Y
                           </span>
                         )}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-1 font-sans">
+                        {fabric.supplier}
+                      </div>
+                      <div className="text-[10px] text-slate-500 flex items-center gap-1 font-sans">
+                        <MapPin className="w-2.5 h-2.5" />
+                        {fabric.location}
                       </div>
                     </td>
 
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-white text-xs">
-                        {fabric.name}
-                      </div>
+                      <div className="font-bold text-white text-xs">{fabric.name}</div>
                       <div className="text-[11px] text-slate-400 mt-0.5">
-                        {fabric.composition} • {fabric.gsm} GSM • {fabric.widthInches}" width • {fabric.color}
+                        {fabric.composition} • {fabric.gsm} GSM • {fabric.widthInches}&quot; • {fabric.color}
                       </div>
                       {fabric.perPcsConsumptionYards && fabric.perPcsConsumptionYards > 0 ? (
                         <div className="inline-flex items-center gap-1.5 mt-1.5 px-2 py-0.5 rounded-md bg-emerald-950/50 border border-emerald-500/35 text-[10px] font-mono font-bold text-emerald-300">
                           <Ruler className="w-3 h-3 text-emerald-400" />
-                          Per-Pcs Consumption: {fabric.perPcsConsumptionYards} yds/pc (Locked)
+                          Per-Pcs Consumption: {fabric.perPcsConsumptionYards} yds/pc
                         </div>
                       ) : (
                         <div className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-md bg-slate-950/60 border border-slate-800 text-[10px] font-mono text-slate-500">
@@ -491,7 +569,7 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                           {Number(fabric.availableYards.toFixed(2))} yds
                         </span>
                         <span className="text-[11px] text-slate-500">
-                          (Allocated: {Number(fabric.allocatedYards.toFixed(2))} yds)
+                          (Alloc: {Number(fabric.allocatedYards.toFixed(2))}y)
                         </span>
                       </div>
                       <div className="w-28 bg-slate-800 rounded-full h-1.5 mt-1 overflow-hidden">
@@ -506,34 +584,153 @@ export const FabricInventoryView: React.FC<FabricInventoryViewProps> = ({
                       </div>
                     </td>
 
+                    {/* Supplier AWB Tracking & 1-Click Arrival Confirmation Column */}
                     <td className="py-3.5 px-4">
-                      <div className="text-slate-200 font-medium">
-                        {fabric.supplier}
-                      </div>
-                      <div className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                        <MapPin className="w-3 h-3 text-slate-500" />
-                        {fabric.location}
+                      <div className="space-y-2 min-w-[240px]">
+                        {pendingAwbs.length > 0 ? (
+                          pendingAwbs.map((awb) => (
+                            <div
+                              key={awb.id}
+                              className="p-2 rounded-xl bg-cyan-950/45 border border-cyan-500/50 flex items-center justify-between gap-2 shadow-sm"
+                            >
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="px-1.5 py-0.5 rounded bg-cyan-500/25 border border-cyan-400/50 font-mono font-black text-[11px] text-cyan-200">
+                                    AWB: {awb.awbNumber}
+                                  </span>
+                                  <span className="font-mono font-black text-xs text-emerald-300">
+                                    +{Number(awb.expectedYards).toFixed(1)} yds
+                                  </span>
+                                </div>
+                                <div className="text-[10px] text-slate-400 mt-0.5">
+                                  {awb.courier || 'Supplier Courier'} • In-Transit
+                                </div>
+                              </div>
+
+                              {!isViewOnly && onConfirmFabricAwbArrival && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    onConfirmFabricAwbArrival(fabric.id, awb.id || awb.awbNumber)
+                                  }
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] flex items-center gap-1 shadow-md shadow-emerald-600/25 cursor-pointer shrink-0 transition-all hover:scale-105"
+                                  title={`Confirm AWB ${awb.awbNumber} arrived and automatically add +${awb.expectedYards} yds to ${fabric.code} inventory`}
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Confirm Arrived (+{awb.expectedYards}y)</span>
+                                </button>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                            <Plane className="w-3.5 h-3.5 text-slate-600" />
+                            <span>
+                              {isCritical
+                                ? 'Shortage! Inform supplier & insert AWB →'
+                                : 'No active AWB in transit'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Quick Inline AWB Entry Form */}
+                        {!isViewOnly && isInlineOpen && (
+                          <div className="p-2.5 rounded-xl bg-slate-950 border border-cyan-500/50 space-y-2">
+                            <div className="text-[10px] font-bold text-cyan-300 uppercase">
+                              Insert Supplier AWB for {fabric.code} ({fabric.supplier}):
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <input
+                                type="text"
+                                placeholder="AWB # (e.g. DHL-99201)"
+                                value={inlineAwbNumber}
+                                onChange={(e) => setInlineAwbNumber(e.target.value)}
+                                className="bg-slate-900 border border-cyan-500/40 rounded-lg px-2 py-1 text-[11px] text-white font-mono"
+                              />
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  min="0.5"
+                                  placeholder="Yds"
+                                  value={inlineAwbYards}
+                                  onChange={(e) => setInlineAwbYards(Number(e.target.value))}
+                                  className="w-full bg-slate-900 border border-emerald-500/40 rounded-lg px-2 py-1 text-[11px] text-emerald-300 font-mono font-bold"
+                                />
+                                <span className="text-[10px] font-mono text-slate-400">yds</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setInlineAwbFabricId(null)}
+                                className="px-2 py-1 rounded bg-slate-800 text-slate-400 hover:text-white text-[10px] cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleQuickInlineAwbSubmit(fabric)}
+                                className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black text-[10px] cursor-pointer"
+                              >
+                                Save AWB (+{inlineAwbYards || 0} yds)
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {arrivedAwbs.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {arrivedAwbs.slice(0, 2).map((a) => (
+                              <span
+                                key={a.id}
+                                className="px-1.5 py-0.5 rounded bg-emerald-950/50 border border-emerald-500/30 text-emerald-300 font-mono text-[9px]"
+                              >
+                                ✓ {a.awbNumber} (+{a.expectedYards}y added)
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </td>
 
                     <td className="py-3.5 px-4 text-right">
                       {!isViewOnly ? (
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => onRestockFabric(fabric)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-1 shadow transition-all cursor-pointer"
-                            title="Receive new roll or add yardage"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>Restock</span>
-                          </button>
-                          <button
-                            onClick={() => onDeductFabric(fabric)}
-                            className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors cursor-pointer"
-                            title="Deduct sample cutting consumption"
-                          >
-                            - Deduct
-                          </button>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (inlineAwbFabricId === fabric.id) {
+                                  setInlineAwbFabricId(null);
+                                } else {
+                                  setInlineAwbFabricId(fabric.id);
+                                  setInlineAwbNumber('');
+                                  setInlineAwbYards(30);
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black text-[11px] flex items-center gap-1 shadow transition-all cursor-pointer"
+                              title="Quickly insert Supplier AWB Number & Expected Yards"
+                            >
+                              <Plane className="w-3 h-3" />
+                              <span>+ Insert AWB</span>
+                            </button>
+                            <button
+                              onClick={() => onRestockFabric(fabric)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-[11px] flex items-center gap-1 shadow transition-all cursor-pointer"
+                              title="Open full AWB & Roll Restock modal"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>AWB / Restock</span>
+                            </button>
+                            <button
+                              onClick={() => onDeductFabric(fabric)}
+                              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-[11px] transition-colors cursor-pointer"
+                              title="Deduct sample cutting consumption"
+                            >
+                              - Deduct
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 text-[11px] font-semibold">

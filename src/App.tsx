@@ -20,7 +20,12 @@ import {
   getSampleImage,
   getEffectivePerPcsConsumption,
 } from './types/sample';
-import { FabricItem, isFabricLowStock } from './types/fabric';
+import {
+  FabricItem,
+  FabricAwbShipment,
+  isFabricLowStock,
+  getPendingAwbShipments,
+} from './types/fabric';
 import { PushNotification } from './types/notification';
 import { BVTestItem, INITIAL_BV_TESTS, isTestOverdueForResubmission } from './types/test';
 import {
@@ -902,9 +907,146 @@ export default function App() {
             lastReceivedDate: new Date().toISOString().split('T')[0],
           };
           void upsertFabricInSupabase(updatedFabric);
+          if (selectedFabricForRestock && selectedFabricForRestock.id === f.id) {
+            setSelectedFabricForRestock(updatedFabric);
+          }
           return updatedFabric;
         }
         return f;
+      })
+    );
+  };
+
+  const handleRegisterFabricAwb = (
+    fabricId: string,
+    awbData: {
+      awbNumber: string;
+      expectedYards: number;
+      courier?: string;
+      supplier?: string;
+      expectedArrivalDate?: string;
+      notes?: string;
+    }
+  ) => {
+    const cleanAwb = awbData.awbNumber.trim().toUpperCase();
+    const cleanYards = Math.max(0.5, Number(Number(awbData.expectedYards).toFixed(2)) || 0);
+    if (!cleanAwb || cleanYards <= 0) return;
+
+    setFabrics((prev) =>
+      prev.map((f) => {
+        if (f.id !== fabricId) return f;
+
+        const existingList = Array.isArray(f.awbShipments) ? f.awbShipments : [];
+        const newShipment: FabricAwbShipment = {
+          id: `awb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          awbNumber: cleanAwb,
+          supplier: awbData.supplier || f.supplier || 'Mill Supplier',
+          courier: awbData.courier || 'DHL Express',
+          expectedYards: cleanYards,
+          informedAt: new Date().toISOString(),
+          expectedArrivalDate: awbData.expectedArrivalDate,
+          status: 'in_transit',
+          notes: awbData.notes,
+        };
+
+        const updatedShipments = [newShipment, ...existingList];
+        const inTransitList = updatedShipments.filter((s) => s.status === 'in_transit');
+        const totalInTransitYards = Number(
+          inTransitList.reduce((sum, s) => sum + Number(s.expectedYards || 0), 0).toFixed(2)
+        );
+
+        const updatedFabric: FabricItem = {
+          ...f,
+          pendingAwbNumber: inTransitList.map((s) => s.awbNumber).join(', '),
+          pendingAwbYards: totalInTransitYards,
+          awbShipments: updatedShipments,
+        };
+
+        void upsertFabricInSupabase(updatedFabric);
+        if (selectedFabricForRestock && selectedFabricForRestock.id === f.id) {
+          setSelectedFabricForRestock(updatedFabric);
+        }
+
+        sendPushNotification(
+          'Supplier AWB Registered for Fabric Shortage',
+          `AWB ${cleanAwb} (+${cleanYards} yds from ${newShipment.supplier}) inserted against Fabric ${f.code}. Confirm arrival when AWB arrives to automatically add +${cleanYards} yds to inventory.`,
+          'info',
+          { fabricCode: f.code }
+        );
+
+        return updatedFabric;
+      })
+    );
+  };
+
+  const handleConfirmFabricAwbArrival = (fabricId: string, awbIdOrNumber: string) => {
+    setFabrics((prev) =>
+      prev.map((f) => {
+        if (f.id !== fabricId) return f;
+
+        const existingList = Array.isArray(f.awbShipments) ? [...f.awbShipments] : [];
+        const pendingFallback = getPendingAwbShipments(f);
+        const workingList = existingList.length > 0 ? existingList : pendingFallback;
+
+        let matchedAwb: FabricAwbShipment | null = null;
+        const nowIso = new Date().toISOString();
+
+        const updatedShipments = workingList.map((shipment) => {
+          if (
+            !matchedAwb &&
+            shipment.status === 'in_transit' &&
+            (shipment.id === awbIdOrNumber ||
+              shipment.awbNumber.toLowerCase() === awbIdOrNumber.toLowerCase())
+          ) {
+            matchedAwb = shipment;
+            return {
+              ...shipment,
+              status: 'arrived' as const,
+              arrivedAt: nowIso,
+              receivedBy: currentUser?.displayName || 'Merchandiser',
+            };
+          }
+          return shipment;
+        });
+
+        if (!matchedAwb) return f;
+
+        const arrivedShipment = matchedAwb as FabricAwbShipment;
+        const addedYards = Math.max(0, Number(arrivedShipment.expectedYards) || 0);
+        const newAvailable = Number((f.availableYards + addedYards).toFixed(2));
+        const remainingInTransit = updatedShipments.filter((s) => s.status === 'in_transit');
+        const remainingInTransitYards = Number(
+          remainingInTransit
+            .reduce((sum, s) => sum + Number(s.expectedYards || 0), 0)
+            .toFixed(2)
+        );
+
+        const updatedFabric: FabricItem = {
+          ...f,
+          availableYards: newAvailable,
+          lastReceivedDate: nowIso.split('T')[0],
+          pendingAwbNumber: remainingInTransit.map((s) => s.awbNumber).join(', '),
+          pendingAwbYards: remainingInTransitYards,
+          awbShipments: updatedShipments,
+        };
+
+        void upsertFabricInSupabase(updatedFabric);
+        if (selectedFabricForRestock && selectedFabricForRestock.id === f.id) {
+          setSelectedFabricForRestock(updatedFabric);
+        }
+
+        sendPushNotification(
+          'AWB Arrived — Fabric Inventory Auto-Updated!',
+          `Supplier AWB ${arrivedShipment.awbNumber} confirmed arrived! +${addedYards.toFixed(
+            2
+          )} yds automatically added to Fabric ${f.code} inventory (New available stock: ${newAvailable.toFixed(
+            2
+          )} yds).`,
+          'success',
+          { fabricCode: f.code }
+        );
+
+        return updatedFabric;
       })
     );
   };
@@ -1297,6 +1439,7 @@ export default function App() {
                     setSelectedFabricForRestock(fabric);
                     setIsRestockModalOpen(true);
                   }}
+                  onConfirmFabricAwbArrival={handleConfirmFabricAwbArrival}
                   onOpenFollowUp={handleOpenFollowUp}
                   onToggleWorkbookSent={handleToggleWorkbookSent}
                   onSendWhatsApp={handleSendWhatsAppNotification}
@@ -1418,6 +1561,8 @@ export default function App() {
                     if (isSewingUser) return;
                     handleConfirmRestockFabric(fabric.id, -2.5);
                   }}
+                  onRegisterFabricAwb={isSewingUser ? undefined : handleRegisterFabricAwb}
+                  onConfirmFabricAwbArrival={isSewingUser ? undefined : handleConfirmFabricAwbArrival}
                   onSelectSampleByCode={(code) => {
                     const found = samples.find((s) => s.styleCode === code);
                     if (found) {
@@ -1579,6 +1724,8 @@ export default function App() {
             }}
             fabric={selectedFabricForRestock}
             onConfirmRestock={handleConfirmRestockFabric}
+            onRegisterFabricAwb={handleRegisterFabricAwb}
+            onConfirmFabricAwbArrival={handleConfirmFabricAwbArrival}
           />
 
           <AddFabricModal

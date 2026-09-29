@@ -399,6 +399,10 @@ export function mapSampleToRow(sample: SampleItem) {
 }
 
 export function mapRowToFabric(row: any): FabricItem {
+  const awbShipments = Array.isArray(row.awb_shipments) ? row.awb_shipments : [];
+  const latestInTransit = awbShipments.find(
+    (s: any) => s && s.status === 'in_transit' && s.awbNumber
+  );
   return {
     id: row.id,
     code: row.code || '',
@@ -419,10 +423,27 @@ export function mapRowToFabric(row: any): FabricItem {
     supplier: row.supplier || '',
     location: row.location || '',
     lastReceivedDate: row.last_received_date || '',
+    pendingAwbNumber: row.pending_awb_number || latestInTransit?.awbNumber || '',
+    pendingAwbYards:
+      Number(row.pending_awb_yards ?? latestInTransit?.expectedYards ?? 0) || undefined,
+    awbShipments,
   };
 }
 
 export function mapFabricToRow(fabric: FabricItem) {
+  const awbShipments = Array.isArray(fabric.awbShipments) ? fabric.awbShipments : [];
+  const inTransitList = awbShipments.filter((s) => s && s.status === 'in_transit' && s.awbNumber);
+  const pendingAwbNumber =
+    inTransitList.map((s) => s.awbNumber).join(', ') || fabric.pendingAwbNumber || '';
+  const pendingAwbYards =
+    inTransitList.length > 0
+      ? Number(
+          inTransitList
+            .reduce((sum, s) => sum + Math.max(0, Number(s.expectedYards) || 0), 0)
+            .toFixed(2)
+        )
+      : Number(fabric.pendingAwbYards ?? 0);
+
   return {
     id: fabric.id,
     code: fabric.code,
@@ -440,6 +461,9 @@ export function mapFabricToRow(fabric: FabricItem) {
     supplier: fabric.supplier,
     location: fabric.location,
     last_received_date: fabric.lastReceivedDate,
+    pending_awb_number: pendingAwbNumber,
+    pending_awb_yards: pendingAwbYards,
+    awb_shipments: awbShipments,
     updated_at: new Date().toISOString(),
   };
 }
@@ -619,7 +643,14 @@ export async function upsertFabricInSupabase(fabric: FabricItem): Promise<void> 
   const fullRow = mapFabricToRow(fabric);
   const { error } = await supabase.from('fabrics').upsert(fullRow);
   if (error) {
-    const { per_pcs_consumption_yards, style_consumption_map, ...legacyRow } = fullRow;
+    const {
+      per_pcs_consumption_yards,
+      style_consumption_map,
+      pending_awb_number,
+      pending_awb_yards,
+      awb_shipments,
+      ...legacyRow
+    } = fullRow;
     const { error: fallbackErr } = await supabase.from('fabrics').upsert(legacyRow);
     if (fallbackErr) console.error('Supabase upsert fabric error:', fallbackErr);
   }
