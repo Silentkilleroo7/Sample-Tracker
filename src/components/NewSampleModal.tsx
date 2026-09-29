@@ -6,6 +6,8 @@ import {
   SampleType,
   SizeBreakdownItem,
   ColorBreakdownItem,
+  SingleRequisitionOptionItem,
+  SINGLE_REQUISITION_OPTION_PRESETS,
   PRESET_STYLE_IMAGES,
   CORE_SEAL_SAMPLE_TYPES,
   GOLD_SEAL_SIZE_RUN_PRESETS,
@@ -82,6 +84,8 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const [listedColors, setListedColors] = useState<string[]>([]);
   const [colorQuantities, setColorQuantities] = useState<Record<string, number>>({});
   const [colorWashes, setColorWashes] = useState<Record<string, string>>({});
+  const [requisitionOptions, setRequisitionOptions] = useState<SingleRequisitionOptionItem[]>([]);
+  const [customReqOptionName, setCustomReqOptionName] = useState('');
 
   // Size input: type a size (or 10–12 sizes) and press Enter to list it in a single requisition
   const [sizeInput, setSizeInput] = useState('');
@@ -1056,6 +1060,11 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     if (finalThreadNote) notesSummaryParts.push(`THREAD: ${finalThreadNote}`);
     if (finalZipperNote) notesSummaryParts.push(`ZIPPER: ${finalZipperNote}`);
     if (finalButtonNote) notesSummaryParts.push(`BUTTON: ${finalButtonNote}`);
+    if (requisitionOptions.length > 0) {
+      notesSummaryParts.push(
+        `OPTIONS: ${requisitionOptions.map((o) => `${o.name} (${o.quantity} Pcs)`).join(', ')}`
+      );
+    }
     const autoSpecialInstructions = notesSummaryParts.join(' | ');
 
     const newSample: Partial<SampleItem> = {
@@ -1071,6 +1080,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       colorBreakdown: finalColorBreakdown,
       size: finalSize,
       sizeBreakdown: finalSizeBreakdown,
+      requisitionOptions: requisitionOptions.length > 0 ? requisitionOptions : undefined,
       quantity: finalQuantity,
       fabricId: finalFabricId,
       fabricCode: finalFabricCode,
@@ -1173,6 +1183,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         sizeBreakdown: finalSizeBreakdown,
         colorWash: combinedColorWash,
         colorBreakdown: finalColorBreakdown,
+        requisitionOptions: requisitionOptions.length > 0 ? requisitionOptions : undefined,
         fabricCode: finalFabricCode,
         perPcsConsumptionYards: finalPerPcsConsumption,
         fabricRequiredYards: finalTotalFabricRequiredYards,
@@ -1735,6 +1746,182 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Single Requisition Additional Options (Thread Mokab, Leg Panel, Sleeve Panel, etc.) */}
+              <div className="mt-3 pt-3 border-t border-slate-800 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>
+                      Options Under Single Requisition (Thread Mokab, Leg Panel, Sleeve Panel):
+                    </span>
+                  </span>
+                  {requisitionOptions.length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 text-[10px] font-mono font-bold">
+                      {requisitionOptions.length} Option{requisitionOptions.length > 1 ? 's' : ''} Added
+                    </span>
+                  )}
+                </div>
+
+                {/* Quick Toggle Pills for Thread Mokab, Leg Panel, Sleeve Panel, etc. */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {SINGLE_REQUISITION_OPTION_PRESETS.map((preset) => {
+                    const isAdded = requisitionOptions.some(
+                      (o) => o.name.toLowerCase() === preset.label.toLowerCase()
+                    );
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => {
+                          if (isAdded) {
+                            setRequisitionOptions(
+                              requisitionOptions.filter(
+                                (o) => o.name.toLowerCase() !== preset.label.toLowerCase()
+                              )
+                            );
+                          } else {
+                            setRequisitionOptions([
+                              ...requisitionOptions,
+                              {
+                                id: `${preset.id}-${Date.now()}`,
+                                name: preset.label,
+                                quantity: 1,
+                                note: preset.defaultNote,
+                              },
+                            ]);
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isAdded
+                            ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-sm'
+                            : 'bg-slate-900 hover:bg-slate-800 text-emerald-200 border-emerald-500/40'
+                        }`}
+                      >
+                        <span>{isAdded ? '✓' : '+'}</span>
+                        <span>{preset.label}</span>
+                      </button>
+                    );
+                  })}
+
+                  <div className="flex items-center gap-1 ml-auto">
+                    <input
+                      type="text"
+                      value={customReqOptionName}
+                      onChange={(e) => setCustomReqOptionName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && customReqOptionName.trim()) {
+                          e.preventDefault();
+                          const name = customReqOptionName.trim();
+                          if (
+                            !requisitionOptions.some(
+                              (o) => o.name.toLowerCase() === name.toLowerCase()
+                            )
+                          ) {
+                            setRequisitionOptions([
+                              ...requisitionOptions,
+                              {
+                                id: `custom-${Date.now()}`,
+                                name,
+                                quantity: 1,
+                                note: 'As per instruction',
+                              },
+                            ]);
+                          }
+                          setCustomReqOptionName('');
+                        }
+                      }}
+                      placeholder="Custom option (e.g. Collar Panel)..."
+                      className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white placeholder-slate-500 w-44 focus:outline-none focus:border-emerald-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = customReqOptionName.trim();
+                        if (!name) return;
+                        if (
+                          !requisitionOptions.some(
+                            (o) => o.name.toLowerCase() === name.toLowerCase()
+                          )
+                        ) {
+                          setRequisitionOptions([
+                            ...requisitionOptions,
+                            {
+                              id: `custom-${Date.now()}`,
+                              name,
+                              quantity: 1,
+                              note: 'As per instruction',
+                            },
+                          ]);
+                        }
+                        setCustomReqOptionName('');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                </div>
+
+                {/* Active Single Requisition Options List */}
+                {requisitionOptions.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    {requisitionOptions.map((opt, idx) => (
+                      <div
+                        key={opt.id || idx}
+                        className="p-2 rounded-xl bg-slate-900/90 border border-emerald-500/40 flex flex-col gap-1.5"
+                      >
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-xs text-emerald-300 truncate">
+                            {opt.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setRequisitionOptions(
+                                requisitionOptions.filter((_, i) => i !== idx)
+                              )
+                            }
+                            className="text-slate-400 hover:text-rose-400 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400">Qty:</span>
+                          <input
+                            type="number"
+                            min={1}
+                            value={opt.quantity}
+                            onChange={(e) => {
+                              const val = Math.max(1, parseInt(e.target.value, 10) || 1);
+                              setRequisitionOptions(
+                                requisitionOptions.map((item, i) =>
+                                  i === idx ? { ...item, quantity: val } : item
+                                )
+                              );
+                            }}
+                            className="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-center font-mono font-bold text-xs text-white"
+                          />
+                          <input
+                            type="text"
+                            value={opt.note || ''}
+                            onChange={(e) => {
+                              setRequisitionOptions(
+                                requisitionOptions.map((item, i) =>
+                                  i === idx ? { ...item, note: e.target.value } : item
+                                )
+                              );
+                            }}
+                            placeholder="Note / Spec"
+                            className="flex-1 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-slate-200"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -144,6 +144,45 @@ export interface ColorBreakdownItem {
   quantity: number;
 }
 
+export interface SingleRequisitionOptionItem {
+  id: string;
+  name: string; // e.g. 'Thread Mokab', 'Leg Panel', 'Sleeve Panel'
+  quantity: number;
+  note?: string;
+}
+
+export const SINGLE_REQUISITION_OPTION_PRESETS: {
+  id: string;
+  label: string;
+  defaultNote: string;
+}[] = [
+  {
+    id: 'thread-mokab',
+    label: 'Thread Mokab',
+    defaultNote: 'Thread shade & stitch mockup',
+  },
+  {
+    id: 'leg-panel',
+    label: 'Leg Panel',
+    defaultNote: 'Leg wash & whisker panel',
+  },
+  {
+    id: 'sleeve-panel',
+    label: 'Sleeve Panel',
+    defaultNote: 'Sleeve wash & seam panel',
+  },
+  {
+    id: 'wash-panel',
+    label: 'Wash Panel',
+    defaultNote: 'Wash shade panel',
+  },
+  {
+    id: 'pocket-mockup',
+    label: 'Pocket Mockup',
+    defaultNote: 'Pocket & bartack mockup',
+  },
+];
+
 export const MULTI_COLOR_PACK_PRESETS: {
   id: string;
   label: string;
@@ -236,6 +275,7 @@ export interface VolarRequisitionForm {
   sizeBreakdown?: SizeBreakdownItem[];
   colorWash: string;
   colorBreakdown?: ColorBreakdownItem[];
+  requisitionOptions?: SingleRequisitionOptionItem[]; // Additional options under single requisition (e.g. Thread Mokab, Leg Panel, Sleeve Panel)
   fabricCode: string;
   perPcsConsumptionYards?: number;
   fabricRequiredYards?: number;
@@ -271,6 +311,7 @@ export interface SampleItem {
   colorBreakdown?: ColorBreakdownItem[]; // Same style with multiple different colors in a single requisition
   size: string; // e.g. "28, 29, 30, 31, 32, 33, 34, 36, 38, 40, 42, 44"
   sizeBreakdown?: SizeBreakdownItem[]; // e.g. 10 or 12 sizes with individual quantities in a single requisition
+  requisitionOptions?: SingleRequisitionOptionItem[]; // Options under single requisition: Thread Mokab, Leg Panel, Sleeve Panel, etc.
   quantity: number;
   fabricId: string;
   fabricCode: string;

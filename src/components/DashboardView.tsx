@@ -1930,7 +1930,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-            <span>Top Header Frozen Navigation Synchronized</span>
+            <span>All Workbenches Active</span>
           </div>
         </div>
 

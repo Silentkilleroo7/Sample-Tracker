@@ -154,9 +154,9 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
         {/* Desktop-only Status Header */}
         <div className="hidden sm:flex items-center justify-between px-2 mb-1.5 text-[10px] text-slate-400">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="font-bold uppercase tracking-wider text-indigo-300">
-              Main Tracking Modules (Frozen Top Header)
+            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span className="font-semibold text-indigo-300">
+              Main Tracking Modules
             </span>
           </div>
           <div className="flex items-center gap-3 font-mono text-[10px]">
