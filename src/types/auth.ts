@@ -98,32 +98,29 @@ export const ROLE_BADGE_CONFIG: Record<
   merchandiser: {
     label: 'Merchandiser (Full Access)',
     shortLabel: 'Merchandiser',
-    badgeClass:
-      'bg-indigo-500/20 text-indigo-200 border-indigo-400/50 shadow-sm shadow-indigo-500/10',
-    dotClass: 'bg-indigo-400',
-    bgClass: 'bg-indigo-500/20',
-    textClass: 'text-indigo-200',
-    borderClass: 'border-indigo-400/50',
+    badgeClass: 'bg-emerald-50 text-emerald-900 border-emerald-300',
+    dotClass: 'bg-emerald-600',
+    bgClass: 'bg-emerald-50',
+    textClass: 'text-emerald-900',
+    borderClass: 'border-emerald-300',
   },
   sewing: {
     label: 'Sewing User (Req → Sewing Only)',
     shortLabel: 'Sewing',
-    badgeClass:
-      'bg-purple-500/20 text-purple-200 border-purple-400/50 shadow-sm shadow-purple-500/10',
-    dotClass: 'bg-purple-400',
-    bgClass: 'bg-purple-500/20',
-    textClass: 'text-purple-200',
-    borderClass: 'border-purple-400/50',
+    badgeClass: 'bg-emerald-50 text-emerald-900 border-emerald-300',
+    dotClass: 'bg-emerald-600',
+    bgClass: 'bg-emerald-50',
+    textClass: 'text-emerald-900',
+    borderClass: 'border-emerald-300',
   },
   wash: {
     label: 'Wash User (Sewing → Wash → Finishing)',
     shortLabel: 'Wash',
-    badgeClass:
-      'bg-cyan-500/20 text-cyan-200 border-cyan-400/50 shadow-sm shadow-cyan-500/10',
-    dotClass: 'bg-cyan-400',
-    bgClass: 'bg-cyan-500/20',
-    textClass: 'text-cyan-200',
-    borderClass: 'border-cyan-400/50',
+    badgeClass: 'bg-emerald-50 text-emerald-900 border-emerald-300',
+    dotClass: 'bg-emerald-600',
+    bgClass: 'bg-emerald-50',
+    textClass: 'text-emerald-900',
+    borderClass: 'border-emerald-300',
   },
 };
 

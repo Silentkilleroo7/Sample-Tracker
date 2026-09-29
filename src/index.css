@@ -14,6 +14,213 @@ html,
 body {
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
+  background-color: #f6faf7;
+  color: #0f291e;
+}
+
+/* ============================================================================
+   UNIFIED GREEN TONE & WHITE/LIGHT SYSTEM THEME (NO MULTI-COLOR CLUTTER)
+   Statuses (Urgent = Red, Pending = Amber, Approved = Green) are tagged only
+   ============================================================================ */
+@media screen {
+  #app-root-wrapper {
+    background-color: #f6faf7 !important;
+    color: #0f291e !important;
+  }
+
+  /* Convert dark slate surfaces to crisp white & soft mint-white surfaces */
+  #app-root-wrapper .bg-slate-950,
+  #app-root-wrapper .bg-slate-950\/95,
+  #app-root-wrapper .bg-slate-950\/90,
+  #app-root-wrapper .bg-slate-950\/80,
+  #app-root-wrapper .bg-slate-950\/70,
+  #app-root-wrapper .bg-slate-950\/60,
+  #app-root-wrapper .bg-slate-950\/50 {
+    background-color: #f4faf6 !important;
+    color: #0f291e !important;
+  }
+
+  #app-root-wrapper .bg-slate-900,
+  #app-root-wrapper .bg-slate-900\/95,
+  #app-root-wrapper .bg-slate-900\/90,
+  #app-root-wrapper .bg-slate-900\/80,
+  #app-root-wrapper .bg-slate-900\/70,
+  #app-root-wrapper .bg-slate-900\/60,
+  #app-root-wrapper .bg-slate-900\/50,
+  #app-root-wrapper .bg-slate-900\/40 {
+    background-color: #ffffff !important;
+    color: #0f291e !important;
+  }
+
+  #app-root-wrapper .bg-slate-800,
+  #app-root-wrapper .bg-slate-800\/90,
+  #app-root-wrapper .bg-slate-800\/80,
+  #app-root-wrapper .bg-slate-800\/70,
+  #app-root-wrapper .bg-slate-800\/60,
+  #app-root-wrapper .bg-slate-800\/50,
+  #app-root-wrapper .bg-slate-800\/40 {
+    background-color: #eff7f2 !important;
+    color: #0f291e !important;
+  }
+
+  /* Unify multi-color dark section/card tints to clean green-tinted light surfaces */
+  #app-root-wrapper [class*="bg-indigo-950"],
+  #app-root-wrapper [class*="bg-purple-950"],
+  #app-root-wrapper [class*="bg-cyan-950"],
+  #app-root-wrapper [class*="bg-sky-950"],
+  #app-root-wrapper [class*="bg-blue-950"],
+  #app-root-wrapper [class*="bg-pink-950"],
+  #app-root-wrapper [class*="bg-fuchsia-950"],
+  #app-root-wrapper [class*="bg-violet-950"],
+  #app-root-wrapper [class*="bg-emerald-950"],
+  #app-root-wrapper [class*="bg-amber-950"],
+  #app-root-wrapper [class*="bg-rose-950"],
+  #app-root-wrapper [class*="bg-red-950"] {
+    background-color: #f2f9f5 !important;
+    background-image: none !important;
+    color: #0f291e !important;
+  }
+
+  #app-root-wrapper [class*="from-indigo-"],
+  #app-root-wrapper [class*="from-purple-"],
+  #app-root-wrapper [class*="from-cyan-"],
+  #app-root-wrapper [class*="from-pink-"],
+  #app-root-wrapper [class*="from-fuchsia-"],
+  #app-root-wrapper [class*="from-blue-"],
+  #app-root-wrapper [class*="from-slate-9"] {
+    background-image: none !important;
+  }
+
+  /* Unify primary multi-color buttons (indigo/purple/cyan/blue/fuchsia/pink) into Green Tone */
+  #app-root-wrapper .bg-indigo-600,
+  #app-root-wrapper .bg-indigo-500,
+  #app-root-wrapper .bg-purple-600,
+  #app-root-wrapper .bg-cyan-600,
+  #app-root-wrapper .bg-blue-600,
+  #app-root-wrapper .bg-fuchsia-600,
+  #app-root-wrapper .bg-pink-600 {
+    background-color: #059669 !important;
+    border-color: #047857 !important;
+    color: #ffffff !important;
+  }
+
+  #app-root-wrapper [class*="bg-indigo-500/"],
+  #app-root-wrapper [class*="bg-indigo-600/"],
+  #app-root-wrapper [class*="bg-purple-500/"],
+  #app-root-wrapper [class*="bg-cyan-500/"],
+  #app-root-wrapper [class*="bg-blue-500/"],
+  #app-root-wrapper [class*="bg-pink-500/"],
+  #app-root-wrapper [class*="bg-fuchsia-500/"],
+  #app-root-wrapper [class*="bg-emerald-500/"] {
+    background-color: #ecfdf5 !important;
+    color: #065f46 !important;
+    border-color: #a7f3d0 !important;
+  }
+
+  /* Unify multi-color text into clean forest green / dark slate */
+  #app-root-wrapper [class*="text-indigo-"],
+  #app-root-wrapper [class*="text-purple-"],
+  #app-root-wrapper [class*="text-cyan-"],
+  #app-root-wrapper [class*="text-sky-"],
+  #app-root-wrapper [class*="text-blue-"],
+  #app-root-wrapper [class*="text-pink-"],
+  #app-root-wrapper [class*="text-fuchsia-"],
+  #app-root-wrapper [class*="text-violet-"] {
+    color: #047857 !important;
+  }
+
+  #app-root-wrapper .text-emerald-200,
+  #app-root-wrapper .text-emerald-300,
+  #app-root-wrapper .text-emerald-400 {
+    color: #047857 !important;
+  }
+
+  /* Status Tag Text Readability on Light Background */
+  #app-root-wrapper .text-amber-100,
+  #app-root-wrapper .text-amber-200,
+  #app-root-wrapper .text-amber-300,
+  #app-root-wrapper .text-amber-400 {
+    color: #b45309 !important;
+  }
+
+  #app-root-wrapper .text-rose-100,
+  #app-root-wrapper .text-rose-200,
+  #app-root-wrapper .text-rose-300,
+  #app-root-wrapper .text-rose-400,
+  #app-root-wrapper .text-red-200,
+  #app-root-wrapper .text-red-300,
+  #app-root-wrapper .text-red-400 {
+    color: #be123c !important;
+  }
+
+  /* Convert light-on-dark text utilities to crisp dark ink on light surfaces */
+  #app-root-wrapper .text-white:not(.bg-emerald-600):not(.bg-emerald-500):not(.bg-emerald-700):not(.bg-red-600):not(.bg-red-500):not(.bg-rose-600):not(.bg-rose-500):not(.bg-amber-500):not(.bg-amber-600):not(.bg-indigo-600):not(.bg-purple-600):not(.bg-cyan-600):not(.bg-blue-600):not(.bg-fuchsia-600),
+  #app-root-wrapper .text-slate-100,
+  #app-root-wrapper .text-slate-200 {
+    color: #0f291e !important;
+  }
+
+  /* Keep white text inside solid primary green or status tag buttons/badges */
+  #app-root-wrapper .bg-emerald-600,
+  #app-root-wrapper .bg-emerald-600 *,
+  #app-root-wrapper .bg-emerald-500,
+  #app-root-wrapper .bg-emerald-500 *,
+  #app-root-wrapper .bg-emerald-700,
+  #app-root-wrapper .bg-emerald-700 *,
+  #app-root-wrapper .bg-red-600,
+  #app-root-wrapper .bg-red-600 *,
+  #app-root-wrapper .bg-rose-600,
+  #app-root-wrapper .bg-rose-600 *,
+  #app-root-wrapper .bg-rose-500,
+  #app-root-wrapper .bg-rose-500 *,
+  #app-root-wrapper .bg-amber-500,
+  #app-root-wrapper .bg-amber-500 *,
+  #app-root-wrapper .bg-amber-600,
+  #app-root-wrapper .bg-amber-600 *,
+  #app-root-wrapper .bg-indigo-600,
+  #app-root-wrapper .bg-indigo-600 * {
+    color: #ffffff !important;
+  }
+
+  #app-root-wrapper .text-slate-300 {
+    color: #1e3a2f !important;
+  }
+
+  #app-root-wrapper .text-slate-400,
+  #app-root-wrapper .text-slate-500 {
+    color: #436858 !important;
+  }
+
+  /* Clean green-tinted borders instead of dark slate or multi-color borders */
+  #app-root-wrapper .border-slate-800,
+  #app-root-wrapper .border-slate-800\/80,
+  #app-root-wrapper .border-slate-800\/60,
+  #app-root-wrapper .border-slate-700,
+  #app-root-wrapper .border-slate-700\/80,
+  #app-root-wrapper .border-slate-700\/60,
+  #app-root-wrapper [class*="border-indigo-"],
+  #app-root-wrapper [class*="border-purple-"],
+  #app-root-wrapper [class*="border-cyan-"],
+  #app-root-wrapper [class*="border-sky-"],
+  #app-root-wrapper [class*="border-blue-"],
+  #app-root-wrapper [class*="border-pink-"],
+  #app-root-wrapper [class*="border-fuchsia-"] {
+    border-color: #cde5d8 !important;
+  }
+
+  /* Form inputs, selects, textareas in clean white with green focus ring */
+  #app-root-wrapper input:not([type="checkbox"]):not([type="radio"]),
+  #app-root-wrapper select,
+  #app-root-wrapper textarea {
+    background-color: #ffffff !important;
+    color: #0f291e !important;
+    border-color: #b8dcc8 !important;
+  }
+
+  #app-root-wrapper input::placeholder,
+  #app-root-wrapper textarea::placeholder {
+    color: #6b8e7e !important;
+  }
 }
 
 @media print {

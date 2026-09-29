@@ -735,8 +735,8 @@ export const STAGE_CONFIG: Record<SampleStage, {
     label: 'Requisition',
     shortLabel: 'Req',
     stepNumber: 1,
-    color: '#3b82f6',
-    badgeBg: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
+    color: '#059669',
+    badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-300',
     badgeText: 'Requisition Raised',
     description: 'Fabric & spec approved, awaiting sewing floor input',
     nextStage: 'sewing',
@@ -746,8 +746,8 @@ export const STAGE_CONFIG: Record<SampleStage, {
     label: 'Sewing Status',
     shortLabel: 'Sewing',
     stepNumber: 2,
-    color: '#8b5cf6',
-    badgeBg: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+    color: '#047857',
+    badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-300',
     badgeText: 'In Sewing',
     description: 'On assembly line for tailoring & panel assembly',
     nextStage: 'wash',
@@ -757,8 +757,8 @@ export const STAGE_CONFIG: Record<SampleStage, {
     label: 'Wash Status',
     shortLabel: 'Wash',
     stepNumber: 3,
-    color: '#06b6d4',
-    badgeBg: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+    color: '#059669',
+    badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-300',
     badgeText: 'In Wash Plant',
     description: 'Undergoing chemical/enzyme treatment & drying',
     nextStage: 'finishing',
@@ -768,8 +768,8 @@ export const STAGE_CONFIG: Record<SampleStage, {
     label: 'Finishing Status',
     shortLabel: 'Finishing',
     stepNumber: 4,
-    color: '#f59e0b',
-    badgeBg: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+    color: '#047857',
+    badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-300',
     badgeText: 'In Finishing',
     description: 'Trimming, pressing, label attachment & final QA',
     nextStage: 'ready_for_parcel',
@@ -780,7 +780,7 @@ export const STAGE_CONFIG: Record<SampleStage, {
     shortLabel: 'Parcel',
     stepNumber: 5,
     color: '#10b981',
-    badgeBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+    badgeBg: 'bg-emerald-100 text-emerald-900 border-emerald-400',
     badgeText: 'Ready for Parcel',
     description: 'Packed, labeled, scheduled for courier dispatch',
     nextStage: 'approval_comments',
@@ -790,8 +790,8 @@ export const STAGE_CONFIG: Record<SampleStage, {
     label: 'Approval Comments',
     shortLabel: 'Approval',
     stepNumber: 6,
-    color: '#ec4899',
-    badgeBg: 'bg-pink-500/10 text-pink-400 border-pink-500/30',
+    color: '#059669',
+    badgeBg: 'bg-amber-50 text-amber-800 border-amber-300',
     badgeText: 'Awaiting / Comments',
     description: 'Buyer evaluating wash, trims & accessories remarks',
     nextStage: null,
@@ -832,20 +832,14 @@ export function getSampleTypeTone(sampleType?: string): SampleTypeTone {
     return {
       category: 'gold',
       label: raw || 'Gold Seal Sample',
-      badgeClass:
-        'bg-gradient-to-r from-amber-500/30 via-yellow-400/25 to-amber-500/30 text-amber-200 border-amber-400/80 shadow-sm shadow-amber-500/20',
-      dotClass: 'bg-amber-400 ring-2 ring-amber-300/50',
-      activePillClass:
-        'bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 text-slate-950 font-black border-amber-200 shadow-md shadow-amber-500/30 ring-2 ring-amber-300/50',
-      idlePillClass:
-        'bg-amber-950/60 text-amber-300 border-amber-500/50 hover:bg-amber-900/70 hover:border-amber-400',
-      inputClass:
-        'bg-amber-950/40 border-amber-400/80 text-amber-200 focus:ring-amber-400',
-      rowTintClass:
-        'bg-amber-950/15 hover:bg-amber-950/30 border-l-4 border-l-amber-400',
-      cardTintClass:
-        'border-amber-500/60 bg-gradient-to-br from-amber-950/30 via-slate-900/90 to-slate-900/90',
-      printBadgeClass: 'bg-amber-100 text-amber-950 border-amber-600',
+      badgeClass: 'bg-amber-50 text-amber-900 border-amber-300 font-bold',
+      dotClass: 'bg-amber-500',
+      activePillClass: 'bg-emerald-600 text-white font-bold border-emerald-600 shadow-sm',
+      idlePillClass: 'bg-white text-slate-700 border-emerald-200 hover:bg-emerald-50',
+      inputClass: 'bg-white border-emerald-300 text-slate-900 focus:ring-emerald-500',
+      rowTintClass: 'hover:bg-emerald-50/40',
+      cardTintClass: 'border-emerald-200 bg-white',
+      printBadgeClass: 'bg-white text-black border-black',
     };
   }
 
@@ -853,20 +847,14 @@ export function getSampleTypeTone(sampleType?: string): SampleTypeTone {
     return {
       category: 'red',
       label: raw || 'Red Seal Sample',
-      badgeClass:
-        'bg-gradient-to-r from-rose-600/35 via-red-500/25 to-rose-600/35 text-rose-200 border-rose-400/80 shadow-sm shadow-rose-500/20',
-      dotClass: 'bg-rose-500 ring-2 ring-rose-300/50',
-      activePillClass:
-        'bg-gradient-to-r from-rose-600 to-red-600 text-white font-black border-rose-300 shadow-md shadow-rose-600/30 ring-2 ring-rose-400/50',
-      idlePillClass:
-        'bg-rose-950/60 text-rose-300 border-rose-500/50 hover:bg-rose-900/70 hover:border-rose-400',
-      inputClass:
-        'bg-rose-950/40 border-rose-500/80 text-rose-200 focus:ring-rose-500',
-      rowTintClass:
-        'bg-rose-950/15 hover:bg-rose-950/30 border-l-4 border-l-rose-500',
-      cardTintClass:
-        'border-rose-500/60 bg-gradient-to-br from-rose-950/30 via-slate-900/90 to-slate-900/90',
-      printBadgeClass: 'bg-rose-100 text-rose-950 border-rose-600',
+      badgeClass: 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold',
+      dotClass: 'bg-emerald-600',
+      activePillClass: 'bg-emerald-600 text-white font-bold border-emerald-600 shadow-sm',
+      idlePillClass: 'bg-white text-slate-700 border-emerald-200 hover:bg-emerald-50',
+      inputClass: 'bg-white border-emerald-300 text-slate-900 focus:ring-emerald-500',
+      rowTintClass: 'hover:bg-emerald-50/40',
+      cardTintClass: 'border-emerald-200 bg-white',
+      printBadgeClass: 'bg-white text-black border-black',
     };
   }
 
@@ -874,19 +862,13 @@ export function getSampleTypeTone(sampleType?: string): SampleTypeTone {
     return {
       category: 'initial',
       label: raw || 'Initial Sample',
-      badgeClass:
-        'bg-white/95 text-slate-950 border-white shadow-sm shadow-white/20',
-      dotClass: 'bg-slate-900 ring-2 ring-slate-400/60',
-      activePillClass:
-        'bg-white text-slate-950 font-black border-white shadow-md shadow-white/30 ring-2 ring-white/60',
-      idlePillClass:
-        'bg-white/15 text-white border-white/50 hover:bg-white/25 hover:border-white',
-      inputClass:
-        'bg-white/15 border-white/80 text-white focus:ring-white',
-      rowTintClass:
-        'bg-white/[0.04] hover:bg-white/[0.08] border-l-4 border-l-white',
-      cardTintClass:
-        'border-white/50 bg-gradient-to-br from-white/[0.08] via-slate-900/90 to-slate-900/90',
+      badgeClass: 'bg-emerald-50/70 text-emerald-800 border-emerald-200 font-semibold',
+      dotClass: 'bg-emerald-500',
+      activePillClass: 'bg-emerald-600 text-white font-bold border-emerald-600 shadow-sm',
+      idlePillClass: 'bg-white text-slate-700 border-emerald-200 hover:bg-emerald-50',
+      inputClass: 'bg-white border-emerald-300 text-slate-900 focus:ring-emerald-500',
+      rowTintClass: 'hover:bg-emerald-50/40',
+      cardTintClass: 'border-emerald-200 bg-white',
       printBadgeClass: 'bg-white text-black border-black',
     };
   }
@@ -894,16 +876,14 @@ export function getSampleTypeTone(sampleType?: string): SampleTypeTone {
   return {
     category: 'default',
     label: raw || 'Standard Sample',
-    badgeClass: 'bg-slate-800 text-slate-200 border-slate-600',
-    dotClass: 'bg-indigo-400',
-    activePillClass: 'bg-indigo-600 text-white font-bold border-indigo-400',
-    idlePillClass:
-      'bg-slate-800/80 text-slate-300 border-slate-700 hover:border-slate-500',
-    inputClass:
-      'bg-slate-800 border-slate-700 text-white focus:ring-indigo-500',
-    rowTintClass: 'hover:bg-slate-800/40',
-    cardTintClass: 'border-slate-800 bg-slate-900/80',
-    printBadgeClass: 'bg-slate-100 text-black border-black',
+    badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    dotClass: 'bg-emerald-500',
+    activePillClass: 'bg-emerald-600 text-white font-bold border-emerald-600',
+    idlePillClass: 'bg-white text-slate-700 border-emerald-200 hover:bg-emerald-50',
+    inputClass: 'bg-white border-emerald-300 text-slate-900 focus:ring-emerald-500',
+    rowTintClass: 'hover:bg-emerald-50/40',
+    cardTintClass: 'border-emerald-200 bg-white',
+    printBadgeClass: 'bg-white text-black border-black',
   };
 }
 
@@ -923,10 +903,9 @@ export interface PriorityTone {
 }
 
 /**
- * Returns the visual color tone configuration for a Requisition Priority:
- * - Normal ('normal') -> White color
- * - High ('high') -> Little Red (soft/light red) color
- * - Urgent ('urgent') -> Fully Red (solid vibrant red) color
+ * Priority tones:
+ * Statuses (Urgent, High/Pending, Normal/Approved) are tagged with badge color ONLY
+ * and do NOT alter the card or row theme of the system.
  */
 export function getPriorityTone(priority?: SamplePriority | string): PriorityTone {
   const p = (priority || 'normal').toLowerCase();
@@ -936,21 +915,15 @@ export function getPriorityTone(priority?: SamplePriority | string): PriorityTon
       priority: 'urgent',
       label: 'URGENT',
       shortLabel: 'Urgent',
-      description: 'Fully Red — Immediate 1-Day Priority',
-      badgeClass:
-        'bg-red-600 text-white border-red-400 shadow-md shadow-red-600/50 font-black',
-      dotClass: 'bg-white ring-2 ring-red-200/80 animate-pulse',
-      activePillClass:
-        'bg-red-600 text-white font-black border-red-300 shadow-lg shadow-red-600/40 ring-2 ring-red-400/70',
-      idlePillClass:
-        'bg-red-950/70 text-red-300 border-red-500/50 hover:bg-red-900/80 hover:border-red-400',
-      selectClass:
-        'bg-red-600 text-white border-red-300 font-black shadow-md shadow-red-600/40 focus:ring-red-400',
-      cardClass:
-        'bg-gradient-to-r from-red-950/90 via-rose-950/85 to-red-950/90 hover:from-red-900/90 hover:to-red-900/90 border-red-500 border-l-4 border-l-red-500 shadow-lg shadow-red-950/50 ring-1 ring-red-500/40',
-      rowClass:
-        'bg-red-950/65 hover:bg-red-900/75 border-l-4 border-l-red-500',
-      printBadgeClass: 'bg-red-600 text-white border-red-800 font-black',
+      description: 'Urgent 1-Day Priority (Tagged Only)',
+      badgeClass: 'bg-red-600 text-white border-red-600 font-bold shadow-xs',
+      dotClass: 'bg-white animate-pulse',
+      activePillClass: 'bg-red-600 text-white font-bold border-red-600 shadow-xs',
+      idlePillClass: 'bg-white text-red-700 border-red-200 hover:bg-red-50',
+      selectClass: 'bg-white text-red-700 border-red-300 font-bold focus:ring-emerald-500',
+      cardClass: 'bg-white hover:bg-emerald-50/30 border-emerald-200 shadow-xs',
+      rowClass: 'bg-white hover:bg-emerald-50/40',
+      printBadgeClass: 'bg-white text-black border-black font-bold',
     };
   }
 
@@ -959,21 +932,15 @@ export function getPriorityTone(priority?: SamplePriority | string): PriorityTon
       priority: 'high',
       label: 'HIGH',
       shortLabel: 'High',
-      description: 'Little Red — Elevated Priority',
-      badgeClass:
-        'bg-rose-500/25 text-rose-200 border-rose-400/70 shadow-sm shadow-rose-500/20 font-bold',
-      dotClass: 'bg-rose-400 ring-2 ring-rose-300/50',
-      activePillClass:
-        'bg-rose-500/35 text-rose-100 font-black border-rose-400 shadow-md shadow-rose-500/25 ring-2 ring-rose-400/50',
-      idlePillClass:
-        'bg-rose-950/45 text-rose-300 border-rose-500/40 hover:bg-rose-900/60 hover:border-rose-400',
-      selectClass:
-        'bg-rose-950/65 text-rose-200 border-rose-400/80 font-bold shadow-sm shadow-rose-500/20 focus:ring-rose-400',
-      cardClass:
-        'bg-rose-950/35 hover:bg-rose-950/50 border-rose-400/60 border-l-4 border-l-rose-400 shadow-md shadow-rose-950/30',
-      rowClass:
-        'bg-rose-950/25 hover:bg-rose-950/40 border-l-4 border-l-rose-400',
-      printBadgeClass: 'bg-rose-100 text-rose-900 border-rose-500 font-bold',
+      description: 'High Priority (Tagged Only)',
+      badgeClass: 'bg-amber-500 text-white border-amber-500 font-bold shadow-xs',
+      dotClass: 'bg-white',
+      activePillClass: 'bg-amber-500 text-white font-bold border-amber-500 shadow-xs',
+      idlePillClass: 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50',
+      selectClass: 'bg-white text-amber-800 border-amber-300 font-bold focus:ring-emerald-500',
+      cardClass: 'bg-white hover:bg-emerald-50/30 border-emerald-200 shadow-xs',
+      rowClass: 'bg-white hover:bg-emerald-50/40',
+      printBadgeClass: 'bg-white text-black border-black font-bold',
     };
   }
 
@@ -981,22 +948,197 @@ export function getPriorityTone(priority?: SamplePriority | string): PriorityTon
     priority: 'normal',
     label: 'NORMAL',
     shortLabel: 'Normal',
-    description: 'White — Standard Requisition',
-    badgeClass:
-      'bg-white text-slate-950 border-white shadow-sm shadow-white/25 font-black',
-    dotClass: 'bg-slate-900 ring-2 ring-slate-400/60',
-    activePillClass:
-      'bg-white text-slate-950 font-black border-white shadow-md shadow-white/30 ring-2 ring-white/70',
-    idlePillClass:
-      'bg-white/10 text-white border-white/40 hover:bg-white/20 hover:border-white',
-    selectClass:
-      'bg-white text-slate-950 border-white font-black shadow-sm shadow-white/20 focus:ring-white',
-    cardClass:
-      'bg-white/[0.07] hover:bg-white/[0.11] border-white/60 border-l-4 border-l-white shadow-md shadow-white/5',
-    rowClass:
-      'bg-white/[0.05] hover:bg-white/[0.09] border-l-4 border-l-white',
-    printBadgeClass: 'bg-white text-black border-black font-black',
+    description: 'Standard Requisition',
+    badgeClass: 'bg-emerald-600 text-white border-emerald-600 font-semibold',
+    dotClass: 'bg-white',
+    activePillClass: 'bg-emerald-600 text-white font-bold border-emerald-600 shadow-xs',
+    idlePillClass: 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-50',
+    selectClass: 'bg-white text-emerald-900 border-emerald-300 font-semibold focus:ring-emerald-500',
+    cardClass: 'bg-white hover:bg-emerald-50/30 border-emerald-200 shadow-xs',
+    rowClass: 'bg-white hover:bg-emerald-50/40',
+    printBadgeClass: 'bg-white text-black border-black font-semibold',
   };
+}
+
+export interface RankedSampleSearchResult {
+  sample: SampleItem;
+  score: number;
+  matchReason: string;
+  matchedField: 'poNumber' | 'styleName' | 'styleCode' | 'blNumber' | 'buyer' | 'color' | 'other';
+}
+
+function computeStringCloseness(targetRaw: string, queryRaw: string): number {
+  const target = targetRaw.toLowerCase().trim();
+  const query = queryRaw.toLowerCase().trim();
+  if (!target || !query) return 0;
+  if (target === query) return 100;
+
+  const targetClean = target.replace(/[\s\-_/#.]/g, '');
+  const queryClean = query.replace(/[\s\-_/#.]/g, '');
+  if (targetClean && queryClean) {
+    if (targetClean === queryClean) return 98;
+    if (targetClean.startsWith(queryClean)) return 90;
+    if (targetClean.includes(queryClean)) return 82;
+  }
+
+  if (target.startsWith(query)) return 92;
+  if (target.includes(query)) return 84;
+
+  // Token / word-level matching
+  const queryTokens = query.split(/[\s\-_,/]+/).filter((t) => t.length >= 2);
+  if (queryTokens.length > 0) {
+    let matchedTokens = 0;
+    for (const token of queryTokens) {
+      if (target.includes(token) || targetClean.includes(token)) {
+        matchedTokens++;
+      }
+    }
+    if (matchedTokens === queryTokens.length) return 76;
+    if (matchedTokens > 0) return 55 + Math.round((matchedTokens / queryTokens.length) * 15);
+  }
+
+  // Character bigram similarity (Dice coefficient) for close / typo-tolerant matching
+  if (queryClean.length >= 2 && targetClean.length >= 2) {
+    const bigrams = (str: string) => {
+      const list: string[] = [];
+      for (let i = 0; i < str.length - 1; i++) {
+        list.push(str.slice(i, i + 2));
+      }
+      return list;
+    };
+    const tBigrams = bigrams(targetClean);
+    const qBigrams = bigrams(queryClean);
+    let intersection = 0;
+    const used = new Array(tBigrams.length).fill(false);
+    for (const qb of qBigrams) {
+      const idx = tBigrams.findIndex((tb, i) => !used[i] && tb === qb);
+      if (idx !== -1) {
+        used[idx] = true;
+        intersection++;
+      }
+    }
+    const dice = (2 * intersection) / (tBigrams.length + qBigrams.length);
+    if (dice >= 0.35) {
+      return Math.round(dice * 75);
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Instant Auto-Detect & Closeness Ranking Search Engine:
+ * Detects styles by PO Number, Style Name, Style Code, BL Number, Buyer, Color/Wash, or Line Code
+ * and returns matching & closely related styles ordered by relevance score.
+ */
+export function rankSamplesBySearchQuery(
+  samples: SampleItem[],
+  query: string
+): RankedSampleSearchResult[] {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  const results: RankedSampleSearchResult[] = [];
+
+  for (const sample of samples) {
+    const candidates: {
+      score: number;
+      reason: string;
+      field: RankedSampleSearchResult['matchedField'];
+    }[] = [];
+
+    const poScore = computeStringCloseness(sample.poNumber || '', trimmed);
+    if (poScore > 0) {
+      candidates.push({
+        score: poScore + 4, // Boost PO Number matches
+        reason: poScore >= 90 ? `PO # Exact Match (${sample.poNumber})` : `Close PO # (${sample.poNumber})`,
+        field: 'poNumber',
+      });
+    }
+
+    const nameScore = computeStringCloseness(sample.styleName || '', trimmed);
+    if (nameScore > 0) {
+      candidates.push({
+        score: nameScore + 3, // Boost Style Name matches
+        reason:
+          nameScore >= 90
+            ? `Style Name Match (${sample.styleName})`
+            : `Related Style Name (${sample.styleName})`,
+        field: 'styleName',
+      });
+    }
+
+    const codeScore = computeStringCloseness(sample.styleCode || '', trimmed);
+    if (codeScore > 0) {
+      candidates.push({
+        score: codeScore + 3,
+        reason:
+          codeScore >= 90
+            ? `Style Code Match (${sample.styleCode})`
+            : `Close Style Code (${sample.styleCode})`,
+        field: 'styleCode',
+      });
+    }
+
+    const blScore = computeStringCloseness(
+      sample.blNumber || sample.requisitionForm?.blNumber || '',
+      trimmed
+    );
+    if (blScore > 0) {
+      candidates.push({
+        score: blScore,
+        reason: `BL # Match (${sample.blNumber || sample.requisitionForm?.blNumber})`,
+        field: 'blNumber',
+      });
+    }
+
+    const buyerScore = computeStringCloseness(sample.buyer || '', trimmed);
+    if (buyerScore > 0) {
+      candidates.push({
+        score: Math.min(85, buyerScore),
+        reason: `Buyer Match (${sample.buyer})`,
+        field: 'buyer',
+      });
+    }
+
+    const colorScore = computeStringCloseness(
+      `${sample.color || ''} ${sample.washDetails?.washType || ''}`,
+      trimmed
+    );
+    if (colorScore > 0) {
+      candidates.push({
+        score: Math.min(80, colorScore),
+        reason: `Color / Wash Match`,
+        field: 'color',
+      });
+    }
+
+    const otherScore = computeStringCloseness(
+      `${sample.lineCode || ''} ${sample.fabricCode || ''} ${sample.sampleType || ''}`,
+      trimmed
+    );
+    if (otherScore > 0) {
+      candidates.push({
+        score: Math.min(75, otherScore),
+        reason: `Spec / Line / Fabric Match`,
+        field: 'other',
+      });
+    }
+
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => b.score - a.score);
+      const best = candidates[0];
+      results.push({
+        sample,
+        score: Math.min(100, best.score),
+        matchReason: best.reason,
+        matchedField: best.field,
+      });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results;
 }
 
 
