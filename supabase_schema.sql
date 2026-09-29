@@ -891,13 +891,19 @@ END;
 $$;
 
 -- =====================================================================================
--- 15. ADMIN "BL...." NUMBER BOX & VOLAR SPREADSHEET REQUISITION SYNC
+-- 15. OPTIONAL "BL...." NUMBER BOX (WRITTEN BY HAND ON PRINTED PAPER OR ENTERED ANYTIME)
 -- =====================================================================================
--- 1. Add bl_number column to public.samples for the top-left "BL...." Admin box
+-- 1. Add optional bl_number column to public.samples (NOT mandatory to print; written by hand on printed paper)
 ALTER TABLE public.samples
-  ADD COLUMN IF NOT EXISTS bl_number TEXT NOT NULL DEFAULT '';
+  ADD COLUMN IF NOT EXISTS bl_number TEXT DEFAULT '';
 
--- 2. Trigger function to keep bl_number and requisition_form->>'blNumber' in sync
+ALTER TABLE public.samples
+  ALTER COLUMN bl_number DROP NOT NULL;
+
+ALTER TABLE public.samples
+  ALTER COLUMN bl_number SET DEFAULT '';
+
+-- 2. Trigger function to keep optional bl_number and requisition_form->>'blNumber' in sync
 CREATE OR REPLACE FUNCTION public.fn_sync_sample_bl_number()
 RETURNS TRIGGER
 LANGUAGE plpgsql

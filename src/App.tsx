@@ -1762,6 +1762,7 @@ export default function App() {
                 : undefined
             }
             onUpdateSampleThumbnail={isMerchandiser ? handleUpdateSampleThumbnail : undefined}
+            onUpdateBlNumber={handleUpdateBlNumber}
           />
 
           <FollowUpModal

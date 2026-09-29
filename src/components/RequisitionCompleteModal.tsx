@@ -75,6 +75,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
   const [copied, setCopied] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [blSavedToast, setBlSavedToast] = useState(false);
+  const [printBlankBlForHandwriting, setPrintBlankBlForHandwriting] = useState(true);
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
   const [newColorNameInput, setNewColorNameInput] = useState<string>('');
 
@@ -424,37 +425,47 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                   Volar Sample Requisition Print Sheet
                 </h2>
                 <SampleTypeBadge sampleType={form.sampleType} size="sm" />
-                {/* Quick Admin BL.... input in top toolbar as well */}
+                {/* Optional BL.... Record in toolbar (Not mandatory to print - written by hand on paper) */}
                 <div className="flex items-center gap-1.5 bg-amber-500/15 border border-amber-500/40 rounded-lg px-2.5 py-0.5">
                   <span className="text-[11px] font-black text-amber-300 uppercase tracking-wider">
-                    BL....
+                    BL.... (Optional):
                   </span>
                   <input
                     type="text"
                     value={form.blNumber || ''}
                     onChange={(e) => handleBlNumberChange(e.target.value)}
-                    placeholder="Admin write BL#"
-                    className="w-28 bg-slate-950/80 border border-amber-500/40 rounded px-2 py-0.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
+                    placeholder="Written by hand on print"
+                    className="w-36 bg-slate-950/80 border border-amber-500/40 rounded px-2 py-0.5 text-xs font-mono font-bold text-white focus:outline-none focus:border-amber-400"
                   />
+                  <label
+                    className="inline-flex items-center gap-1 text-[10px] text-amber-200 cursor-pointer select-none ml-1"
+                    title="Keep checked so the printed paper has a blank BL.... box to be written by hand"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={printBlankBlForHandwriting}
+                      onChange={(e) => setPrintBlankBlForHandwriting(e.target.checked)}
+                      className="rounded border-amber-400 text-amber-500 focus:ring-0"
+                    />
+                    <span>Blank on print (handwrite)</span>
+                  </label>
                   {blSavedToast && (
                     <span className="text-[10px] font-bold text-emerald-400">Saved</span>
                   )}
                 </div>
                 {isRequisitionLocked ? (
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                    <Lock className="w-3 h-3" /> Locked (BL.... Editable by Admin)
+                    <Lock className="w-3 h-3" /> Locked (BL.... Optional / Handwritten)
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Spreadsheet Print Format
+                    BL.... Optional to Print
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-400">
-                Top-left <strong className="text-amber-300">BL....</strong> box + Focused{' '}
-                <strong className="text-white">
-                  Style Name, Description, Color/Wash, Pcs & Sewing Instructions
-                </strong>
+                <strong className="text-amber-300">BL.... is NOT mandatory to print</strong> — prints as a clean top-left box to be{' '}
+                <strong className="text-white">written by hand on the printed paper</strong> by Admin or authorized person.
               </p>
             </div>
           </div>
@@ -679,24 +690,33 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
             {/* 1. TOP HEADER ROW WITH TOP-LEFT "BL...." ADMIN BOX & TITLE      */}
             {/* =============================================================== */}
             <div className="grid grid-cols-12 items-start gap-2 mb-2">
-              {/* TOP-LEFT BLANK BOX NAMED "BL...." FOR ADMIN TO WRITE BL NUMBER */}
+              {/* TOP-LEFT BLANK BOX NAMED "BL...." FOR ADMIN OR OTHER PERSON TO WRITE BY HAND ON PRINTED PAPER */}
               <div className="col-span-4 sm:col-span-3">
-                <div className="border-2 border-black bg-white px-2.5 py-2 shadow-[2px_2px_0px_#000] print:shadow-none">
+                <div className="border-2 border-black bg-white px-2.5 py-2 min-h-[44px] flex flex-col justify-center shadow-[2px_2px_0px_#000] print:shadow-none">
                   <div className="flex items-baseline gap-1.5">
                     <span className="font-black text-[14px] tracking-wide uppercase text-black shrink-0">
                       BL....
                     </span>
+                    {/* Screen input (optional digital record for Admin or other person) */}
                     <input
                       type="text"
                       value={form.blNumber || ''}
                       onChange={(e) => handleBlNumberChange(e.target.value)}
-                      placeholder=""
-                      title="Admin: Write or type BL Number here"
-                      className="w-full border-b border-dotted border-black/70 bg-transparent font-mono font-black text-[14px] text-black focus:outline-none focus:bg-yellow-50/80 print:border-b print:border-black px-1 py-0.5"
+                      placeholder="(Write by hand on print)"
+                      title="Optional: Not mandatory to print. Will be written by hand on printed paper."
+                      className={`w-full border-b border-dotted border-black/70 bg-transparent font-mono font-black text-[14px] text-black placeholder:text-neutral-400 placeholder:font-normal placeholder:text-[10px] focus:outline-none focus:bg-yellow-50/80 px-1 py-0.5 ${
+                        printBlankBlForHandwriting ? 'print:hidden' : 'print:inline-block'
+                      }`}
                     />
+                    {/* Dedicated blank handwriting line for printed paper when printBlankBlForHandwriting is enabled */}
+                    {printBlankBlForHandwriting && (
+                      <span className="hidden print:inline-block w-full border-b border-dotted border-black h-5">
+                        &nbsp;
+                      </span>
+                    )}
                   </div>
                   <div className="text-[9px] font-semibold uppercase tracking-wider text-neutral-500 mt-0.5 print:hidden">
-                    Admin BL Number Box (Click to write or handwrite on print)
+                    Not mandatory to print — Written by hand on printed paper
                   </div>
                 </div>
               </div>
