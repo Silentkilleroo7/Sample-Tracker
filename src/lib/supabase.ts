@@ -5,6 +5,8 @@ import {
   getSampleTypeTone,
   getEffectiveSizeBreakdown,
   getEffectiveSizeName,
+  getEffectiveColorBreakdown,
+  getEffectiveColorName,
   getEffectiveRequisitionQuantity,
   getEffectivePerPcsConsumption,
 } from '../types/sample';
@@ -152,6 +154,11 @@ export function mapRowToSample(row: any): SampleItem {
     lineCode: row.line_code || '',
     sampleType: row.sample_type || 'Red Seal Sample',
     color: row.color || '',
+    colorBreakdown: Array.isArray(row.color_breakdown)
+      ? row.color_breakdown
+      : Array.isArray(reqForm?.colorBreakdown)
+      ? reqForm.colorBreakdown
+      : undefined,
     size: row.size || '',
     sizeBreakdown: Array.isArray(row.size_breakdown)
       ? row.size_breakdown
@@ -255,8 +262,10 @@ export function mapRowToSample(row: any): SampleItem {
   sample.thumbnail = selectedImg || undefined;
   sample.images = selectedImg ? [selectedImg] : [];
   sample.size = getEffectiveSizeName(sample);
+  sample.color = getEffectiveColorName(sample);
   sample.quantity = getEffectiveRequisitionQuantity(sample);
   sample.sizeBreakdown = getEffectiveSizeBreakdown(sample);
+  sample.colorBreakdown = getEffectiveColorBreakdown(sample);
   return sample;
 }
 
@@ -295,6 +304,8 @@ export function mapSampleToRow(sample: SampleItem) {
 
   const effectiveSizeBreakdown = getEffectiveSizeBreakdown(sample);
   const effectiveSizeName = getEffectiveSizeName(sample);
+  const effectiveColorBreakdown = getEffectiveColorBreakdown(sample);
+  const effectiveColorName = getEffectiveColorName(sample);
   const effectiveReqQty = getEffectiveRequisitionQuantity(sample);
   const effectivePerPcsConsumption = getEffectivePerPcsConsumption(sample);
 
@@ -309,6 +320,11 @@ export function mapSampleToRow(sample: SampleItem) {
           sample.requisitionForm.sizeBreakdown.length > 0
             ? sample.requisitionForm.sizeBreakdown
             : effectiveSizeBreakdown,
+        colorBreakdown:
+          sample.requisitionForm.colorBreakdown &&
+          sample.requisitionForm.colorBreakdown.length > 0
+            ? sample.requisitionForm.colorBreakdown
+            : effectiveColorBreakdown,
         shipmentDate: effectiveShipmentDate,
         threadNote: effectiveThreadNote,
         zipperNote: effectiveZipperNote,
@@ -350,7 +366,8 @@ export function mapSampleToRow(sample: SampleItem) {
     line_code: sample.lineCode,
     sample_type: sample.sampleType,
     sample_color_tone: sampleColorTone,
-    color: sample.color,
+    color: effectiveColorName,
+    color_breakdown: effectiveColorBreakdown,
     size: effectiveSizeName,
     size_breakdown: effectiveSizeBreakdown,
     quantity: effectiveReqQty,
@@ -578,6 +595,7 @@ export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> 
       is_requisition_locked,
       sample_color_tone,
       size_breakdown,
+      color_breakdown,
       per_pcs_consumption_yards,
       ...legacyRow
     } = fullRow;

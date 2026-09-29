@@ -620,9 +620,11 @@ BEGIN
 END $$;
 
 -- =====================================================================================
--- 13. SIZE NAME, TOTAL REQUISITION QUANTITY & PRIORITY COLOR TONE SYNC + BACKFILL
+-- 13. MULTI-COLOR REQUISITION, SIZE NAME, TOTAL REQUISITION QUANTITY & PRIORITY SYNC
 -- =====================================================================================
 ALTER TABLE public.samples
+  ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT 'Standard',
+  ADD COLUMN IF NOT EXISTS color_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS size TEXT NOT NULL DEFAULT 'Standard',
   ADD COLUMN IF NOT EXISTS size_breakdown JSONB NOT NULL DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS quantity INTEGER NOT NULL DEFAULT 1,
@@ -630,17 +632,22 @@ ALTER TABLE public.samples
   ADD COLUMN IF NOT EXISTS priority_color_tone TEXT NOT NULL DEFAULT 'white';
 
 -- Trigger function to automatically synchronize:
---   1. size (Size Name string, e.g. '32, 34, 36' or 'M, L')
---   2. quantity (Total Requisition Quantity in Pcs summed from size_breakdown or quantity)
---   3. size_breakdown (Per-size breakdown JSONB array)
---   4. priority_color_tone ('white' for normal, 'light_red' for high, 'red' for urgent)
+--   1. color (Colorway Name string for same style, e.g. 'Dark Indigo, Jet Black, Olive Drab')
+--   2. color_breakdown (Per-color breakdown JSONB array: [{color, wash, sizes, quantity}])
+--   3. size (Size Name string, e.g. '32, 34, 36' or 'M, L')
+--   4. size_breakdown (Per-size breakdown JSONB array)
+--   5. quantity (Total Requisition Quantity in Pcs summed across colors/sizes)
+--   6. priority_color_tone ('white' for normal, 'light_red' for high, 'red' for urgent)
 CREATE OR REPLACE FUNCTION public.fn_sync_sample_size_qty_and_priority()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
   v_size_names TEXT;
-  v_total_qty INTEGER;
+  v_size_total_qty INTEGER;
+  v_color_names TEXT;
+  v_color_total_qty INTEGER;
+  v_default_wash TEXT;
 BEGIN
   -- Normalize priority ('normal', 'high', 'urgent') and set priority_color_tone
   NEW.priority := LOWER(TRIM(COALESCE(NULLIF(NEW.priority, ''), 'normal')));
@@ -662,14 +669,14 @@ BEGIN
     NEW.size_breakdown := NEW.requisition_form -> 'sizeBreakdown';
   END IF;
 
-  -- Extract Size Name(s) and Total Requisition Quantity from size_breakdown if present
+  -- Extract Size Name(s) and Size Total Quantity from size_breakdown if present
   IF NEW.size_breakdown IS NOT NULL
      AND jsonb_typeof(NEW.size_breakdown) = 'array'
      AND jsonb_array_length(NEW.size_breakdown) > 0 THEN
     SELECT
       STRING_AGG(TRIM(COALESCE(elem ->> 'size', '')), ', '),
-      SUM(GREATEST(COALESCE((elem ->> 'quantity'):: integer, 1), 1))
-    INTO v_size_names, v_total_qty
+      SUM(GREATEST(COALESCE((elem ->> 'quantity')::integer, 1), 1))
+    INTO v_size_names, v_size_total_qty
     FROM jsonb_array_elements(NEW.size_breakdown) AS elem
     WHERE TRIM(COALESCE(elem ->> 'size', '')) <> '';
 
@@ -677,8 +684,8 @@ BEGIN
       NEW.size := v_size_names;
     END IF;
 
-    IF v_total_qty IS NOT NULL AND v_total_qty > 0 THEN
-      NEW.quantity := GREATEST(COALESCE(NEW.quantity, 1), v_total_qty);
+    IF v_size_total_qty IS NOT NULL AND v_size_total_qty > 0 THEN
+      NEW.quantity := GREATEST(COALESCE(NEW.quantity, 1), v_size_total_qty);
     END IF;
   END IF;
 
@@ -695,6 +702,66 @@ BEGIN
     );
   END IF;
 
+  -- If color_breakdown is empty in column, check requisition_form->'colorBreakdown'
+  IF (NEW.color_breakdown IS NULL OR jsonb_typeof(NEW.color_breakdown) <> 'array' OR jsonb_array_length(NEW.color_breakdown) = 0)
+     AND NEW.requisition_form IS NOT NULL
+     AND jsonb_typeof(NEW.requisition_form -> 'colorBreakdown') = 'array'
+     AND jsonb_array_length(NEW.requisition_form -> 'colorBreakdown') > 0 THEN
+    NEW.color_breakdown := NEW.requisition_form -> 'colorBreakdown';
+  END IF;
+
+  -- Extract Colorway Name(s) and Color Total Quantity from color_breakdown if present
+  IF NEW.color_breakdown IS NOT NULL
+     AND jsonb_typeof(NEW.color_breakdown) = 'array'
+     AND jsonb_array_length(NEW.color_breakdown) > 0 THEN
+    SELECT
+      STRING_AGG(TRIM(COALESCE(elem ->> 'color', '')), ', '),
+      SUM(GREATEST(COALESCE((elem ->> 'quantity')::integer, 1), 1))
+    INTO v_color_names, v_color_total_qty
+    FROM jsonb_array_elements(NEW.color_breakdown) AS elem
+    WHERE TRIM(COALESCE(elem ->> 'color', '')) <> '';
+
+    IF v_color_names IS NOT NULL AND v_color_names <> '' THEN
+      NEW.color := v_color_names;
+    END IF;
+
+    IF v_color_total_qty IS NOT NULL AND v_color_total_qty > 0 THEN
+      NEW.quantity := GREATEST(COALESCE(NEW.quantity, 1), v_color_total_qty);
+    END IF;
+  END IF;
+
+  NEW.color := COALESCE(NULLIF(TRIM(NEW.color), ''), 'Standard');
+  v_default_wash := COALESCE(NULLIF(TRIM(NEW.wash_details ->> 'washType'), ''), 'Standard Wash');
+
+  -- If color_breakdown is still empty, build a default breakdown entry from color, wash, size & quantity
+  IF NEW.color_breakdown IS NULL
+     OR jsonb_typeof(NEW.color_breakdown) <> 'array'
+     OR jsonb_array_length(NEW.color_breakdown) = 0 THEN
+    NEW.color_breakdown := jsonb_build_array(
+      jsonb_build_object(
+        'color', NEW.color,
+        'wash', v_default_wash,
+        'sizes', NEW.size,
+        'quantity', NEW.quantity
+      )
+    );
+  END IF;
+
+  -- Keep requisition_form JSONB in sync with colorBreakdown and sizeBreakdown
+  IF NEW.requisition_form IS NOT NULL AND jsonb_typeof(NEW.requisition_form) = 'object' THEN
+    NEW.requisition_form := jsonb_set(
+      jsonb_set(
+        NEW.requisition_form,
+        '{sizeBreakdown}',
+        NEW.size_breakdown,
+        true
+      ),
+      '{colorBreakdown}',
+      NEW.color_breakdown,
+      true
+    );
+  END IF;
+
   RETURN NEW;
 END;
 $$;
@@ -704,10 +771,11 @@ CREATE TRIGGER trg_sync_sample_size_qty_and_priority
   BEFORE INSERT OR UPDATE ON public.samples
   FOR EACH ROW EXECUTE FUNCTION public.fn_sync_sample_size_qty_and_priority();
 
--- Backfill all existing samples so every style has Size Name, Total Requisition Quantity,
--- Size Breakdown, and Priority Color Tone populated
+-- Backfill all existing samples so every style has Colorway Breakdown, Size Name,
+-- Total Requisition Quantity, Size Breakdown, and Priority Color Tone populated
 UPDATE public.samples
 SET
+  color = COALESCE(NULLIF(TRIM(color), ''), 'Standard'),
   size = COALESCE(NULLIF(TRIM(size), ''), 'Standard'),
   quantity = GREATEST(COALESCE(quantity, 1), 1),
   priority = COALESCE(NULLIF(LOWER(TRIM(priority)), ''), 'normal'),

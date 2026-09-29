@@ -137,6 +137,45 @@ export interface SizeBreakdownItem {
   quantity: number;
 }
 
+export interface ColorBreakdownItem {
+  color: string;
+  wash?: string;
+  sizes?: string;
+  quantity: number;
+}
+
+export const MULTI_COLOR_PACK_PRESETS: {
+  id: string;
+  label: string;
+  count: number;
+  colors: string[];
+}[] = [
+  {
+    id: '2-color-denim',
+    label: '2 Colors — Dark Indigo + Vintage Black',
+    count: 2,
+    colors: ['Dark Indigo', 'Vintage Black'],
+  },
+  {
+    id: '3-color-denim-shades',
+    label: '3 Colors — Light, Medium & Dark Indigo',
+    count: 3,
+    colors: ['Light Indigo', 'Medium Stone Indigo', 'Dark Rinse Indigo'],
+  },
+  {
+    id: '4-color-core-pack',
+    label: '4 Colors — Black, Navy, Olive & Khaki',
+    count: 4,
+    colors: ['Jet Black', 'Deep Navy', 'Olive Drab', 'Sand Khaki'],
+  },
+  {
+    id: '5-color-tops-pack',
+    label: '5 Colors — White, Black, Grey, Navy & Sage',
+    count: 5,
+    colors: ['Optic White', 'Jet Black', 'Heather Grey', 'Classic Navy', 'Sage Green'],
+  },
+];
+
 export const GOLD_SEAL_SIZE_RUN_PRESETS: {
   id: string;
   label: string;
@@ -195,6 +234,7 @@ export interface VolarRequisitionForm {
   sampleSizeLabel: string;
   sizeBreakdown?: SizeBreakdownItem[];
   colorWash: string;
+  colorBreakdown?: ColorBreakdownItem[];
   fabricCode: string;
   perPcsConsumptionYards?: number;
   fabricRequiredYards?: number;
@@ -226,6 +266,7 @@ export interface SampleItem {
   lineCode: string; // e.g. "LINE-A04"
   sampleType: SampleType;
   color: string;
+  colorBreakdown?: ColorBreakdownItem[]; // Same style with multiple different colors in a single requisition
   size: string; // e.g. "28, 29, 30, 31, 32, 33, 34, 36, 38, 40, 42, 44"
   sizeBreakdown?: SizeBreakdownItem[]; // e.g. 10 or 12 sizes with individual quantities in a single requisition
   quantity: number;
@@ -332,6 +373,83 @@ export function getEffectiveSizeName(sample: Partial<SampleItem>): string {
 }
 
 /**
+ * Returns the effective per-colorway breakdown list for a sample (supports multiple colors of the same style in a single requisition)
+ */
+export function getEffectiveColorBreakdown(sample: Partial<SampleItem>): ColorBreakdownItem[] {
+  if (sample.colorBreakdown && sample.colorBreakdown.length > 0) {
+    return sample.colorBreakdown;
+  }
+  if (
+    sample.requisitionForm?.colorBreakdown &&
+    sample.requisitionForm.colorBreakdown.length > 0
+  ) {
+    return sample.requisitionForm.colorBreakdown;
+  }
+  const rawColorStr = (sample.color || '').trim();
+  const parsedColors = rawColorStr
+    .split(/[,;]+/)
+    .map((c) => c.trim())
+    .filter(Boolean);
+  const washName = sample.washDetails?.washType || 'Standard Wash';
+  const sizeName = getEffectiveSizeName(sample);
+  const totalQty = Math.max(1, Number(sample.quantity || 1));
+
+  if (parsedColors.length === 0) {
+    return [
+      {
+        color: 'Standard',
+        wash: washName,
+        sizes: sizeName,
+        quantity: totalQty,
+      },
+    ];
+  }
+
+  const perColorQty =
+    parsedColors.length > 0 && totalQty >= parsedColors.length
+      ? Math.max(1, Math.floor(totalQty / parsedColors.length))
+      : 1;
+  const remainder =
+    parsedColors.length > 0 && totalQty > parsedColors.length
+      ? totalQty - perColorQty * parsedColors.length
+      : 0;
+
+  return parsedColors.map((col, idx) => ({
+    color: col,
+    wash: washName,
+    sizes: sizeName,
+    quantity: perColorQty + (idx < remainder ? 1 : 0),
+  }));
+}
+
+/**
+ * Returns the clear, human-readable Color Name(s) for a sample across all stored fields
+ */
+export function getEffectiveColorName(sample: Partial<SampleItem>): string {
+  const cBreakdown =
+    sample.colorBreakdown && sample.colorBreakdown.length > 0
+      ? sample.colorBreakdown
+      : sample.requisitionForm?.colorBreakdown &&
+        sample.requisitionForm.colorBreakdown.length > 0
+      ? sample.requisitionForm.colorBreakdown
+      : [];
+
+  if (cBreakdown.length > 0) {
+    const joined = cBreakdown
+      .map((c) => (c.color || '').trim())
+      .filter(Boolean)
+      .join(', ');
+    if (joined) return joined;
+  }
+
+  if (sample.color && sample.color.trim()) {
+    return sample.color.trim();
+  }
+
+  return 'Standard';
+}
+
+/**
  * Returns the effective Total Requisition Quantity (in pcs) for a sample
  */
 export function getEffectiveRequisitionQuantity(sample: Partial<SampleItem>): number {
@@ -348,6 +466,19 @@ export function getEffectiveRequisitionQuantity(sample: Partial<SampleItem>): nu
       ? breakdown.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0)
       : 0;
 
+  const colorBreakdown =
+    sample.colorBreakdown && sample.colorBreakdown.length > 0
+      ? sample.colorBreakdown
+      : sample.requisitionForm?.colorBreakdown &&
+        sample.requisitionForm.colorBreakdown.length > 0
+      ? sample.requisitionForm.colorBreakdown
+      : [];
+
+  const colorBreakdownSum =
+    colorBreakdown.length > 0
+      ? colorBreakdown.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0)
+      : 0;
+
   const directQty = Number(sample.quantity || 0);
 
   let parsedTextQty = 0;
@@ -358,11 +489,15 @@ export function getEffectiveRequisitionQuantity(sample: Partial<SampleItem>): nu
     }
   }
 
-  if (breakdown.length > 1 && breakdownSum > 0) {
-    return Math.max(breakdownSum, directQty, parsedTextQty, 1);
+  if (colorBreakdown.length > 1 && colorBreakdownSum > 0) {
+    return Math.max(colorBreakdownSum, breakdownSum, directQty, parsedTextQty, 1);
   }
 
-  return Math.max(directQty, breakdownSum, parsedTextQty, 1);
+  if (breakdown.length > 1 && breakdownSum > 0) {
+    return Math.max(breakdownSum, colorBreakdownSum, directQty, parsedTextQty, 1);
+  }
+
+  return Math.max(directQty, colorBreakdownSum, breakdownSum, parsedTextQty, 1);
 }
 
 /**

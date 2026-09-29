@@ -5,13 +5,16 @@ import {
   SamplePriority,
   SampleType,
   SizeBreakdownItem,
+  ColorBreakdownItem,
   PRESET_STYLE_IMAGES,
   CORE_SEAL_SAMPLE_TYPES,
   GOLD_SEAL_SIZE_RUN_PRESETS,
+  MULTI_COLOR_PACK_PRESETS,
   getSampleImage,
   getSampleTypeTone,
   getPriorityTone,
   getEffectiveSizeBreakdown,
+  getEffectiveColorBreakdown,
   getEffectivePerPcsConsumption,
 } from '../types/sample';
 import { SampleTypeBadge } from './SampleTypeBadge';
@@ -76,6 +79,9 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const [lineCode, setLineCode] = useState('');
   const [sampleType, setSampleType] = useState<string>('');
   const [color, setColor] = useState('');
+  const [listedColors, setListedColors] = useState<string[]>([]);
+  const [colorQuantities, setColorQuantities] = useState<Record<string, number>>({});
+  const [colorWashes, setColorWashes] = useState<Record<string, string>>({});
 
   // Size input: type a size (or 10–12 sizes) and press Enter to list it in a single requisition
   const [sizeInput, setSizeInput] = useState('');
@@ -134,7 +140,24 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     setPoNumber(stored.poNumber || '');
     setLineCode(stored.lineCode || '');
     setSampleType(stored.sampleType || '');
-    setColor(stored.color || '');
+    const cBreakdown = getEffectiveColorBreakdown(stored);
+    const parsedColors =
+      cBreakdown.length > 0
+        ? cBreakdown.map((c) => c.color)
+        : (stored.color || '')
+            .split(/[,;]+/)
+            .map((c) => c.trim())
+            .filter(Boolean);
+    const cQtyMap: Record<string, number> = {};
+    const cWashMap: Record<string, string> = {};
+    cBreakdown.forEach((c) => {
+      cQtyMap[c.color] = c.quantity;
+      if (c.wash) cWashMap[c.color] = c.wash;
+    });
+    setListedColors(parsedColors);
+    setColorQuantities(cQtyMap);
+    setColorWashes(cWashMap);
+    setColor('');
     const breakdown = getEffectiveSizeBreakdown(stored);
     const parsedSizes =
       breakdown.length > 0
@@ -263,6 +286,9 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     setLineCode('');
     setSampleType('');
     setColor('');
+    setListedColors([]);
+    setColorQuantities({});
+    setColorWashes({});
     setSizeInput('');
     setListedSizes([]);
     setSizeQuantities({});
@@ -486,17 +512,173 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     }
   };
 
-  const handleListColorOnEnter = () => {
-    const trimmed = color.trim();
-    if (!trimmed) return;
-    if (!options.colors.includes(trimmed)) {
-      const updated = { ...options, colors: [...options.colors, trimmed] };
+  const syncTotalQuantityFromColors = (
+    colorsList: string[],
+    cQtyMap: Record<string, number>
+  ) => {
+    if (colorsList.length === 0) return;
+    const total = colorsList.reduce((sum, c) => sum + Math.max(1, Number(cQtyMap[c] ?? 1)), 0);
+    setQuantity(total);
+  };
+
+  const handleAddColorToList = (rawVal?: string) => {
+    const val = (rawVal !== undefined ? rawVal : color).trim();
+    if (!val) return;
+
+    const parts = val
+      .split(/[,;]+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    if (parts.length === 0) return;
+
+    const defaultQtyPerColor =
+      listedSizes.length > 0
+        ? listedSizes.reduce((s, sz) => s + Math.max(1, Number(sizeQuantities[sz] ?? 1)), 0)
+        : listedColors.length === 0 && quantity > 1 && parts.length === 1
+        ? quantity
+        : 1;
+
+    const nextColors = Array.from(new Set([...listedColors, ...parts]));
+    const nextColorQtyMap: Record<string, number> = { ...colorQuantities };
+    const nextColorWashMap: Record<string, string> = { ...colorWashes };
+
+    nextColors.forEach((c) => {
+      if (!nextColorQtyMap[c] || nextColorQtyMap[c] < 1) {
+        nextColorQtyMap[c] = defaultQtyPerColor;
+      }
+      if (!nextColorWashMap[c] && washType.trim()) {
+        nextColorWashMap[c] = washType.trim();
+      }
+    });
+
+    setListedColors(nextColors);
+    setColorQuantities(nextColorQtyMap);
+    setColorWashes(nextColorWashMap);
+    syncTotalQuantityFromColors(nextColors, nextColorQtyMap);
+
+    const newColorsForDb = parts.filter((p) => !options.colors.includes(p));
+    if (newColorsForDb.length > 0) {
+      const updated = {
+        ...options,
+        colors: Array.from(new Set([...options.colors, ...newColorsForDb])),
+      };
       setOptions(updated);
       saveRequisitionOptions(updated);
-      triggerSaveNotification(`Color "${trimmed}" listed & saved!`);
-    } else {
-      triggerSaveNotification(`Color "${trimmed}" selected!`);
     }
+
+    setColor('');
+    triggerSaveNotification(
+      `${
+        parts.length > 1 ? `${parts.length} colors` : `Color "${parts[0]}"`
+      } added to this requisition (${nextColors.length} total colors for ${
+        styleCode.trim() || 'this style'
+      })!`
+    );
+  };
+
+  const handleRemoveListedColor = (colorToRemove: string) => {
+    const nextColors = listedColors.filter((c) => c !== colorToRemove);
+    const nextColorQtyMap = { ...colorQuantities };
+    const nextColorWashMap = { ...colorWashes };
+    delete nextColorQtyMap[colorToRemove];
+    delete nextColorWashMap[colorToRemove];
+    setListedColors(nextColors);
+    setColorQuantities(nextColorQtyMap);
+    setColorWashes(nextColorWashMap);
+    if (nextColors.length > 0) {
+      syncTotalQuantityFromColors(nextColors, nextColorQtyMap);
+    } else if (listedSizes.length > 0) {
+      syncTotalQuantityFromMap(listedSizes, sizeQuantities);
+    } else {
+      setQuantity(1);
+    }
+  };
+
+  const handleToggleSavedColor = (c: string) => {
+    if (listedColors.includes(c)) {
+      handleRemoveListedColor(c);
+    } else {
+      const defaultQty =
+        listedSizes.length > 0
+          ? listedSizes.reduce((s, sz) => s + Math.max(1, Number(sizeQuantities[sz] ?? 1)), 0)
+          : listedColors.length === 0 && quantity > 1
+          ? quantity
+          : 1;
+      const nextColors = [...listedColors, c];
+      const nextColorQtyMap = { ...colorQuantities, [c]: colorQuantities[c] || defaultQty };
+      const nextColorWashMap = {
+        ...colorWashes,
+        [c]: colorWashes[c] || washType.trim() || 'Standard Wash',
+      };
+      setListedColors(nextColors);
+      setColorQuantities(nextColorQtyMap);
+      setColorWashes(nextColorWashMap);
+      syncTotalQuantityFromColors(nextColors, nextColorQtyMap);
+    }
+  };
+
+  const handleApplyColorPackPreset = (presetColors: string[], label: string) => {
+    const normalized = presetColors.map((c) => c.trim()).filter(Boolean);
+    const defaultQtyPerColor =
+      listedSizes.length > 0
+        ? listedSizes.reduce((s, sz) => s + Math.max(1, Number(sizeQuantities[sz] ?? 1)), 0)
+        : 1;
+    const nextQtyMap: Record<string, number> = {};
+    const nextWashMap: Record<string, string> = {};
+    normalized.forEach((c) => {
+      nextQtyMap[c] = defaultQtyPerColor;
+      nextWashMap[c] = colorWashes[c] || washType.trim() || 'Standard Wash';
+    });
+    setListedColors(normalized);
+    setColorQuantities(nextQtyMap);
+    setColorWashes(nextWashMap);
+    syncTotalQuantityFromColors(normalized, nextQtyMap);
+
+    const newColorsForDb = normalized.filter((p) => !options.colors.includes(p));
+    if (newColorsForDb.length > 0) {
+      const updated = {
+        ...options,
+        colors: Array.from(new Set([...options.colors, ...newColorsForDb])),
+      };
+      setOptions(updated);
+      saveRequisitionOptions(updated);
+    }
+
+    triggerSaveNotification(
+      `Loaded ${normalized.length} colors (${label}) for same style in single requisition!`
+    );
+  };
+
+  const handleUpdateColorQuantity = (c: string, newQty: number) => {
+    const clamped = Math.max(1, Math.min(500, Number(newQty) || 1));
+    const nextQtyMap = { ...colorQuantities, [c]: clamped };
+    setColorQuantities(nextQtyMap);
+    syncTotalQuantityFromColors(listedColors, nextQtyMap);
+  };
+
+  const handleUpdateColorWash = (c: string, newWash: string) => {
+    setColorWashes((prev) => ({ ...prev, [c]: newWash }));
+  };
+
+  const handleSetAllColorsQuantity = (pcsPerColor: number) => {
+    if (listedColors.length === 0) return;
+    const clamped = Math.max(1, Math.min(200, pcsPerColor));
+    const nextQtyMap: Record<string, number> = {};
+    listedColors.forEach((c) => {
+      nextQtyMap[c] = clamped;
+    });
+    setColorQuantities(nextQtyMap);
+    syncTotalQuantityFromColors(listedColors, nextQtyMap);
+    triggerSaveNotification(
+      `Set ${clamped} pc(s) for all ${listedColors.length} colors (${
+        listedColors.length * clamped
+      } pcs total)!`
+    );
+  };
+
+  const handleListColorOnEnter = () => {
+    handleAddColorToList();
   };
 
   const handleListWashOnEnter = () => {
@@ -555,9 +737,66 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
 
   const effectiveSizeString = effectiveSizeBreakdown.map((item) => item.size).join(', ');
 
-  const effectiveTotalQuantity =
+  const sizeBreakdownSum =
     effectiveSizeBreakdown.length > 0
       ? effectiveSizeBreakdown.reduce((sum, item) => sum + item.quantity, 0)
+      : quantity;
+
+  // Effective multi-color breakdown for the same style in a single requisition
+  const effectiveColorBreakdown: ColorBreakdownItem[] = (() => {
+    const pendingColor = color.trim();
+    const pendingColorParts = pendingColor
+      ? pendingColor
+          .split(/[,;]+/)
+          .map((p) => p.trim())
+          .filter(Boolean)
+      : [];
+    const combinedColors =
+      pendingColorParts.length > 0
+        ? Array.from(new Set([...listedColors, ...pendingColorParts]))
+        : listedColors;
+
+    const currentWash = washType.trim() || 'Standard Wash';
+    const currentSizesLabel = effectiveSizeString || 'Standard';
+
+    if (combinedColors.length === 0) {
+      return [];
+    }
+
+    if (listedColors.length === 0 && combinedColors.length > 0) {
+      const basePerColor = Math.max(1, sizeBreakdownSum);
+      return combinedColors.map((c) => ({
+        color: c,
+        wash: colorWashes[c]?.trim() || currentWash,
+        sizes: currentSizesLabel,
+        quantity: basePerColor,
+      }));
+    }
+
+    return combinedColors.map((c) => ({
+      color: c,
+      wash: colorWashes[c]?.trim() || currentWash,
+      sizes: currentSizesLabel,
+      quantity: Math.max(
+        1,
+        Number(
+          colorQuantities[c] ??
+            (combinedColors.length === 1 ? sizeBreakdownSum : Math.max(1, sizeBreakdownSum))
+        )
+      ),
+    }));
+  })();
+
+  const effectiveColorString =
+    effectiveColorBreakdown.map((item) => item.color).join(', ') || color.trim() || 'Standard';
+
+  const effectiveTotalQuantity =
+    effectiveColorBreakdown.length > 1
+      ? effectiveColorBreakdown.reduce((sum, item) => sum + item.quantity, 0)
+      : effectiveSizeBreakdown.length > 0
+      ? sizeBreakdownSum
+      : effectiveColorBreakdown.length === 1
+      ? Math.max(effectiveColorBreakdown[0].quantity, quantity)
       : quantity;
 
   // Determine if Per-Pcs Fabric Consumption (in yds) was saved for this style/fabric or in presets
@@ -692,9 +931,12 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       return;
     }
 
-    // If user typed a size in the input box but didn't hit Enter yet, list it automatically
+    // If user typed a size or color in the input box but didn't hit Enter yet, list it automatically
     if (sizeInput.trim()) {
       handleAddSizeToList(sizeInput);
+    }
+    if (color.trim()) {
+      handleAddColorToList(color);
     }
 
     const cleanCode = styleCode.trim().toUpperCase();
@@ -752,8 +994,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         : [{ size: 'Standard', quantity: Math.max(1, quantity) }];
     const finalSize =
       effectiveSizeString || finalSizeBreakdown.map((b) => b.size).join(', ') || 'Standard';
-    const finalQuantity =
-      effectiveSizeBreakdown.length > 0 ? effectiveTotalQuantity : Math.max(1, quantity);
+    const finalQuantity = Math.max(1, effectiveTotalQuantity);
     const finalPerPcsConsumption =
       effectivePerPcsConsumption > 0 ? effectivePerPcsConsumption : 1;
     const finalTotalFabricRequiredYards = Number(
@@ -763,8 +1004,22 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     const finalSampleType = (sampleType.trim() || 'Initial Sample') as SampleType;
     const finalBuyer = buyer.trim() || 'Direct Buyer';
     const finalLineCode = lineCode.trim().toUpperCase() || 'LINE-01';
-    const finalColor = color.trim() || 'Standard';
     const finalWash = washType.trim() || 'Standard Wash';
+    const finalColorBreakdown: ColorBreakdownItem[] =
+      effectiveColorBreakdown.length > 0
+        ? effectiveColorBreakdown
+        : [
+            {
+              color: color.trim() || 'Standard',
+              wash: finalWash,
+              sizes: finalSize,
+              quantity: finalQuantity,
+            },
+          ];
+    const finalColor =
+      effectiveColorString ||
+      finalColorBreakdown.map((c) => c.color).join(', ') ||
+      'Standard';
     const finalCourier = courier.trim() || '';
 
     const finalThreadNote = threadNote.trim();
@@ -813,6 +1068,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       lineCode: finalLineCode,
       sampleType: finalSampleType,
       color: finalColor,
+      colorBreakdown: finalColorBreakdown,
       size: finalSize,
       sizeBreakdown: finalSizeBreakdown,
       quantity: finalQuantity,
@@ -916,6 +1172,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
             : `${finalSampleType}\nSize: ${finalSize} (${finalQuantity} Pcs)`,
         sizeBreakdown: finalSizeBreakdown,
         colorWash: combinedColorWash,
+        colorBreakdown: finalColorBreakdown,
         fabricCode: finalFabricCode,
         perPcsConsumptionYards: finalPerPcsConsumption,
         fabricRequiredYards: finalTotalFabricRequiredYards,
@@ -1715,79 +1972,291 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
             )}
           </div>
 
-          {/* 8. Color, Quantity, Priority, Requested By */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-            {/* Color / Shade */}
-            <div className="sm:col-span-2">
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-slate-300 font-semibold">Color / Shade</label>
-                <span className="text-[10px] text-slate-400">Press Enter to list</span>
+          {/* 8. Multi-Color Requisition for Same Style (Single Requisition) + Quantity & Priority */}
+          <div className="p-3.5 rounded-xl bg-cyan-950/25 border border-cyan-500/40 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="font-bold text-cyan-300 flex items-center gap-1.5 text-xs">
+                <Layers className="w-4 h-4 text-cyan-400" />
+                <span>
+                  Same Style • Multi-Color Requisition Builder (Place 1 or Multiple Colors in Single Requisition) *
+                </span>
+              </label>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-200 border border-cyan-400/40 font-mono text-[10px] font-bold">
+                  {effectiveColorBreakdown.length || 1}{' '}
+                  {(effectiveColorBreakdown.length || 1) === 1 ? 'Colorway' : 'Colorways'} •{' '}
+                  {effectiveTotalQuantity} Pcs Total
+                </span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  list="color-options-list"
-                  placeholder="Type Color & press Enter..."
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleListColorOnEnter();
-                    }
-                  }}
-                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2 text-white placeholder-slate-500"
-                />
-                <button
-                  type="button"
-                  onClick={handleListColorOnEnter}
-                  className="px-2.5 py-2 bg-slate-800 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-slate-700 rounded-xl font-bold text-[11px] cursor-pointer"
-                >
-                  List
-                </button>
-              </div>
-              <datalist id="color-options-list">
-                {options.colors.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-              {options.colors.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {options.colors.map((c) => (
+            </div>
+
+            {/* Quick Multi-Color Pack Presets */}
+            <div className="p-2.5 rounded-xl bg-slate-900/90 border border-cyan-500/30 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-[11px] font-bold text-cyan-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>
+                    Quick Load Multiple Colors for Same Style ({styleCode.trim() || 'Current Style'}):
+                  </span>
+                </span>
+                {listedColors.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1">
                     <button
-                      key={c}
                       type="button"
-                      onClick={() => setColor(c)}
-                      className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
-                        color === c
-                          ? 'bg-indigo-600 text-white border-indigo-400'
-                          : 'bg-slate-800 text-slate-300 border-slate-700'
+                      onClick={() => handleSetAllColorsQuantity(1)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-cyan-600 text-slate-300 hover:text-slate-950 border border-slate-700 text-[10px] font-mono font-bold cursor-pointer transition-colors"
+                    >
+                      All Colors = 1 pc
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSetAllColorsQuantity(2)}
+                      className="px-2 py-0.5 rounded bg-slate-800 hover:bg-cyan-600 text-slate-300 hover:text-slate-950 border border-slate-700 text-[10px] font-mono font-bold cursor-pointer transition-colors"
+                    >
+                      All Colors = 2 pcs
+                    </button>
+                    {listedSizes.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetAllColorsQuantity(sizeBreakdownSum)}
+                        className="px-2 py-0.5 rounded bg-indigo-950/80 hover:bg-indigo-600 text-indigo-200 hover:text-white border border-indigo-500/40 text-[10px] font-mono font-bold cursor-pointer transition-colors"
+                      >
+                        Each Color = {sizeBreakdownSum} pcs ({listedSizes.length} sizes)
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setListedColors([]);
+                        setColorQuantities({});
+                        setColorWashes({});
+                        if (listedSizes.length > 0) {
+                          syncTotalQuantityFromMap(listedSizes, sizeQuantities);
+                        } else {
+                          setQuantity(1);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded bg-rose-950/60 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-[10px] font-bold cursor-pointer transition-colors"
+                    >
+                      Clear Colors
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                {MULTI_COLOR_PACK_PRESETS.map((preset) => {
+                  const isCurrentPack =
+                    listedColors.length === preset.colors.length &&
+                    preset.colors.every((c) => listedColors.includes(c));
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => handleApplyColorPackPreset(preset.colors, preset.label)}
+                      className={`px-2.5 py-1.5 rounded-lg text-left text-[10px] font-mono border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                        isCurrentPack
+                          ? 'bg-gradient-to-r from-cyan-500 to-teal-400 text-slate-950 font-black border-cyan-300 shadow-sm'
+                          : 'bg-slate-800/90 hover:bg-slate-800 text-cyan-200 border-cyan-500/30 hover:border-cyan-400'
                       }`}
                     >
-                      {c}
+                      <span className="truncate font-bold">{preset.label}</span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[9px] font-black shrink-0 ${
+                          isCurrentPack
+                            ? 'bg-slate-950 text-cyan-300'
+                            : 'bg-cyan-500/20 text-cyan-300'
+                        }`}
+                      >
+                        {preset.colors.length} COLORS
+                      </span>
                     </button>
-                  ))}
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Color Input Row */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <input
+                type="text"
+                list="color-options-list"
+                placeholder="Type 1 color or multiple comma-separated colors (e.g. Dark Indigo, Jet Black, Olive Drab) & press Enter..."
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleListColorOnEnter();
+                  }
+                }}
+                className="flex-1 bg-slate-900 border border-cyan-500/50 rounded-xl p-2.5 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <button
+                type="button"
+                onClick={handleListColorOnEnter}
+                className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black rounded-xl shadow transition-colors cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>Add Color(s) to Style</span>
+              </button>
+            </div>
+            <datalist id="color-options-list">
+              {options.colors.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+
+            {/* Interactive Per-Color Breakdown Cards */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex flex-wrap items-center justify-between gap-1">
+                <span className="text-[11px] font-semibold text-slate-300">
+                  Same Style Colorway Breakdown ({listedColors.length}{' '}
+                  {listedColors.length === 1 ? 'colorway' : 'colorways'} listed):
+                </span>
+                {listedColors.length > 1 && (
+                  <span className="text-[10px] font-mono text-cyan-300 font-bold">
+                    Multi-Color Single Requisition: {listedColors.length} Colors = {effectiveTotalQuantity} Pcs Total
+                  </span>
+                )}
+              </div>
+
+              {listedColors.length === 0 ? (
+                <div className="text-[11px] text-slate-400 italic py-1.5 px-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
+                  Tip: Type a color above and click <strong>Add Color(s) to Style</strong> (or click multiple saved colors below) to place <strong>multiple colors for the same style</strong> in a single requisition.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                  {listedColors.map((c, idx) => {
+                    const cQty = colorQuantities[c] ?? Math.max(1, sizeBreakdownSum);
+                    const cWash = colorWashes[c] ?? washType;
+                    return (
+                      <div
+                        key={c}
+                        className="p-2.5 rounded-xl bg-slate-900/95 border border-cyan-500/40 flex flex-col gap-2 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-mono text-[10px] font-black">
+                            COLOR #{idx + 1}
+                          </span>
+                          <span className="font-bold text-xs text-white truncate flex-1">
+                            {c}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveListedColor(c)}
+                            className="text-slate-400 hover:text-rose-400 cursor-pointer p-0.5"
+                            title={`Remove color ${c}`}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 items-center">
+                          <div>
+                            <span className="text-[9px] text-slate-400 block mb-0.5">
+                              Wash / Shade Finish
+                            </span>
+                            <input
+                              type="text"
+                              placeholder={washType || 'Standard Wash'}
+                              value={cWash}
+                              onChange={(e) => handleUpdateColorWash(c, e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[11px] text-cyan-200 focus:outline-none focus:border-cyan-400"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-slate-400 block mb-0.5">
+                              Color Qty (Pcs)
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="1"
+                                max="500"
+                                value={cQty}
+                                onChange={(e) =>
+                                  handleUpdateColorQuantity(c, Number(e.target.value))
+                                }
+                                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono font-bold text-xs text-amber-300 focus:outline-none focus:border-amber-400"
+                              />
+                              <span className="text-[9px] text-slate-400 font-mono">pcs</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">
+                          <span className="truncate">
+                            Sizes: <strong className="text-indigo-300">{effectiveSizeString || 'Standard'}</strong>
+                          </span>
+                          <span className="text-emerald-300 font-bold shrink-0">
+                            {(cQty * (effectivePerPcsConsumption || 0)).toFixed(2)} yds
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
+            {/* Saved Colors Quick-Toggle */}
+            {options.colors.length > 0 && (
+              <div className="pt-1.5 border-t border-cyan-500/20 flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-slate-400">
+                  Saved Colors (click multiple to add to this style):
+                </span>
+                {options.colors.map((c) => {
+                  const isSelected = listedColors.includes(c);
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => handleToggleSavedColor(c)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-cyan-500/30 text-cyan-200 border-cyan-400 shadow-sm'
+                          : 'bg-slate-900 text-slate-300 border-slate-700 hover:text-white'
+                      }`}
+                    >
+                      {isSelected ? `✓ ${c}` : `+ ${c}`}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 8B. Total Quantity & Requisition Priority */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Quantity */}
             <div>
               <label className="block text-slate-300 font-semibold mb-1">
-                Total Quantity (pcs)
+                Total Requisition Quantity (pcs)
               </label>
               <input
                 type="number"
                 min="1"
-                max="1000"
+                max="2000"
                 value={effectiveTotalQuantity}
                 onChange={(e) => {
                   const val = Math.max(1, Number(e.target.value) || 1);
                   setQuantity(val);
+                  if (listedColors.length > 1) {
+                    const perColor = Math.max(1, Math.floor(val / listedColors.length));
+                    const rem = Math.max(0, val - perColor * listedColors.length);
+                    const nextCMap: Record<string, number> = {};
+                    listedColors.forEach((c, idx) => {
+                      nextCMap[c] = perColor + (idx < rem ? 1 : 0);
+                    });
+                    setColorQuantities(nextCMap);
+                  } else if (listedColors.length === 1) {
+                    setColorQuantities({ [listedColors[0]]: val });
+                  }
                   if (listedSizes.length === 1) {
                     setSizeQuantities({ [listedSizes[0]]: val });
-                  } else if (listedSizes.length > 1) {
+                  } else if (listedSizes.length > 1 && listedColors.length <= 1) {
                     const perSize = Math.max(1, Math.floor(val / listedSizes.length));
                     const rem = Math.max(0, val - perSize * listedSizes.length);
                     const nextMap: Record<string, number> = {};
@@ -1797,11 +2266,13 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                     setSizeQuantities(nextMap);
                   }
                 }}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2 text-white font-mono font-bold"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-white font-mono font-bold"
               />
-              {listedSizes.length > 1 && (
+              {(listedColors.length > 1 || listedSizes.length > 1) && (
                 <span className="text-[9px] text-amber-300 font-mono block mt-0.5">
-                  Summed across {listedSizes.length} sizes ({effectiveTotalQuantity} pcs total)
+                  {listedColors.length > 1
+                    ? `Summed across ${listedColors.length} colors (${effectiveTotalQuantity} pcs total)`
+                    : `Summed across ${listedSizes.length} sizes (${effectiveTotalQuantity} pcs total)`}
                 </span>
               )}
             </div>
@@ -2544,8 +3015,24 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                     </span>
                   </div>
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
-                    <span className="text-slate-400 block text-[10px]">Color / Shade</span>
-                    <span className="font-semibold text-white">{color.trim() || 'N/A'}</span>
+                    <span className="text-slate-400 block text-[10px]">
+                      Colorways ({effectiveColorBreakdown.length || 1})
+                    </span>
+                    <span className="font-semibold text-cyan-200 block">
+                      {effectiveColorString || 'Standard'}
+                    </span>
+                    {effectiveColorBreakdown.length > 1 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {effectiveColorBreakdown.map((cb) => (
+                          <span
+                            key={cb.color}
+                            className="px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 font-mono text-[9px] font-bold"
+                          >
+                            {cb.color}: {cb.quantity}pc
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="p-2 rounded-lg bg-slate-900/70 border border-slate-800">
                     <span className="text-slate-400 block text-[10px]">Wash Recipe</span>

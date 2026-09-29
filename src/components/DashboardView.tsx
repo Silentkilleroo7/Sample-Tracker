@@ -39,6 +39,8 @@ import {
   getGranularApprovalStatus,
   getEffectiveSizeBreakdown,
   getEffectiveSizeName,
+  getEffectiveColorBreakdown,
+  getEffectiveColorName,
   getEffectiveRequisitionQuantity,
   getEffectivePerPcsConsumption,
   getPriorityTone,
@@ -1044,6 +1046,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             const pTone = getPriorityTone(sample.priority);
             const sizeRun = getEffectiveSizeBreakdown(sample);
             const sizeName = getEffectiveSizeName(sample);
+            const colorRun = getEffectiveColorBreakdown(sample);
+            const colorName = getEffectiveColorName(sample);
             const totalReqQty = getEffectiveRequisitionQuantity(sample);
 
             return (
@@ -1139,6 +1143,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         ))}
                       </div>
                     )}
+
+                    <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                      <span className="text-[9px] font-mono uppercase tracking-wider text-cyan-300 font-bold">
+                        Colorways ({colorRun.length}):
+                      </span>
+                      {colorRun.length > 1 ? (
+                        colorRun.map((cItem, cIdx) => (
+                          <span
+                            key={`${cItem.color}-${cIdx}`}
+                            className="px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 font-mono text-[10px] font-bold"
+                          >
+                            {cItem.color}: {cItem.quantity} {cItem.quantity === 1 ? 'pc' : 'pcs'}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-200 font-mono text-[10px] font-bold">
+                          {colorName}
+                        </span>
+                      )}
+                    </div>
 
                     <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 pt-1.5 border-t border-slate-800">
                       <span className="flex items-center gap-1 text-emerald-400">
