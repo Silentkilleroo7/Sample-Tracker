@@ -1087,7 +1087,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
       priority,
       targetParcelDate,
       shipmentDate,
-      isRequisitionLocked: true,
+      isRequisitionLocked: false,
       createdAt:
         selectedStoredSample && confirmationMode === 'update'
           ? selectedStoredSample.createdAt
@@ -1110,7 +1110,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
               {
                 stage: 'requisition',
                 timestamp: nowIso,
-                note: `Requisition confirmed & permanently locked for ${finalSampleType}. Color: ${finalColor}, Wash: ${finalWash}, Sizes: ${finalSize} (${finalQuantity} pcs × ${finalPerPcsConsumption} yds/pc = ${finalTotalFabricRequiredYards} yds deducted).${
+                note: `Requisition created for ${finalSampleType}. Color: ${finalColor}, Wash: ${finalWash}, Sizes: ${finalSize} (${finalQuantity} pcs × ${finalPerPcsConsumption} yds/pc = ${finalTotalFabricRequiredYards} yds deducted).${
                   autoSpecialInstructions ? ` Trims: ${autoSpecialInstructions}.` : ''
                 }`,
                 operator: requestedBy.trim() || currentUserName || 'Merchandiser',
@@ -1215,8 +1215,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         samplingSectionNotes: selectedStoredSample?.requisitionForm?.samplingSectionNotes || '',
         receivedBy: selectedStoredSample?.requisitionForm?.receivedBy || '',
         merchandiserSignature: requestedBy.trim() || currentUserName,
-        isLocked: true,
-        lockedAt: nowIso,
+        isLocked: false,
       },
     };
 

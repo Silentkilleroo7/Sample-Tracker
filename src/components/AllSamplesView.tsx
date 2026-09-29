@@ -670,15 +670,6 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                                 <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
                                 <span>{pTone.label}</span>
                               </span>
-                              {sample.isRequisitionLocked && (
-                                <span
-                                  className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 border border-amber-500/30 flex items-center gap-0.5"
-                                  title="Requisition permanently saved & locked"
-                                >
-                                  <Lock className="w-2.5 h-2.5" />
-                                  Locked
-                                </span>
-                              )}
                             </div>
                             <div className="font-semibold text-white mt-1 group-hover:text-indigo-300 transition-colors line-clamp-1">
                               {sample.styleName}

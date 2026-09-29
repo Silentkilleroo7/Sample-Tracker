@@ -121,12 +121,7 @@ export function mapRowToSample(row: any): SampleItem {
     row.target_parcel_date ||
     '';
 
-  const isLocked =
-    row.is_requisition_locked !== undefined
-      ? Boolean(row.is_requisition_locked)
-      : reqForm?.isLocked !== undefined
-      ? Boolean(reqForm.isLocked)
-      : Boolean(pDetails?.isRequisitionLocked);
+  const isLocked = false;
 
   const effectiveThreadNote =
     row.thread_note ||
@@ -283,9 +278,7 @@ export function mapSampleToRow(sample: SampleItem) {
     sample.requisitionForm?.shipmentDate ||
     sample.targetParcelDate ||
     '';
-  const isLocked = Boolean(
-    sample.isRequisitionLocked || sample.requisitionForm?.isLocked
-  );
+  const isLocked = false;
 
   const effectiveThreadNote =
     sample.threadNote ||

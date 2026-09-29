@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS public.samples (
   priority TEXT NOT NULL DEFAULT 'normal',
   target_parcel_date TEXT NOT NULL DEFAULT '',
   shipment_date TEXT NOT NULL DEFAULT '',
-  is_requisition_locked BOOLEAN NOT NULL DEFAULT TRUE,
+  is_requisition_locked BOOLEAN NOT NULL DEFAULT FALSE,
   thread_note TEXT NOT NULL DEFAULT '',
   zipper_note TEXT NOT NULL DEFAULT '',
   button_note TEXT NOT NULL DEFAULT '',
@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS public.samples (
 
 -- Safe migration columns for existing deployments
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS shipment_date TEXT NOT NULL DEFAULT '';
-ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS is_requisition_locked BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS is_requisition_locked BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.samples ALTER COLUMN is_requisition_locked SET DEFAULT FALSE;
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS thread_note TEXT NOT NULL DEFAULT '';
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS zipper_note TEXT NOT NULL DEFAULT '';
 ALTER TABLE public.samples ADD COLUMN IF NOT EXISTS button_note TEXT NOT NULL DEFAULT '';
@@ -891,9 +892,15 @@ END;
 $$;
 
 -- =====================================================================================
--- 15. OPTIONAL "BL...." NUMBER BOX (WRITTEN BY HAND ON PRINTED PAPER OR ENTERED ANYTIME)
+-- 15. NEVER LOCK REQUISITION PRINT PAPER & OPTIONAL "BL...." HANDWRITTEN BOX
 -- =====================================================================================
--- 1. Add optional bl_number column to public.samples (NOT mandatory to print; written by hand on printed paper)
+-- 1. Ensure is_requisition_locked is always FALSE by default and bl_number is optional
+ALTER TABLE public.samples
+  ADD COLUMN IF NOT EXISTS is_requisition_locked BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE public.samples
+  ALTER COLUMN is_requisition_locked SET DEFAULT FALSE;
+
 ALTER TABLE public.samples
   ADD COLUMN IF NOT EXISTS bl_number TEXT DEFAULT '';
 
@@ -903,12 +910,15 @@ ALTER TABLE public.samples
 ALTER TABLE public.samples
   ALTER COLUMN bl_number SET DEFAULT '';
 
--- 2. Trigger function to keep optional bl_number and requisition_form->>'blNumber' in sync
+-- 2. Trigger function: NEVER lock requisition print paper (forces is_requisition_locked = FALSE)
 CREATE OR REPLACE FUNCTION public.fn_sync_sample_bl_number()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 BEGIN
+  -- Never lock the requisition print paper
+  NEW.is_requisition_locked := FALSE;
+
   IF (NEW.bl_number IS NULL OR TRIM(NEW.bl_number) = '')
      AND NEW.requisition_form IS NOT NULL
      AND jsonb_typeof(NEW.requisition_form) = 'object'
@@ -920,9 +930,23 @@ BEGIN
 
   IF NEW.requisition_form IS NOT NULL AND jsonb_typeof(NEW.requisition_form) = 'object' THEN
     NEW.requisition_form := jsonb_set(
-      NEW.requisition_form,
-      '{blNumber}',
-      to_jsonb(NEW.bl_number),
+      jsonb_set(
+        NEW.requisition_form,
+        '{blNumber}',
+        to_jsonb(NEW.bl_number),
+        true
+      ),
+      '{isLocked}',
+      'false'::jsonb,
+      true
+    );
+  END IF;
+
+  IF NEW.parcel_details IS NOT NULL AND jsonb_typeof(NEW.parcel_details) = 'object' THEN
+    NEW.parcel_details := jsonb_set(
+      NEW.parcel_details,
+      '{isRequisitionLocked}',
+      'false'::jsonb,
       true
     );
   END IF;
@@ -935,6 +959,22 @@ DROP TRIGGER IF EXISTS trg_sync_sample_bl_number ON public.samples;
 CREATE TRIGGER trg_sync_sample_bl_number
   BEFORE INSERT OR UPDATE ON public.samples
   FOR EACH ROW EXECUTE FUNCTION public.fn_sync_sample_bl_number();
+
+-- 3. Unlock all existing samples in Supabase immediately
+UPDATE public.samples
+SET
+  is_requisition_locked = FALSE,
+  requisition_form = CASE
+    WHEN requisition_form IS NOT NULL AND jsonb_typeof(requisition_form) = 'object'
+      THEN jsonb_set(requisition_form, '{isLocked}', 'false'::jsonb, true)
+    ELSE requisition_form
+  END,
+  parcel_details = CASE
+    WHEN parcel_details IS NOT NULL AND jsonb_typeof(parcel_details) = 'object'
+      THEN jsonb_set(parcel_details, '{isRequisitionLocked}', 'false'::jsonb, true)
+    ELSE parcel_details
+  END,
+  updated_at = NOW();
 
 
 

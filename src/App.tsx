@@ -572,7 +572,7 @@ export default function App() {
     const effectiveButton =
       form.buttonNote || form.trims?.buttonNote || '';
 
-    const lockedForm: VolarRequisitionForm = {
+    const savedForm: VolarRequisitionForm = {
       ...form,
       threadNote: effectiveThread,
       zipperNote: effectiveZipper,
@@ -584,15 +584,14 @@ export default function App() {
         zipperNote: effectiveZipper,
         buttonNote: effectiveButton,
       },
-      isLocked: true,
-      lockedAt: form.lockedAt || new Date().toISOString(),
+      isLocked: false,
     };
     setSamples((prev) =>
       prev.map((s) => {
         if (s.id === sampleId) {
           const updated: SampleItem = {
             ...s,
-            blNumber: lockedForm.blNumber || s.blNumber,
+            blNumber: savedForm.blNumber || s.blNumber,
             color: firstRow?.color || s.color,
             size: firstRow?.size || s.size,
             washDetails: {
@@ -602,9 +601,9 @@ export default function App() {
             threadNote: effectiveThread || s.threadNote,
             zipperNote: effectiveZipper || s.zipperNote,
             buttonNote: effectiveButton || s.buttonNote,
-            shipmentDate: lockedForm.shipmentDate || s.shipmentDate || s.targetParcelDate,
-            isRequisitionLocked: true,
-            requisitionForm: lockedForm,
+            shipmentDate: savedForm.shipmentDate || s.shipmentDate || s.targetParcelDate,
+            isRequisitionLocked: false,
+            requisitionForm: savedForm,
             updatedAt: new Date().toISOString(),
           };
           void upsertSampleInSupabase(updated);
@@ -618,7 +617,7 @@ export default function App() {
         prev
           ? {
               ...prev,
-              blNumber: lockedForm.blNumber || prev.blNumber,
+              blNumber: savedForm.blNumber || prev.blNumber,
               color: firstRow?.color || prev.color,
               size: firstRow?.size || prev.size,
               washDetails: {
@@ -628,9 +627,9 @@ export default function App() {
               threadNote: effectiveThread || prev.threadNote,
               zipperNote: effectiveZipper || prev.zipperNote,
               buttonNote: effectiveButton || prev.buttonNote,
-              shipmentDate: lockedForm.shipmentDate || prev.shipmentDate,
-              isRequisitionLocked: true,
-              requisitionForm: lockedForm,
+              shipmentDate: savedForm.shipmentDate || prev.shipmentDate,
+              isRequisitionLocked: false,
+              requisitionForm: savedForm,
             }
           : null
       );
@@ -640,7 +639,7 @@ export default function App() {
         prev
           ? {
               ...prev,
-              blNumber: lockedForm.blNumber || prev.blNumber,
+              blNumber: savedForm.blNumber || prev.blNumber,
               color: firstRow?.color || prev.color,
               size: firstRow?.size || prev.size,
               washDetails: {
@@ -650,16 +649,16 @@ export default function App() {
               threadNote: effectiveThread || prev.threadNote,
               zipperNote: effectiveZipper || prev.zipperNote,
               buttonNote: effectiveButton || prev.buttonNote,
-              shipmentDate: lockedForm.shipmentDate || prev.shipmentDate,
-              isRequisitionLocked: true,
-              requisitionForm: lockedForm,
+              shipmentDate: savedForm.shipmentDate || prev.shipmentDate,
+              isRequisitionLocked: false,
+              requisitionForm: savedForm,
             }
           : null
       );
     }
     sendPushNotification(
-      'Requisition Saved & Permanently Locked',
-      `Requisition for ${ lockedForm.descriptionCode || 'Style' } has been confirmed and permanently locked.`,
+      'Requisition Print Sheet Saved',
+      `Requisition print sheet for ${ savedForm.descriptionCode || 'Style' } has been updated.`,
       'success',
       { sampleId }
     );

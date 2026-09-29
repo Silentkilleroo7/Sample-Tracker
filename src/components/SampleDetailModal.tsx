@@ -105,12 +105,6 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
                 <span className={`w-1.5 h-1.5 rounded-full ${getPriorityTone(sample.priority).dotClass}`}></span>
                 <span>{getPriorityTone(sample.priority).label}</span>
               </span>
-              {sample.isRequisitionLocked && (
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1">
-                  <Lock className="w-3 h-3" />
-                  Requisition Saved &amp; Locked
-                </span>
-              )}
             </div>
             <h2 className="text-xl font-black text-white mt-1">
               {sample.styleName}
@@ -121,29 +115,6 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
               <span>• Line: <span className="font-mono text-slate-300">{sample.lineCode}</span></span>
               <span className="inline-flex items-center gap-1.5">
                 • Type: <SampleTypeBadge sampleType={sample.sampleType} size="sm" />
-              </span>
-              <span className="inline-flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-0.5">
-                <strong className="text-amber-300 font-mono text-[11px]">BL....</strong>
-                {onUpdateBlNumber ? (
-                  <input
-                    type="text"
-                    value={sample.blNumber || sample.requisitionForm?.blNumber || ''}
-                    onChange={(e) => {
-                      onUpdateBlNumber(sample.id, e.target.value);
-                      setBlSaved(true);
-                      setTimeout(() => setBlSaved(false), 1500);
-                    }}
-                    placeholder="Written by hand on print (optional)"
-                    className="w-44 bg-slate-950/80 border border-amber-500/30 rounded px-1.5 py-0.5 text-[11px] font-mono font-bold text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400"
-                  />
-                ) : (
-                  <span className="font-mono font-bold text-amber-200">
-                    {sample.blNumber || sample.requisitionForm?.blNumber || 'Written by hand on printed paper'}
-                  </span>
-                )}
-                {blSaved && (
-                  <span className="text-[10px] font-bold text-emerald-400">Saved</span>
-                )}
               </span>
             </div>
           </div>
