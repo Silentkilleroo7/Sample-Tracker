@@ -843,10 +843,11 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                           )}
                           <button
                             onClick={() => onOpenRequisitionSlip && onOpenRequisitionSlip(sample)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-300 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                            title="Open & Print Sample Requisition Form"
+                            className="px-2 py-1 text-emerald-300 hover:text-white bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/40 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                            title="Open Print Preview & Print Sample Requisition Form"
                           >
-                            <Printer className="w-4 h-4" />
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Print</span>
                           </button>
                           <button
                             onClick={() => onSelectSample(sample)}
@@ -1103,19 +1104,35 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
                         <span className="text-slate-400 font-mono">
                           Parcel: {sample.parcelDetails.parcelDate || sample.targetParcelDate}
                         </span>
-                        {config.nextStage && canUserAdvanceStage(userRole, sample.stage, config.nextStage) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAdvanceStage(sample);
-                            }}
-                            className="px-2 py-0.8 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1 shadow transition-colors cursor-pointer"
-                            title={`Move to ${STAGE_CONFIG[config.nextStage].shortLabel}`}
-                          >
-                            <span>Move</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {onOpenRequisitionSlip && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenRequisitionSlip(sample);
+                              }}
+                              className="px-1.5 py-0.8 rounded bg-emerald-950/80 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-300 hover:text-white font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                              title="Print Preview & Print Requisition"
+                            >
+                              <Printer className="w-3 h-3" />
+                              <span>Print</span>
+                            </button>
+                          )}
+                          {config.nextStage && canUserAdvanceStage(userRole, sample.stage, config.nextStage) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAdvanceStage(sample);
+                              }}
+                              className="px-2 py-0.8 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1 shadow transition-colors cursor-pointer"
+                              title={`Move to ${STAGE_CONFIG[config.nextStage].shortLabel}`}
+                            >
+                              <span>Move</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                     );

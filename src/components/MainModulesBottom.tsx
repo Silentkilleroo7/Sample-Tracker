@@ -147,16 +147,16 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
 
   return (
     <nav
-      aria-label="Main modules navigation"
-      className="sticky bottom-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 shadow-2xl"
+      aria-label="Main tracking modules top header navigation"
+      className="w-full bg-slate-950/95 backdrop-blur-xl border-b border-indigo-500/30 shadow-xl"
     >
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2">
-        {/* Desktop-only Status Header (hidden on mobile to preserve 85%+ viewport space) */}
+        {/* Desktop-only Status Header */}
         <div className="hidden sm:flex items-center justify-between px-2 mb-1.5 text-[10px] text-slate-400">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="font-semibold text-indigo-300">
-              Main Tracking Modules
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="font-bold uppercase tracking-wider text-indigo-300">
+              Main Tracking Modules (Frozen Top Header)
             </span>
           </div>
           <div className="flex items-center gap-3 font-mono text-[10px]">
@@ -172,7 +172,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
           </div>
         </div>
 
-        {/* Single-Row Mobile Thumb Dock & Responsive Desktop Grid */}
+        {/* Single-Row Responsive Top Header Module Bar */}
         <div
           className={
             isCompactRole
@@ -189,16 +189,16 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => onSelectView(item.id)}
-                className={`relative min-h-[48px] ${
-                  isCompactRole ? 'w-full' : 'min-w-[78px] sm:min-w-0 shrink-0'
+                className={`relative min-h-[46px] ${
+                  isCompactRole ? 'w-full' : 'min-w-[82px] sm:min-w-0 shrink-0'
                 } flex flex-col sm:flex-row items-center justify-center sm:justify-between px-2.5 py-1.5 sm:py-2 rounded-xl transition-all group cursor-pointer text-left ${
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/50'
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/60'
                     : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800/80'
                 }`}
               >
                 {isActive && (
-                  <span className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-indigo-300 rounded-full" />
+                  <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-emerald-300 rounded-full" />
                 )}
 
                 <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 min-w-0">

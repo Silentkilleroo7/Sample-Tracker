@@ -18,8 +18,8 @@ body {
 
 @media print {
   @page {
-    margin: 4mm;
-    size: auto;
+    margin: 6mm;
+    size: A4 landscape;
   }
 
   html,
@@ -33,16 +33,17 @@ body {
     padding: 0 !important;
     min-height: 0 !important;
     height: auto !important;
+    max-height: none !important;
     width: 100% !important;
     display: block !important;
     overflow: visible !important;
+    position: static !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Hide all main app views, navigation, headers, footers, and non-printable UI so ONLY the requisition form prints without any black bar or gap */
+  /* Hide screen-only app content when printing */
   #app-screen-only-content,
-  #app-root-wrapper > *:not(#requisition-print-modal-backdrop),
   nav,
   header,
   aside,
@@ -50,17 +51,12 @@ body {
   main,
   .print\:hidden {
     display: none !important;
-    height: 0 !important;
-    width: 0 !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    background: transparent !important;
   }
 
   #requisition-print-modal-backdrop,
-  #requisition-print-modal-container {
+  #requisition-print-modal-container,
+  #requisition-print-scroll-wrapper,
+  #requisition-print-paper-stage {
     position: static !important;
     display: block !important;
     margin: 0 !important;
@@ -69,6 +65,7 @@ body {
     max-width: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
+    height: auto !important;
     overflow: visible !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
@@ -77,27 +74,30 @@ body {
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    transform: none !important;
   }
 
-  #requisition-printable-slip {
+  #requisition-printable-slip,
+  #printable-requisition-sheet {
     display: block !important;
-    position: relative !important;
-    top: 0 !important;
-    left: 0 !important;
+    position: static !important;
     width: 100% !important;
+    max-width: 100% !important;
     margin: 0 !important;
-    padding: 3mm !important;
+    padding: 2mm !important;
     box-shadow: none !important;
     color: #000000 !important;
     background: #ffffff !important;
     background-color: #ffffff !important;
-    border: 2px solid #000000 !important;
+    border: none !important;
     border-radius: 0 !important;
+    transform: none !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  #requisition-printable-slip * {
+  #requisition-printable-slip *,
+  #printable-requisition-sheet * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }

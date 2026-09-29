@@ -69,6 +69,8 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
   onViewInPipeline,
 }) => {
   const [isEditMode, setIsEditMode] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState<number>(100);
+  const [paperOrientation, setPaperOrientation] = useState<'landscape' | 'portrait'>('landscape');
   const [copied, setCopied] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [newColorNameInput, setNewColorNameInput] = useState<string>('');
@@ -257,8 +259,119 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
 
   const activeTotalFabricYards = Number((activePerPcsCons * activeTotalQty).toFixed(2));
 
+  const triggerDedicatedPrint = () => {
+    const sheetEl = document.getElementById('printable-requisition-sheet');
+    if (!sheetEl) {
+      window.focus();
+      window.print();
+      return;
+    }
+
+    try {
+      const existingFrame = document.getElementById('volar-dedicated-print-iframe');
+      if (existingFrame && existingFrame.parentNode) {
+        existingFrame.parentNode.removeChild(existingFrame);
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.id = 'volar-dedicated-print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.opacity = '0';
+      iframe.style.pointerEvents = 'none';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document || iframe.contentDocument;
+      if (!doc || !iframe.contentWindow) {
+        window.focus();
+        window.print();
+        return;
+      }
+
+      const headStyles = Array.from(
+        document.querySelectorAll('style, link[rel="stylesheet"]')
+      )
+        .map((node) => node.outerHTML)
+        .join('\n');
+
+      const orientationRule =
+        paperOrientation === 'portrait' ? 'A4 portrait' : 'A4 landscape';
+
+      doc.open();
+      doc.write(`<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Volar Sample Requisition - ${form.descriptionCode || sample.styleCode}</title>
+    ${headStyles}
+    <style>
+      @page {
+        size: ${orientationRule};
+        margin: 6mm;
+      }
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      #printable-requisition-sheet {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 2mm !important;
+        border: none !important;
+        box-shadow: none !important;
+        background: #ffffff !important;
+        color: #000000 !important;
+      }
+    </style>
+  </head>
+  <body>
+    ${sheetEl.outerHTML}
+  </body>
+</html>`);
+      doc.close();
+
+      let printed = false;
+      const runIframePrint = () => {
+        if (printed) return;
+        printed = true;
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch {
+          window.focus();
+          window.print();
+        }
+      };
+
+      iframe.onload = () => {
+        setTimeout(runIframePrint, 120);
+      };
+      setTimeout(runIframePrint, 350);
+    } catch {
+      window.focus();
+      window.print();
+    }
+  };
+
   const handlePrint = () => {
-    window.print();
+    if (isEditMode) {
+      setIsEditMode(false);
+      setTimeout(() => {
+        triggerDedicatedPrint();
+      }, 80);
+    } else {
+      triggerDedicatedPrint();
+    }
   };
 
   const handleAddColorRowInForm = () => {
@@ -388,8 +501,14 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:static print:inset-auto print:bg-white print:p-0 print:m-0 print:block print:overflow-visible">
-      <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-6xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[95vh] print:max-h-none print:shadow-none print:border-none print:rounded-none print:bg-white print:w-full print:max-w-none print:block">
+    <div
+      id="requisition-print-modal-backdrop"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 backdrop-blur-md p-2 sm:p-4 overflow-y-auto print:static print:inset-auto print:bg-white print:p-0 print:m-0 print:block print:overflow-visible"
+    >
+      <div
+        id="requisition-print-modal-container"
+        className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-6xl shadow-2xl overflow-hidden my-auto flex flex-col max-h-[95vh] print:max-h-none print:shadow-none print:border-none print:rounded-none print:bg-white print:w-full print:max-w-none print:block"
+      >
         {/* TOP ACTION BAR (Hidden when printing) */}
         <div className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-indigo-950/90 via-slate-900 to-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 print:hidden shrink-0">
           <div className="flex items-center gap-3">
@@ -398,33 +517,39 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
             </div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h2 className="text-sm sm:text-base font-bold text-white">
-                Volar Sample Requisition Print Sheet
+                Volar Sample Requisition Print Preview
               </h2>
               <SampleTypeBadge sampleType={form.sampleType} size="sm" />
             </div>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Explicit Print Preview Mode Button */}
             <button
               type="button"
-              onClick={() => setIsEditMode(!isEditMode)}
+              onClick={() => setIsEditMode(false)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                !isEditMode
+                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-inner'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+              }`}
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Print Preview
+            </button>
+
+            {/* Explicit Edit Requisition Button */}
+            <button
+              type="button"
+              onClick={() => setIsEditMode(true)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                 isEditMode
-                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-inner'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
               }`}
             >
-              {isEditMode ? (
-                <>
-                  <Eye className="w-3.5 h-3.5" />
-                  Preview Print Sheet
-                </>
-              ) : (
-                <>
-                  <Edit3 className="w-3.5 h-3.5" />
-                  Edit Requisition Details
-                </>
-              )}
+              <Edit3 className="w-3.5 h-3.5" />
+              Edit Requisition Details
             </button>
 
             {isEditMode && (
@@ -495,6 +620,62 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
             </button>
           </div>
         </div>
+
+        {/* PRINT PREVIEW TOOLBAR (Shown when in Print Preview mode, hidden when printing) */}
+        {!isEditMode && (
+          <div className="bg-slate-950/90 border-b border-slate-800 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-xs print:hidden shrink-0">
+            <div className="flex items-center gap-2 text-emerald-300 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>
+                <strong>Live A4 Print Preview:</strong> Exact paper layout ready for printing.
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPaperOrientation('landscape')}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold cursor-pointer transition-colors ${
+                    paperOrientation === 'landscape'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  A4 Landscape
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPaperOrientation('portrait')}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold cursor-pointer transition-colors ${
+                    paperOrientation === 'portrait'
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  A4 Portrait
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg p-0.5">
+                {[90, 100, 110].map((zoom) => (
+                  <button
+                    key={zoom}
+                    type="button"
+                    onClick={() => setPreviewZoom(zoom)}
+                    className={`px-2 py-1 rounded text-[11px] font-mono font-semibold cursor-pointer transition-colors ${
+                      previewZoom === zoom
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {zoom}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* EDIT MODE BANNER (Hidden when printing) */}
         {isEditMode && !isRequisitionLocked && (
@@ -602,15 +783,32 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
         )}
 
         {/* SCROLLABLE BODY CONTAINER */}
-        <div className="p-3 sm:p-6 overflow-y-auto bg-slate-950/70 flex-1 print:p-0 print:bg-white print:overflow-visible print:block">
+        <div
+          id="requisition-print-scroll-wrapper"
+          className="p-3 sm:p-6 overflow-y-auto bg-slate-950/70 flex-1 print:p-0 print:bg-white print:overflow-visible print:block"
+        >
           {/* ===================================================================== */}
           {/* OFFICIAL VOLAR FASHION PVT LTD SPREADSHEET REQUISITION FORM           */}
           {/* Matches attached image + Top-Left BL.... Box + Focused Key Fields     */}
           {/* ===================================================================== */}
           <div
-            id="printable-requisition-sheet"
-            className="bg-white text-black mx-auto max-w-[1040px] p-4 sm:p-6 shadow-xl border border-slate-300 print:shadow-none print:border-none print:p-2 print:max-w-none print:w-full font-sans text-[12px] leading-snug select-text"
+            id="requisition-print-paper-stage"
+            style={
+              !isEditMode && previewZoom !== 100
+                ? {
+                    transform: `scale(${previewZoom / 100})`,
+                    transformOrigin: 'top center',
+                  }
+                : undefined
+            }
+            className="transition-transform duration-150"
           >
+            <div
+              id="printable-requisition-sheet"
+              className={`bg-white text-black mx-auto ${
+                paperOrientation === 'portrait' ? 'max-w-[820px]' : 'max-w-[1060px]'
+              } p-4 sm:p-6 shadow-2xl border border-slate-300 print:shadow-none print:border-none print:p-2 print:max-w-none print:w-full font-sans text-[12px] leading-snug select-text`}
+            >
             {/* =============================================================== */}
             {/* 1. TOP HEADER ROW WITH TOP-LEFT "BL...." ADMIN BOX & TITLE      */}
             {/* =============================================================== */}
@@ -1372,6 +1570,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                   Admin Approval & BL.... Verification
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>

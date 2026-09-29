@@ -28,6 +28,7 @@ import {
   Clock,
   Tag,
   Ruler,
+  Printer,
 } from 'lucide-react';
 import {
   SampleItem,
@@ -69,6 +70,7 @@ interface DashboardViewProps {
   onToggleWorkbookSent?: (sampleId: string) => void;
   onSendWhatsApp?: (sample: SampleItem, phone: string, customMessage?: string) => void;
   onUpdateApprovalDetails?: (sampleId: string, details: ApprovalDetails) => void;
+  onOpenRequisitionSlip?: (sample: SampleItem) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -85,6 +87,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onToggleWorkbookSent,
   onSendWhatsApp,
   onUpdateApprovalDetails,
+  onOpenRequisitionSlip,
 }) => {
   // Dynamic Summary Controls State
   const [summaryFilter, setSummaryFilter] = useState<
@@ -1249,15 +1252,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   )}
                 </div>
 
-                {/* Actions: Follow-Up, WhatsApp, Advance */}
+                {/* Actions: Follow-Up, WhatsApp, Print, Advance */}
                 <div className="mt-3 pt-2.5 border-t border-slate-700/60 flex items-center justify-between gap-1.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => onSelectSample(sample)}
-                    className="text-[11px] text-slate-300 hover:text-white px-2 py-1 bg-slate-700/60 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                  >
-                    Spec Details
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onSelectSample(sample)}
+                      className="text-[11px] text-slate-300 hover:text-white px-2 py-1 bg-slate-700/60 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Spec Details
+                    </button>
+                    {onOpenRequisitionSlip && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenRequisitionSlip(sample)}
+                        className="text-[11px] text-emerald-300 hover:text-white px-2 py-1 bg-emerald-950/60 hover:bg-emerald-600 border border-emerald-500/40 rounded-lg flex items-center gap-1 font-semibold transition-colors cursor-pointer"
+                        title="Open Print Preview & Print Requisition"
+                      >
+                        <Printer className="w-3 h-3" />
+                        <span>Print</span>
+                      </button>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-1.5">
                     {isCompleted && (
@@ -1914,7 +1930,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-            <span>Bottom Navigation Synchronized</span>
+            <span>Top Header Frozen Navigation Synchronized</span>
           </div>
         </div>
 

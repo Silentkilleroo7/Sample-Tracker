@@ -1451,31 +1451,49 @@ export default function App() {
         className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white print:min-h-0 print:bg-white print:text-black print:block"
       >
         <div id="app-screen-only-content" className="flex-1 flex flex-col min-h-screen print:hidden">
-          {/* 1. Top Navbar */}
-          <Navbar
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            notifications={notifications}
-            onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
-            onNewRequisition={() => {
-              if (!isMerchandiser) return;
-              setSelectedStyleForModification(null);
-              setIsNewSampleModalOpen(true);
-            }}
-            lowStockCount={lowFabricCount}
-            onNavigateToLowStock={() => {
-              if (isWashUser) return;
-              setCurrentView('fabric_inventory');
-            }}
-            onExportData={handleExportData}
-            onResetData={handleResetData}
-            currentUser={currentUser}
-            onLogout={handleLogout}
-          />
+          {/* 1. Frozen (Sticky) Top Header + Main Tracking Modules */}
+          <div className="sticky top-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl shadow-2xl">
+            <Navbar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              notifications={notifications}
+              onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
+              onNewRequisition={() => {
+                if (!isMerchandiser) return;
+                setSelectedStyleForModification(null);
+                setIsNewSampleModalOpen(true);
+              }}
+              lowStockCount={lowFabricCount}
+              onNavigateToLowStock={() => {
+                if (isWashUser) return;
+                setCurrentView('fabric_inventory');
+              }}
+              onExportData={handleExportData}
+              onResetData={handleResetData}
+              currentUser={currentUser}
+              onLogout={handleLogout}
+            />
+
+            <MainModulesBottom
+              currentView={currentView}
+              userRole={currentUser.role}
+              onSelectView={(view) => {
+                setCurrentView(view);
+                if (isSewingUser) {
+                  setInitialStageFilter('requisition');
+                } else if (isWashUser) {
+                  setInitialStageFilter(view === 'wash' ? 'wash' : 'sewing');
+                } else {
+                  setInitialStageFilter('all');
+                }
+              }}
+              counts={counts}
+            />
+          </div>
 
           {/* 2. Main Full-Width View Container */}
           <div className="flex-1 max-w-7xl w-full mx-auto">
-            <main className="p-3 sm:p-6 lg:p-8 pb-24 sm:pb-28 min-w-0">
+            <main className="p-3 sm:p-6 lg:p-8 pb-12 min-w-0">
               {currentView === 'dashboard' && isMerchandiser && (
                 <DashboardView
                   samples={samples}
@@ -1502,6 +1520,10 @@ export default function App() {
                   onToggleWorkbookSent={handleToggleWorkbookSent}
                   onSendWhatsApp={handleSendWhatsAppNotification}
                   onUpdateApprovalDetails={handleUpdateApprovalDetails}
+                  onOpenRequisitionSlip={(sample) => {
+                    setCompletedRequisitionSample(sample);
+                    setIsRequisitionCompleteModalOpen(true);
+                  }}
                 />
               )}
 
@@ -1644,23 +1666,6 @@ export default function App() {
             </main>
           </div>
 
-          {/* 3. Main Tracking Modules in Bottom Side as Main Modules */}
-          <MainModulesBottom
-            currentView={currentView}
-            userRole={currentUser.role}
-            onSelectView={(view) => {
-              setCurrentView(view);
-              if (isSewingUser) {
-                setInitialStageFilter('requisition');
-              } else if (isWashUser) {
-                setInitialStageFilter(view === 'wash' ? 'wash' : 'sewing');
-              } else {
-                setInitialStageFilter('all');
-              }
-            }}
-            counts={counts}
-          />
-
           {/* Floating Push Notification Toasts */}
           <NotificationToastContainer
             notifications={notifications}
@@ -1749,6 +1754,7 @@ export default function App() {
             onToggleWorkbookSent={isMerchandiser ? handleToggleWorkbookSent : undefined}
             onSendWhatsApp={isMerchandiser ? handleSendWhatsAppNotification : undefined}
             onOpenRequisitionSlip={(sample) => {
+              setIsDetailModalOpen(false);
               setCompletedRequisitionSample(sample);
               setIsRequisitionCompleteModalOpen(true);
             }}
