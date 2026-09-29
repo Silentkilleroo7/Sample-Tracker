@@ -592,6 +592,7 @@ export default function App() {
         if (s.id === sampleId) {
           const updated: SampleItem = {
             ...s,
+            blNumber: lockedForm.blNumber || s.blNumber,
             color: firstRow?.color || s.color,
             size: firstRow?.size || s.size,
             washDetails: {
@@ -617,6 +618,7 @@ export default function App() {
         prev
           ? {
               ...prev,
+              blNumber: lockedForm.blNumber || prev.blNumber,
               color: firstRow?.color || prev.color,
               size: firstRow?.size || prev.size,
               washDetails: {
@@ -638,6 +640,7 @@ export default function App() {
         prev
           ? {
               ...prev,
+              blNumber: lockedForm.blNumber || prev.blNumber,
               color: firstRow?.color || prev.color,
               size: firstRow?.size || prev.size,
               washDetails: {
@@ -660,6 +663,62 @@ export default function App() {
       'success',
       { sampleId }
     );
+  };
+
+  const handleUpdateBlNumber = (sampleId: string, blNumber: string) => {
+    const cleanBl = blNumber.trim();
+    setSamples((prev) =>
+      prev.map((s) => {
+        if (s.id === sampleId) {
+          const updated: SampleItem = {
+            ...s,
+            blNumber: cleanBl,
+            requisitionForm: s.requisitionForm
+              ? {
+                  ...s.requisitionForm,
+                  blNumber: cleanBl,
+                }
+              : s.requisitionForm,
+            updatedAt: new Date().toISOString(),
+          };
+          void upsertSampleInSupabase(updated);
+          return updated;
+        }
+        return s;
+      })
+    );
+    if (completedRequisitionSample && completedRequisitionSample.id === sampleId) {
+      setCompletedRequisitionSample((prev) =>
+        prev
+          ? {
+              ...prev,
+              blNumber: cleanBl,
+              requisitionForm: prev.requisitionForm
+                ? {
+                    ...prev.requisitionForm,
+                    blNumber: cleanBl,
+                  }
+                : prev.requisitionForm,
+            }
+          : null
+      );
+    }
+    if (selectedSampleForDetail && selectedSampleForDetail.id === sampleId) {
+      setSelectedSampleForDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              blNumber: cleanBl,
+              requisitionForm: prev.requisitionForm
+                ? {
+                    ...prev.requisitionForm,
+                    blNumber: cleanBl,
+                  }
+                : prev.requisitionForm,
+            }
+          : null
+      );
+    }
   };
 
   const handleUpdateSampleThumbnail = (
@@ -1773,6 +1832,7 @@ export default function App() {
           }}
           sample={completedRequisitionSample}
           onSaveForm={handleSaveRequisitionForm}
+          onUpdateBlNumber={handleUpdateBlNumber}
           onViewInPipeline={(sample) => {
             setCurrentView('all_samples');
             setSelectedSampleForDetail(sample);

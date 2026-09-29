@@ -222,6 +222,7 @@ export const GOLD_SEAL_SIZE_RUN_PRESETS: {
 
 export interface VolarRequisitionForm {
   companyName: string;
+  blNumber?: string; // Top-left BL.... box where the number of BL is written by Admin
   date: string;
   requiredDate: string;
   shipmentDate?: string;
@@ -259,6 +260,7 @@ export interface VolarRequisitionForm {
 
 export interface SampleItem {
   id: string;
+  blNumber?: string; // Top-left BL.... number assigned by Admin
   styleCode: string; // e.g. "ST-8820"
   styleName: string; // e.g. "Vintage Carpenter Denim Pant"
   buyer: string; // e.g. "Levi Strauss & Co."

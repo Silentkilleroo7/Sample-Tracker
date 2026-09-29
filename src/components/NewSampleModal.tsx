@@ -1166,23 +1166,23 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
         styleName: styleName.trim(),
         sampleSizeLabel:
           finalSizeBreakdown.length > 1
-            ? `${finalSampleType} (${finalSizeBreakdown.length} Sizes)\n${finalSizeBreakdown
-                .map((b) => `${b.size}:${b.quantity}`)
-                .join(', ')} (${finalQuantity} Pcs)`
-            : `${finalSampleType}\nSize: ${finalSize} (${finalQuantity} Pcs)`,
+            ? `${finalSampleType}\n${finalSizeBreakdown
+                .map((b) => `${b.quantity}x Size ${b.size}`)
+                .join(', ')}`
+            : `${finalSampleType}\n${finalQuantity}x Size ${finalSize}`,
         sizeBreakdown: finalSizeBreakdown,
         colorWash: combinedColorWash,
         colorBreakdown: finalColorBreakdown,
         fabricCode: finalFabricCode,
         perPcsConsumptionYards: finalPerPcsConsumption,
         fabricRequiredYards: finalTotalFabricRequiredYards,
-        fitting: selectedStoredSample?.requisitionForm?.fitting || '',
-        threadInstruction: finalThreadNote || 'AS PER SAMPLE',
+        fitting: selectedStoredSample?.requisitionForm?.fitting || 'As Tech Pack & comments',
+        threadInstruction: finalThreadNote || 'Same as Instructions',
         threadNote: finalThreadNote,
         zipperNote: finalZipperNote,
         buttonNote: finalButtonNote,
         quantityText: `${finalQuantity} Pcs`,
-        block: selectedStoredSample?.requisitionForm?.block || '',
+        block: selectedStoredSample?.requisitionForm?.block || 'as spec',
         fabricComposition: finalFabricName,
         supplier: selectedFabric?.supplier || selectedStoredSample?.requisitionForm?.supplier || '',
         weight: selectedFabric?.gsm

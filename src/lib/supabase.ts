@@ -145,8 +145,15 @@ export function mapRowToSample(row: any): SampleItem {
     reqForm?.trims?.buttonNote ||
     '';
 
+  const effectiveBlNumber =
+    row.bl_number ||
+    reqForm?.blNumber ||
+    pDetails?.blNumber ||
+    '';
+
   const sample: SampleItem = {
     id: row.id,
+    blNumber: effectiveBlNumber,
     styleCode: row.style_code || '',
     styleName: row.style_name || '',
     buyer: row.buyer || '',
@@ -243,6 +250,7 @@ export function mapRowToSample(row: any): SampleItem {
     requisitionForm: reqForm
       ? {
           ...reqForm,
+          blNumber: reqForm.blNumber || effectiveBlNumber,
           shipmentDate: reqForm.shipmentDate || effectiveShipmentDate,
           threadNote: effectiveThreadNote,
           zipperNote: effectiveZipperNote,
@@ -296,8 +304,14 @@ export function mapSampleToRow(sample: SampleItem) {
     sample.requisitionForm?.buttonNote ||
     '';
 
+  const effectiveBlNumber =
+    sample.blNumber ||
+    sample.requisitionForm?.blNumber ||
+    '';
+
   const enrichedParcelDetails = {
     ...(sample.parcelDetails || {}),
+    blNumber: effectiveBlNumber,
     shipmentDate: effectiveShipmentDate,
     isRequisitionLocked: isLocked,
   };
@@ -312,6 +326,7 @@ export function mapSampleToRow(sample: SampleItem) {
   const enrichedRequisitionForm = sample.requisitionForm
     ? {
         ...sample.requisitionForm,
+        blNumber: sample.requisitionForm.blNumber || effectiveBlNumber,
         perPcsConsumptionYards:
           sample.requisitionForm.perPcsConsumptionYards || effectivePerPcsConsumption,
         fabricRequiredYards: sample.fabricRequiredYards,
@@ -359,6 +374,7 @@ export function mapSampleToRow(sample: SampleItem) {
 
   return {
     id: sample.id,
+    bl_number: effectiveBlNumber,
     style_code: sample.styleCode,
     style_name: sample.styleName,
     buyer: sample.buyer,
@@ -612,6 +628,7 @@ export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> 
   if (error) {
     // Fallback if new columns are not yet added to table
     const {
+      bl_number,
       thread_note,
       zipper_note,
       button_note,

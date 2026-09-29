@@ -890,5 +890,46 @@ BEGIN
 END;
 $$;
 
+-- =====================================================================================
+-- 15. ADMIN "BL...." NUMBER BOX & VOLAR SPREADSHEET REQUISITION SYNC
+-- =====================================================================================
+-- 1. Add bl_number column to public.samples for the top-left "BL...." Admin box
+ALTER TABLE public.samples
+  ADD COLUMN IF NOT EXISTS bl_number TEXT NOT NULL DEFAULT '';
+
+-- 2. Trigger function to keep bl_number and requisition_form->>'blNumber' in sync
+CREATE OR REPLACE FUNCTION public.fn_sync_sample_bl_number()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF (NEW.bl_number IS NULL OR TRIM(NEW.bl_number) = '')
+     AND NEW.requisition_form IS NOT NULL
+     AND jsonb_typeof(NEW.requisition_form) = 'object'
+     AND TRIM(COALESCE(NEW.requisition_form ->> 'blNumber', '')) <> '' THEN
+    NEW.bl_number := TRIM(NEW.requisition_form ->> 'blNumber');
+  END IF;
+
+  NEW.bl_number := COALESCE(TRIM(NEW.bl_number), '');
+
+  IF NEW.requisition_form IS NOT NULL AND jsonb_typeof(NEW.requisition_form) = 'object' THEN
+    NEW.requisition_form := jsonb_set(
+      NEW.requisition_form,
+      '{blNumber}',
+      to_jsonb(NEW.bl_number),
+      true
+    );
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_sync_sample_bl_number ON public.samples;
+CREATE TRIGGER trg_sync_sample_bl_number
+  BEFORE INSERT OR UPDATE ON public.samples
+  FOR EACH ROW EXECUTE FUNCTION public.fn_sync_sample_bl_number();
+
+
 
 
