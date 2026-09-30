@@ -29,15 +29,18 @@ import {
   Tag,
   Ruler,
   Printer,
+  Paperclip,
 } from 'lucide-react';
 import {
   SampleItem,
+  ApprovableComponentKey,
   STAGE_CONFIG,
   isParcelCompleted,
   ApprovalDetails,
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getGranularApprovalStatus,
+  getComponentApprovalProof,
   getEffectiveSizeBreakdown,
   getEffectiveSizeName,
   getEffectiveColorBreakdown,
@@ -70,6 +73,7 @@ interface DashboardViewProps {
   onToggleWorkbookSent?: (sampleId: string) => void;
   onSendWhatsApp?: (sample: SampleItem, phone: string, customMessage?: string) => void;
   onUpdateApprovalDetails?: (sampleId: string, details: ApprovalDetails) => void;
+  onOpenComponentApproval?: (sample: SampleItem, component: ApprovableComponentKey) => void;
   onOpenRequisitionSlip?: (sample: SampleItem) => void;
 }
 
@@ -87,6 +91,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onToggleWorkbookSent,
   onSendWhatsApp,
   onUpdateApprovalDetails,
+  onOpenComponentApproval,
   onOpenRequisitionSlip,
 }) => {
   // Dynamic Summary Controls State
@@ -96,7 +101,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [summarySearch, setSummarySearch] = useState('');
   const [summarySort, setSummarySort] = useState<'shipmentDate' | 'parcelDate' | 'priority' | 'styleCode'>('shipmentDate');
   const [fastApprovalFilter, setFastApprovalFilter] = useState<
-    'all' | 'button' | 'thread' | 'wash' | 'trims_accessories'
+    'all' | 'button' | 'thread' | 'zipper' | 'wash' | 'trims_accessories'
   >('all');
 
   // Counts & Filtered lists
@@ -137,6 +142,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       const status = getGranularApprovalStatus(s);
       if (fastApprovalFilter === 'button') return !status.buttonApproved;
       if (fastApprovalFilter === 'thread') return !status.threadApproved;
+      if (fastApprovalFilter === 'zipper') return !status.zipperApproved;
       if (fastApprovalFilter === 'wash') return !status.washApproved;
       if (fastApprovalFilter === 'trims_accessories')
         return !status.trimsApproved || !status.accessoriesApproved;
@@ -150,6 +156,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const pendingThreadCount = allUnapprovedPrioritySamples.filter(
     (s) => !getGranularApprovalStatus(s).threadApproved
   ).length;
+  const pendingZipperCount = allUnapprovedPrioritySamples.filter(
+    (s) => !getGranularApprovalStatus(s).zipperApproved
+  ).length;
   const pendingWashCount = allUnapprovedPrioritySamples.filter(
     (s) => !getGranularApprovalStatus(s).washApproved
   ).length;
@@ -160,8 +169,35 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const handleQuickToggleGranularApproval = (
     sample: SampleItem,
-    field: 'washApproved' | 'buttonApproved' | 'threadApproved' | 'trimsApproved' | 'accessoriesApproved'
+    field:
+      | 'washApproved'
+      | 'buttonApproved'
+      | 'threadApproved'
+      | 'zipperApproved'
+      | 'trimsApproved'
+      | 'accessoriesApproved'
   ) => {
+    // For Wash, Thread, Zipper, and Button: always open the ComponentApprovalModal
+    // so the user submits a mandatory Note + PDF/Image attachment to mark as Approved!
+    if (onOpenComponentApproval) {
+      if (field === 'washApproved') {
+        onOpenComponentApproval(sample, 'wash');
+        return;
+      }
+      if (field === 'threadApproved') {
+        onOpenComponentApproval(sample, 'thread');
+        return;
+      }
+      if (field === 'zipperApproved') {
+        onOpenComponentApproval(sample, 'zipper');
+        return;
+      }
+      if (field === 'buttonApproved') {
+        onOpenComponentApproval(sample, 'button');
+        return;
+      }
+    }
+
     if (!onUpdateApprovalDetails) return;
     const currentStatus = getGranularApprovalStatus(sample);
     const nextVal = !currentStatus[field];
@@ -170,6 +206,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       washApproved: field === 'washApproved' ? nextVal : currentStatus.washApproved,
       buttonApproved: field === 'buttonApproved' ? nextVal : currentStatus.buttonApproved,
       threadApproved: field === 'threadApproved' ? nextVal : currentStatus.threadApproved,
+      zipperApproved: field === 'zipperApproved' ? nextVal : currentStatus.zipperApproved,
       trimsApproved: field === 'trimsApproved' ? nextVal : currentStatus.trimsApproved,
       accessoriesApproved:
         field === 'accessoriesApproved' ? nextVal : currentStatus.accessoriesApproved,
@@ -178,6 +215,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       updatedDetails.washApproved &&
       updatedDetails.buttonApproved &&
       updatedDetails.threadApproved &&
+      updatedDetails.zipperApproved &&
       updatedDetails.trimsApproved &&
       updatedDetails.accessoriesApproved;
     if (allNowApproved) {
@@ -392,8 +430,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Granular Pending Approval Filter Pills (Button, Thread, Wash, Trims & Accessories) */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+        {/* Granular Pending Approval Filter Pills (Button, Thread, Zipper, Wash, Trims & Accessories) */}
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-2.5 text-xs">
           <button
             type="button"
             onClick={() => setFastApprovalFilter('all')}
@@ -411,16 +449,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setFastApprovalFilter('button')}
+            onClick={() => setFastApprovalFilter('wash')}
             className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-              fastApprovalFilter === 'button'
-                ? 'bg-rose-500/25 border-rose-400 text-white ring-1 ring-rose-400/40'
+              fastApprovalFilter === 'wash'
+                ? 'bg-cyan-500/25 border-cyan-400 text-white ring-1 ring-cyan-400/40'
                 : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
             }`}
           >
-            <div className="text-[10px] text-rose-300 uppercase font-bold">Pending Button</div>
-            <div className="text-base font-black font-mono text-rose-200 mt-0.5">
-              {pendingButtonCount} Unapproved
+            <div className="text-[10px] text-cyan-300 uppercase font-bold">Pending Wash</div>
+            <div className="text-base font-black font-mono text-cyan-200 mt-0.5">
+              {pendingWashCount} Unapproved
             </div>
           </button>
 
@@ -441,16 +479,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <button
             type="button"
-            onClick={() => setFastApprovalFilter('wash')}
+            onClick={() => setFastApprovalFilter('zipper')}
             className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-              fastApprovalFilter === 'wash'
-                ? 'bg-cyan-500/25 border-cyan-400 text-white ring-1 ring-cyan-400/40'
+              fastApprovalFilter === 'zipper'
+                ? 'bg-emerald-500/25 border-emerald-400 text-white ring-1 ring-emerald-400/40'
                 : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
             }`}
           >
-            <div className="text-[10px] text-cyan-300 uppercase font-bold">Pending Wash</div>
-            <div className="text-base font-black font-mono text-cyan-200 mt-0.5">
-              {pendingWashCount} Unapproved
+            <div className="text-[10px] text-emerald-300 uppercase font-bold">Pending Zipper</div>
+            <div className="text-base font-black font-mono text-emerald-200 mt-0.5">
+              {pendingZipperCount} Unapproved
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setFastApprovalFilter('button')}
+            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+              fastApprovalFilter === 'button'
+                ? 'bg-rose-500/25 border-rose-400 text-white ring-1 ring-rose-400/40'
+                : 'bg-slate-900/70 border-slate-800 text-slate-300 hover:border-slate-700'
+            }`}
+          >
+            <div className="text-[10px] text-rose-300 uppercase font-bold">Pending Button</div>
+            <div className="text-base font-black font-mono text-rose-200 mt-0.5">
+              {pendingButtonCount} Unapproved
             </div>
           </button>
 
@@ -599,72 +652,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Interactive Approval Badges for Button, Thread, Wash, Trims, Accessories */}
+                  {/* Interactive Approval Badges for Wash, Thread, Zipper, Button (Requires Note + PDF/Image Attachment) */}
                   <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickToggleGranularApproval(sample, 'buttonApproved')}
-                      title="Click to toggle Button Approval"
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
-                        status.buttonApproved
-                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
-                          : 'bg-rose-950/80 text-rose-200 border-rose-500/60 hover:bg-rose-900/80'
-                      }`}
-                    >
-                      <span>{status.buttonApproved ? '✅' : '⏳'} Button</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickToggleGranularApproval(sample, 'threadApproved')}
-                      title="Click to toggle Thread Approval"
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
-                        status.threadApproved
-                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
-                          : 'bg-rose-950/80 text-rose-200 border-rose-500/60 hover:bg-rose-900/80'
-                      }`}
-                    >
-                      <span>{status.threadApproved ? '✅' : '⏳'} Thread</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickToggleGranularApproval(sample, 'washApproved')}
-                      title="Click to toggle Wash Approval"
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
-                        status.washApproved
-                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
-                          : 'bg-rose-950/80 text-rose-200 border-rose-500/60 hover:bg-rose-900/80'
-                      }`}
-                    >
-                      <span>{status.washApproved ? '✅' : '⏳'} Wash</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickToggleGranularApproval(sample, 'trimsApproved')}
-                      title="Click to toggle Trims Approval"
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
-                        status.trimsApproved
-                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
-                          : 'bg-amber-950/80 text-amber-200 border-amber-500/60 hover:bg-amber-900/80'
-                      }`}
-                    >
-                      <span>{status.trimsApproved ? '✅' : '⏳'} Trims</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleQuickToggleGranularApproval(sample, 'accessoriesApproved')}
-                      title="Click to toggle Accessories Approval"
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
-                        status.accessoriesApproved
-                          ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/40'
-                          : 'bg-amber-950/80 text-amber-200 border-amber-500/60 hover:bg-amber-900/80'
-                      }`}
-                    >
-                      <span>{status.accessoriesApproved ? '✅' : '⏳'} Accessories</span>
-                    </button>
+                    {(
+                      [
+                        { comp: 'wash', field: 'washApproved', label: 'Wash', ok: status.washApproved },
+                        { comp: 'thread', field: 'threadApproved', label: 'Thread', ok: status.threadApproved },
+                        { comp: 'zipper', field: 'zipperApproved', label: 'Zipper', ok: status.zipperApproved },
+                        { comp: 'button', field: 'buttonApproved', label: 'Button', ok: status.buttonApproved },
+                      ] as const
+                    ).map(({ comp, field, label, ok }) => {
+                      const proof = getComponentApprovalProof(sample, comp);
+                      return (
+                        <button
+                          key={comp}
+                          type="button"
+                          onClick={() => handleQuickToggleGranularApproval(sample, field)}
+                          title={`Click to submit mandatory Note & PDF/Image attachment for ${label} Approval`}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer flex items-center gap-1 ${
+                            ok
+                              ? 'bg-emerald-600 text-white border-emerald-700'
+                              : 'bg-amber-500 text-white border-amber-600'
+                          }`}
+                        >
+                          <span>
+                            {ok ? '✅' : '⏳'} {label}
+                          </span>
+                          {proof.attachmentUrl && <Paperclip className="w-3 h-3" />}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );

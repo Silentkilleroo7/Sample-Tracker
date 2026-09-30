@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import {
   SampleItem,
+  ApprovableComponentKey,
   getSampleImage,
   getSampleTypeTone,
   getEffectiveSizeBreakdown,
@@ -215,6 +216,7 @@ export function mapRowToSample(row: any): SampleItem {
       followUp: pDetails.followUp,
     },
     approvalDetails: {
+      ...aDetails,
       washComments: aDetails.washComments || '',
       washApproved: Boolean(aDetails.washApproved),
       trimsComments: aDetails.trimsComments || '',
@@ -941,4 +943,129 @@ export async function uploadStylePhoto(
 
   const dataUrl = await readFileAsDataUrl(file);
   return { url: dataUrl };
+}
+
+export const APPROVAL_ATTACHMENTS_BUCKET = 'approval-attachments';
+
+/**
+ * Uploads an Approval Attachment (PDF or Image) for Wash, Thread, Zipper, or Button
+ * to Supabase Storage and logs it in public.style_component_approvals.
+ * Automatically falls back to Data URL if Supabase storage is unavailable.
+ */
+export async function uploadApprovalAttachment(
+  file: File,
+  meta: {
+    sampleId: string;
+    styleCode: string;
+    component: ApprovableComponentKey;
+  }
+): Promise<{
+  url: string;
+  fileName: string;
+  fileType: 'pdf' | 'image';
+  storagePath?: string;
+}> {
+  const isPdf =
+    file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const fileType: 'pdf' | 'image' = isPdf ? 'pdf' : 'image';
+
+  if (supabase) {
+    try {
+      const cleanStyle = (meta.styleCode || 'general')
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .toUpperCase();
+      const ext = file.name.split('.').pop()?.toLowerCase() || (isPdf ? 'pdf' : 'jpg');
+      const safeName = file.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 40);
+      const storagePath = `approvals/${cleanStyle}/${meta.component}/${Date.now()}_${safeName}.${ext}`;
+
+      // Try dedicated approval-attachments bucket first, then style-photos bucket
+      let bucketUsed = APPROVAL_ATTACHMENTS_BUCKET;
+      let { error: uploadError } = await supabase.storage
+        .from(APPROVAL_ATTACHMENTS_BUCKET)
+        .upload(storagePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
+        });
+
+      if (uploadError) {
+        bucketUsed = STYLE_PHOTOS_BUCKET;
+        const fallbackRes = await supabase.storage
+          .from(STYLE_PHOTOS_BUCKET)
+          .upload(storagePath, file, {
+            cacheControl: '3600',
+            upsert: true,
+            contentType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
+          });
+        uploadError = fallbackRes.error;
+      }
+
+      if (!uploadError) {
+        const { data: pubData } = supabase.storage
+          .from(bucketUsed)
+          .getPublicUrl(storagePath);
+
+        if (pubData?.publicUrl) {
+          return {
+            url: pubData.publicUrl,
+            fileName: file.name,
+            fileType,
+            storagePath,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase approval attachment upload fallback to Data URL:', err);
+    }
+  }
+
+  const dataUrl = await readFileAsDataUrl(file);
+  return {
+    url: dataUrl,
+    fileName: file.name,
+    fileType,
+  };
+}
+
+/**
+ * Records a component approval (Wash, Thread, Zipper, or Button) with mandatory Note & PDF/Image Attachment
+ * into public.style_component_approvals in Supabase.
+ */
+export async function upsertComponentApprovalInSupabase(params: {
+  sampleId: string;
+  styleCode: string;
+  component: ApprovableComponentKey;
+  approved: boolean;
+  note: string;
+  attachmentUrl: string;
+  attachmentName?: string;
+  attachmentType?: 'pdf' | 'image';
+  approvedBy?: string;
+  approvedAt?: string;
+}): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('style_component_approvals').upsert(
+      {
+        id: `${params.sampleId}_${params.component}`,
+        sample_id: params.sampleId,
+        style_code: params.styleCode,
+        component_type: params.component,
+        is_approved: params.approved,
+        approval_note: params.note,
+        attachment_url: params.attachmentUrl,
+        attachment_name: params.attachmentName || '',
+        attachment_type: params.attachmentType || 'image',
+        approved_by: params.approvedBy || 'Merchandiser',
+        approved_at: params.approvedAt || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'id' }
+    );
+  } catch (err) {
+    console.warn('Supabase style_component_approvals upsert skipped:', err);
+  }
 }

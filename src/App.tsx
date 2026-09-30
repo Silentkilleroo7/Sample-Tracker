@@ -14,6 +14,7 @@ import {
   SampleStage,
   STAGE_CONFIG,
   ApprovalDetails,
+  ApprovableComponentKey,
   ParcelDetails,
   VolarRequisitionForm,
   generateWhatsAppFollowUpLink,
@@ -75,6 +76,7 @@ import { RequisitionCompleteModal } from './components/RequisitionCompleteModal'
 import { NewBVTestModal } from './components/NewBVTestModal';
 import { UpdateBVResultModal } from './components/UpdateBVResultModal';
 import { ResubmitBVTestModal } from './components/ResubmitBVTestModal';
+import { ComponentApprovalModal } from './components/ComponentApprovalModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { NotificationToastContainer } from './components/NotificationToastContainer';
 
@@ -125,6 +127,10 @@ export default function App() {
 
   // 0. Role-Based User Authentication State (Merchandiser, Wash)
   const [appUsers, setAppUsers] = useState<AppUser[]>(SYSTEM_USERS);
+  const [componentApprovalTarget, setComponentApprovalTarget] = useState<{
+    sample: SampleItem;
+    component: ApprovableComponentKey;
+  } | null>(null);
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     try {
       const savedUser = localStorage.getItem('threadtrack_live_user_v1');
@@ -865,6 +871,17 @@ export default function App() {
             updatedAt: new Date().toISOString(),
           };
           void upsertSampleInSupabase(updated);
+          if (selectedSampleForDetail && selectedSampleForDetail.id === sampleId) {
+            setSelectedSampleForDetail(updated);
+          }
+          if (
+            componentApprovalTarget &&
+            componentApprovalTarget.sample.id === sampleId
+          ) {
+            setComponentApprovalTarget((curr) =>
+              curr ? { ...curr, sample: updated } : null
+            );
+          }
           return updated;
         }
         return s;
@@ -873,8 +890,8 @@ export default function App() {
 
     const sample = samples.find((s) => s.id === sampleId);
     sendPushNotification(
-      'Buyer Remarks Saved',
-      `Approval remarks updated for ${sample?.styleCode || 'Style'}. Verdict: ${details.overallVerdict.toUpperCase()}`,
+      'Approval Proof & Remarks Saved',
+      `Approval status & attachment updated for ${sample?.styleCode || 'Style'}. Verdict: ${details.overallVerdict.toUpperCase()}`,
       details.overallVerdict === 'approved' ? 'success' : 'info',
       { sampleId, styleCode: sample?.styleCode }
     );
@@ -1696,6 +1713,9 @@ export default function App() {
                   onToggleWorkbookSent={handleToggleWorkbookSent}
                   onSendWhatsApp={handleSendWhatsAppNotification}
                   onUpdateApprovalDetails={handleUpdateApprovalDetails}
+                  onOpenComponentApproval={(sample, component) =>
+                    setComponentApprovalTarget({ sample, component })
+                  }
                   onOpenRequisitionSlip={(sample) => {
                     setCompletedRequisitionSample(sample);
                     setIsRequisitionCompleteModalOpen(true);
@@ -1775,6 +1795,9 @@ export default function App() {
                   onAdvanceStage={handleTriggerAdvance}
                   onUpdateApprovalDetails={handleUpdateApprovalDetails}
                   onUpdateParcelDetails={handleUpdateParcelDetails}
+                  onOpenComponentApproval={(sample, component) =>
+                    setComponentApprovalTarget({ sample, component })
+                  }
                   onOpenFollowUp={handleOpenFollowUp}
                   onToggleWorkbookSent={handleToggleWorkbookSent}
                   onSendWhatsApp={handleSendWhatsAppNotification}
@@ -1944,6 +1967,18 @@ export default function App() {
             }
             onUpdateSampleThumbnail={isMerchandiser ? handleUpdateSampleThumbnail : undefined}
             onUpdateBlNumber={handleUpdateBlNumber}
+            onOpenComponentApproval={(sample, component) =>
+              setComponentApprovalTarget({ sample, component })
+            }
+          />
+
+          <ComponentApprovalModal
+            isOpen={Boolean(componentApprovalTarget)}
+            onClose={() => setComponentApprovalTarget(null)}
+            sample={componentApprovalTarget?.sample || null}
+            initialComponent={componentApprovalTarget?.component || 'wash'}
+            reviewerName={currentUser.displayName}
+            onSaveApprovalDetails={handleUpdateApprovalDetails}
           />
 
           <FollowUpModal

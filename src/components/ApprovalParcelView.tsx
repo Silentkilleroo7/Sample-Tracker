@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   SampleItem,
+  ApprovableComponentKey,
   STAGE_CONFIG,
   ApprovalStatus,
   ApprovalDetails,
@@ -8,6 +9,7 @@ import {
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getGranularApprovalStatus,
+  getComponentApprovalProof,
   getPriorityTone,
 } from '../types/sample';
 import { ProgressBar } from './ProgressBar';
@@ -30,6 +32,9 @@ import {
   MessageCircle,
   Phone,
   FileCheck2,
+  Paperclip,
+  FileText,
+  Download,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -39,6 +44,7 @@ interface ApprovalParcelViewProps {
   onAdvanceStage: (sample: SampleItem) => void;
   onUpdateApprovalDetails: (sampleId: string, details: ApprovalDetails) => void;
   onUpdateParcelDetails: (sampleId: string, details: ParcelDetails) => void;
+  onOpenComponentApproval?: (sample: SampleItem, component: ApprovableComponentKey) => void;
   onOpenFollowUp?: (sample: SampleItem) => void;
   onToggleWorkbookSent?: (sampleId: string) => void;
   onSendWhatsApp?: (sample: SampleItem, phone: string, customMessage?: string) => void;
@@ -49,6 +55,7 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
   onSelectSample,
   onAdvanceStage,
   onUpdateApprovalDetails,
+  onOpenComponentApproval,
   onOpenFollowUp,
   onToggleWorkbookSent,
   onSendWhatsApp,
@@ -101,6 +108,7 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
       ...sample.approvalDetails,
       buttonApproved: gran.buttonApproved,
       threadApproved: gran.threadApproved,
+      zipperApproved: gran.zipperApproved,
     });
   };
 
@@ -499,233 +507,127 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Fast Approval Checklist Bar: Button, Thread, Wash, Trims, Accessories */}
+                  {/* Fast Approval Checklist Bar: Wash, Thread, Zipper, Button (Mandatory Note + PDF/Image Attachment) */}
                   <div className="mb-3 p-2.5 rounded-lg bg-slate-900/80 border border-slate-700/70 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-bold text-amber-300 text-[11px] uppercase tracking-wider">
-                      Fast Approval Status (Button, Thread, Wash, Trims &amp; Accessories):
+                    <span className="font-bold text-emerald-950 text-[11px] uppercase tracking-wider">
+                      Mandatory Proof Approvals (Wash, Thread, Zipper &amp; Button — Note + PDF/Image Required):
                     </span>
                     <div className="flex flex-wrap items-center gap-2">
-                      {isEditing ? (
-                        <>
-                          <label className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 border border-slate-700 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(aDetails.buttonApproved)}
-                              onChange={(e) =>
-                                setTempApproval((prev) =>
-                                  prev ? { ...prev, buttonApproved: e.target.checked } : null
-                                )
-                              }
-                            />
-                            <span className="font-bold text-rose-300">Button Approved</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 border border-slate-700 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={Boolean(aDetails.threadApproved)}
-                              onChange={(e) =>
-                                setTempApproval((prev) =>
-                                  prev ? { ...prev, threadApproved: e.target.checked } : null
-                                )
-                              }
-                            />
-                            <span className="font-bold text-purple-300">Thread Approved</span>
-                          </label>
-                        </>
-                      ) : (
-                        <>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                              getGranularApprovalStatus(sample).buttonApproved
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      {(
+                        [
+                          { comp: 'wash', label: 'Wash' },
+                          { comp: 'thread', label: 'Thread' },
+                          { comp: 'zipper', label: 'Zipper' },
+                          { comp: 'button', label: 'Button' },
+                        ] as { comp: ApprovableComponentKey; label: string }[]
+                      ).map(({ comp, label }) => {
+                        const proof = getComponentApprovalProof(sample, comp);
+                        return (
+                          <button
+                            key={comp}
+                            type="button"
+                            onClick={() =>
+                              onOpenComponentApproval && onOpenComponentApproval(sample, comp)
+                            }
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border flex items-center gap-1 cursor-pointer transition-all ${
+                              proof.approved
+                                ? 'bg-emerald-600 text-white border-emerald-700'
+                                : 'bg-amber-500 text-white border-amber-600'
                             }`}
+                            title={`Click to submit Note & PDF/Image attachment for ${label}`}
                           >
-                            Button: {getGranularApprovalStatus(sample).buttonApproved ? '✅ Approved' : '⏳ Pending'}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                              getGranularApprovalStatus(sample).threadApproved
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                            }`}
-                          >
-                            Thread: {getGranularApprovalStatus(sample).threadApproved ? '✅ Approved' : '⏳ Pending'}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                              getGranularApprovalStatus(sample).washApproved
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                            }`}
-                          >
-                            Wash: {getGranularApprovalStatus(sample).washApproved ? '✅ Approved' : '⏳ Pending'}
-                          </span>
-                        </>
-                      )}
+                            <span>
+                              {label}: {proof.approved ? '✅ Approved' : '⏳ Submit Proof'}
+                            </span>
+                            {proof.attachmentUrl && <Paperclip className="w-3 h-3" />}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
-                  {/* 3 Categories: Wash, Trims, Accessories */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 text-xs">
-                    {/* 1. Wash Approval */}
-                    <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-700/60 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-cyan-300 flex items-center gap-1">
-                            1. Wash Approval
-                          </span>
-                          {isEditing ? (
-                            <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={aDetails.washApproved}
-                                onChange={(e) =>
-                                  setTempApproval((prev) =>
-                                    prev ? { ...prev, washApproved: e.target.checked } : null
-                                  )
-                                }
-                                className="rounded text-indigo-600 focus:ring-0"
-                              />
-                              Approved
-                            </label>
-                          ) : (
-                            <span
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                aDetails.washApproved
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              }`}
-                            >
-                              {aDetails.washApproved ? 'Approved' : 'Pending / Review'}
-                            </span>
-                          )}
-                        </div>
-                        {isEditing ? (
-                          <textarea
-                            value={aDetails.washComments}
-                            onChange={(e) =>
-                              setTempApproval((prev) =>
-                                prev ? { ...prev, washComments: e.target.value } : null
-                              )
-                            }
-                            rows={3}
-                            placeholder="Enter wash comments (e.g. shade, whisker contrast, hand feel)..."
-                            className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                        ) : (
-                          <p className="text-slate-300 text-xs mt-1 italic leading-relaxed">
-                            {aDetails.washComments || 'No wash remarks entered yet.'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                  {/* 4 Mandatory Component Approval Cards: 1. Wash, 2. Thread, 3. Zipper, 4. Button */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                    {(
+                      [
+                        { comp: 'wash', num: 1, title: 'Wash Approval' },
+                        { comp: 'thread', num: 2, title: 'Thread Approval' },
+                        { comp: 'zipper', num: 3, title: 'Zipper Approval' },
+                        { comp: 'button', num: 4, title: 'Button Approval' },
+                      ] as { comp: ApprovableComponentKey; num: number; title: string }[]
+                    ).map(({ comp, num, title }) => {
+                      const proof = getComponentApprovalProof(sample, comp);
+                      return (
+                        <div
+                          key={comp}
+                          className="p-3 rounded-lg bg-slate-900/60 border border-slate-700/60 flex flex-col justify-between gap-2"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                              <span className="font-bold text-slate-900">
+                                {num}. {title}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                  proof.approved
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'bg-amber-500 text-white'
+                                }`}
+                              >
+                                {proof.approved ? 'Approved' : 'Pending'}
+                              </span>
+                            </div>
 
-                    {/* 2. Trims Approval */}
-                    <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-700/60 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-amber-300 flex items-center gap-1">
-                            2. Trims Approval
-                          </span>
-                          {isEditing ? (
-                            <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={aDetails.trimsApproved}
-                                onChange={(e) =>
-                                  setTempApproval((prev) =>
-                                    prev ? { ...prev, trimsApproved: e.target.checked } : null
-                                  )
-                                }
-                                className="rounded text-indigo-600 focus:ring-0"
-                              />
-                              Approved
-                            </label>
-                          ) : (
-                            <span
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                aDetails.trimsApproved
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              }`}
-                            >
-                              {aDetails.trimsApproved ? 'Approved' : 'Pending / Review'}
-                            </span>
-                          )}
-                        </div>
-                        {isEditing ? (
-                          <textarea
-                            value={aDetails.trimsComments}
-                            onChange={(e) =>
-                              setTempApproval((prev) =>
-                                prev ? { ...prev, trimsComments: e.target.value } : null
-                              )
-                            }
-                            rows={3}
-                            placeholder="Enter trims comments (labels, pocket bags, stitching thread)..."
-                            className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                        ) : (
-                          <p className="text-slate-300 text-xs mt-1 italic leading-relaxed">
-                            {aDetails.trimsComments || 'No trims remarks entered yet.'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                            <p className="text-slate-700 text-xs mt-1 italic leading-relaxed">
+                              {proof.note || `No ${comp} approval note submitted yet.`}
+                            </p>
+                          </div>
 
-                    {/* 3. Accessories Approval */}
-                    <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-700/60 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-pink-300 flex items-center gap-1">
-                            3. Accessories Approval
-                          </span>
-                          {isEditing ? (
-                            <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={aDetails.accessoriesApproved}
-                                onChange={(e) =>
-                                  setTempApproval((prev) =>
-                                    prev ? { ...prev, accessoriesApproved: e.target.checked } : null
-                                  )
+                          <div className="pt-2 border-t border-slate-700/50 space-y-1.5">
+                            {proof.attachmentUrl ? (
+                              <a
+                                href={proof.attachmentUrl}
+                                download={
+                                  proof.attachmentName ||
+                                  `${sample.styleCode}_${comp}_approval.${
+                                    proof.attachmentType === 'pdf' ? 'pdf' : 'jpg'
+                                  }`
                                 }
-                                className="rounded text-indigo-600 focus:ring-0"
-                              />
-                              Approved
-                            </label>
-                          ) : (
-                            <span
-                              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                aDetails.accessoriesApproved
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                  : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                              }`}
+                                className="w-full inline-flex items-center justify-between gap-1 px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-900 text-[10px] font-bold"
+                              >
+                                <span className="inline-flex items-center gap-1 truncate">
+                                  {proof.attachmentType === 'pdf' ? (
+                                    <FileText className="w-3 h-3 text-red-600 shrink-0" />
+                                  ) : (
+                                    <Paperclip className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  )}
+                                  <span className="truncate">
+                                    {proof.attachmentName || 'Attached File'}
+                                  </span>
+                                </span>
+                                <Download className="w-3 h-3 shrink-0" />
+                              </a>
+                            ) : (
+                              <div className="text-[10px] text-amber-700 font-medium">
+                                PDF / Image required to approve
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onOpenComponentApproval && onOpenComponentApproval(sample, comp)
+                              }
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-bold cursor-pointer text-center"
                             >
-                              {aDetails.accessoriesApproved ? 'Approved' : 'Pending / Review'}
-                            </span>
-                          )}
+                              {proof.approved
+                                ? 'View / Update Note & Attachment'
+                                : `Approve ${comp.charAt(0).toUpperCase() + comp.slice(1)} (Note + File)`}
+                            </button>
+                          </div>
                         </div>
-                        {isEditing ? (
-                          <textarea
-                            value={aDetails.accessoriesComments}
-                            onChange={(e) =>
-                              setTempApproval((prev) =>
-                                prev ? { ...prev, accessoriesComments: e.target.value } : null
-                              )
-                            }
-                            rows={3}
-                            placeholder="Enter accessories comments (zippers, shank buttons, rivets, drawstrings)..."
-                            className="w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                          />
-                        ) : (
-                          <p className="text-slate-300 text-xs mt-1 italic leading-relaxed">
-                            {aDetails.accessoriesComments || 'No accessories remarks entered yet.'}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                      );
+                    })}
                   </div>
 
                   {/* Overall Verdict & General Remarks */}

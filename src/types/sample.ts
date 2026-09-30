@@ -91,17 +91,58 @@ export function generateWhatsAppFollowUpLink(sample: SampleItem, phone: string, 
   return cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(textToUse)}` : `https://wa.me/?text=${encodeURIComponent(textToUse)}`;
 }
 
+export type ApprovableComponentKey = 'wash' | 'thread' | 'zipper' | 'button';
+
+export interface ComponentApprovalProof {
+  approved: boolean;
+  note: string;
+  attachmentUrl: string;
+  attachmentName?: string;
+  attachmentType?: 'pdf' | 'image';
+  approvedBy?: string;
+  approvedAt?: string;
+}
+
 export interface ApprovalDetails {
   washComments: string;
   washApproved: boolean;
+  washApprovalNote?: string;
+  washApprovalAttachment?: string;
+  washApprovalAttachmentName?: string;
+  washApprovalAttachmentType?: 'pdf' | 'image';
+  washApprovedBy?: string;
+  washApprovedAt?: string;
+
+  threadApproved?: boolean;
+  threadApprovalNote?: string;
+  threadApprovalAttachment?: string;
+  threadApprovalAttachmentName?: string;
+  threadApprovalAttachmentType?: 'pdf' | 'image';
+  threadApprovedBy?: string;
+  threadApprovedAt?: string;
+
+  zipperApproved?: boolean;
+  zipperApprovalNote?: string;
+  zipperApprovalAttachment?: string;
+  zipperApprovalAttachmentName?: string;
+  zipperApprovalAttachmentType?: 'pdf' | 'image';
+  zipperApprovedBy?: string;
+  zipperApprovedAt?: string;
+
+  buttonApproved?: boolean;
+  buttonApprovalNote?: string;
+  buttonApprovalAttachment?: string;
+  buttonApprovalAttachmentName?: string;
+  buttonApprovalAttachmentType?: 'pdf' | 'image';
+  buttonApprovedBy?: string;
+  buttonApprovedAt?: string;
+
   trimsComments: string;
   trimsApproved: boolean;
   accessoriesComments: string;
   accessoriesApproved: boolean;
-  buttonApproved?: boolean;
-  threadApproved?: boolean;
-  zipperApproved?: boolean;
   labelApproved?: boolean;
+  componentApprovals?: Partial<Record<ApprovableComponentKey, ComponentApprovalProof>>;
   overallVerdict: ApprovalStatus;
   reviewedBy?: string;
   reviewedAt?: string;
@@ -590,7 +631,89 @@ export function getDaysUntilShipment(sample: SampleItem): number | null {
 }
 
 /**
- * Returns granular approval statuses for Button, Thread, Wash, Trims, and Accessories
+ * Returns the approval proof (note + PDF/Image attachment + metadata) for Wash, Thread, Zipper, or Button
+ */
+export function getComponentApprovalProof(
+  sample: SampleItem,
+  component: ApprovableComponentKey
+): ComponentApprovalProof {
+  const a = sample.approvalDetails || ({} as ApprovalDetails);
+  const fromMap = a.componentApprovals?.[component];
+
+  if (component === 'wash') {
+    const note = a.washApprovalNote || fromMap?.note || a.washComments || '';
+    const attachmentUrl = a.washApprovalAttachment || fromMap?.attachmentUrl || '';
+    const attachmentName = a.washApprovalAttachmentName || fromMap?.attachmentName;
+    const attachmentType = a.washApprovalAttachmentType || fromMap?.attachmentType;
+    return {
+      approved: Boolean(a.washApproved),
+      note,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
+      approvedBy: a.washApprovedBy || fromMap?.approvedBy || a.reviewedBy,
+      approvedAt: a.washApprovedAt || fromMap?.approvedAt || a.reviewedAt,
+    };
+  }
+
+  if (component === 'thread') {
+    const approved =
+      a.threadApproved !== undefined ? Boolean(a.threadApproved) : Boolean(a.trimsApproved);
+    const note = a.threadApprovalNote || fromMap?.note || '';
+    const attachmentUrl = a.threadApprovalAttachment || fromMap?.attachmentUrl || '';
+    const attachmentName = a.threadApprovalAttachmentName || fromMap?.attachmentName;
+    const attachmentType = a.threadApprovalAttachmentType || fromMap?.attachmentType;
+    return {
+      approved,
+      note,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
+      approvedBy: a.threadApprovedBy || fromMap?.approvedBy || a.reviewedBy,
+      approvedAt: a.threadApprovedAt || fromMap?.approvedAt || a.reviewedAt,
+    };
+  }
+
+  if (component === 'zipper') {
+    const approved =
+      a.zipperApproved !== undefined
+        ? Boolean(a.zipperApproved)
+        : Boolean(a.accessoriesApproved);
+    const note = a.zipperApprovalNote || fromMap?.note || '';
+    const attachmentUrl = a.zipperApprovalAttachment || fromMap?.attachmentUrl || '';
+    const attachmentName = a.zipperApprovalAttachmentName || fromMap?.attachmentName;
+    const attachmentType = a.zipperApprovalAttachmentType || fromMap?.attachmentType;
+    return {
+      approved,
+      note,
+      attachmentUrl,
+      attachmentName,
+      attachmentType,
+      approvedBy: a.zipperApprovedBy || fromMap?.approvedBy || a.reviewedBy,
+      approvedAt: a.zipperApprovedAt || fromMap?.approvedAt || a.reviewedAt,
+    };
+  }
+
+  // button
+  const approved =
+    a.buttonApproved !== undefined ? Boolean(a.buttonApproved) : Boolean(a.accessoriesApproved);
+  const note = a.buttonApprovalNote || fromMap?.note || '';
+  const attachmentUrl = a.buttonApprovalAttachment || fromMap?.attachmentUrl || '';
+  const attachmentName = a.buttonApprovalAttachmentName || fromMap?.attachmentName;
+  const attachmentType = a.buttonApprovalAttachmentType || fromMap?.attachmentType;
+  return {
+    approved,
+    note,
+    attachmentUrl,
+    attachmentName,
+    attachmentType,
+    approvedBy: a.buttonApprovedBy || fromMap?.approvedBy || a.reviewedBy,
+    approvedAt: a.buttonApprovedAt || fromMap?.approvedAt || a.reviewedAt,
+  };
+}
+
+/**
+ * Returns granular approval statuses for Wash, Thread, Zipper, Button, Trims, and Accessories
  */
 export function getGranularApprovalStatus(sample: SampleItem) {
   const a = sample.approvalDetails;
@@ -601,18 +724,22 @@ export function getGranularApprovalStatus(sample: SampleItem) {
     a.buttonApproved !== undefined ? Boolean(a.buttonApproved) : accessoriesApproved;
   const threadApproved =
     a.threadApproved !== undefined ? Boolean(a.threadApproved) : trimsApproved;
+  const zipperApproved =
+    a.zipperApproved !== undefined ? Boolean(a.zipperApproved) : accessoriesApproved;
 
   const pendingItems: string[] = [];
   if (!washApproved) pendingItems.push('Wash');
-  if (!buttonApproved) pendingItems.push('Button');
   if (!threadApproved) pendingItems.push('Thread');
+  if (!zipperApproved) pendingItems.push('Zipper');
+  if (!buttonApproved) pendingItems.push('Button');
   if (!trimsApproved) pendingItems.push('Trims');
   if (!accessoriesApproved) pendingItems.push('Accessories');
 
   const isFullyApproved =
     washApproved &&
-    buttonApproved &&
     threadApproved &&
+    zipperApproved &&
+    buttonApproved &&
     trimsApproved &&
     accessoriesApproved &&
     a.overallVerdict === 'approved';
@@ -621,6 +748,7 @@ export function getGranularApprovalStatus(sample: SampleItem) {
     washApproved,
     buttonApproved,
     threadApproved,
+    zipperApproved,
     trimsApproved,
     accessoriesApproved,
     pendingItems,

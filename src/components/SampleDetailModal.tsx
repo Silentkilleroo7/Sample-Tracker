@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import {
   SampleItem,
+  ApprovableComponentKey,
   STAGE_CONFIG,
   getSampleImage,
   getEffectiveShipmentDate,
   getDaysUntilShipment,
   getGranularApprovalStatus,
+  getComponentApprovalProof,
   getEffectiveSizeBreakdown,
   getEffectivePerPcsConsumption,
   getPriorityTone,
@@ -33,6 +35,9 @@ import {
   Lock,
   Edit3,
   Ruler,
+  Paperclip,
+  FileText,
+  Download,
 } from 'lucide-react';
 
 interface SampleDetailModalProps {
@@ -48,6 +53,7 @@ interface SampleDetailModalProps {
   onModifyStoredStyle?: (sample: SampleItem) => void;
   onUpdateSampleThumbnail?: (sampleId: string, newThumbnail: string, additionalImages?: string[]) => void;
   onUpdateBlNumber?: (sampleId: string, blNumber: string) => void;
+  onOpenComponentApproval?: (sample: SampleItem, component: ApprovableComponentKey) => void;
 }
 
 export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
@@ -63,6 +69,7 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
   onModifyStoredStyle,
   onUpdateSampleThumbnail,
   onUpdateBlNumber,
+  onOpenComponentApproval,
 }) => {
   const { openZoom } = useImageZoom();
   const [inlineZoomed, setInlineZoomed] = useState(false);
@@ -435,60 +442,115 @@ export const SampleDetailModal: React.FC<SampleDetailModalProps> = ({
           </div>
         </div>
 
-        {/* Approval Remarks Note Dossier */}
+        {/* Approval Remarks Note Dossier (Wash, Thread, Zipper & Button with Mandatory Note & PDF/Image) */}
         <div className="p-4 rounded-xl bg-slate-800/40 border border-slate-800 mb-5">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <h3 className="font-bold text-white flex items-center gap-1.5 text-xs">
-              <MessageSquare className="w-4 h-4 text-pink-400" />
-              Buyer Approval Remarks (Button, Thread, Wash, Trims &amp; Accessories)
+              <MessageSquare className="w-4 h-4 text-emerald-600" />
+              Buyer Approval Remarks &amp; Proof (Wash, Thread, Zipper &amp; Button)
             </h3>
             <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold">
-              <span className={`px-2 py-0.5 rounded border ${getGranularApprovalStatus(sample).buttonApproved ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'}`}>
-                Button: {getGranularApprovalStatus(sample).buttonApproved ? '✅' : '⏳'}
-              </span>
-              <span className={`px-2 py-0.5 rounded border ${getGranularApprovalStatus(sample).threadApproved ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'}`}>
-                Thread: {getGranularApprovalStatus(sample).threadApproved ? '✅' : '⏳'}
-              </span>
-              <span className={`px-2 py-0.5 rounded border ${getGranularApprovalStatus(sample).washApproved ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'}`}>
-                Wash: {getGranularApprovalStatus(sample).washApproved ? '✅' : '⏳'}
-              </span>
+              {(['wash', 'thread', 'zipper', 'button'] as ApprovableComponentKey[]).map((comp) => {
+                const proof = getComponentApprovalProof(sample, comp);
+                const label = comp.charAt(0).toUpperCase() + comp.slice(1);
+                return (
+                  <button
+                    key={comp}
+                    type="button"
+                    onClick={() => onOpenComponentApproval && onOpenComponentApproval(sample, comp)}
+                    className={`px-2 py-0.5 rounded border cursor-pointer flex items-center gap-1 ${
+                      proof.approved
+                        ? 'bg-emerald-600 text-white border-emerald-700'
+                        : 'bg-amber-500 text-white border-amber-600'
+                    }`}
+                    title={`Click to submit Note & PDF/Image attachment for ${label}`}
+                  >
+                    <span>
+                      {label}: {proof.approved ? 'Approved' : 'Pending'}
+                    </span>
+                    {proof.attachmentUrl && <Paperclip className="w-2.5 h-2.5" />}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs mb-3">
-            <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-cyan-300">Wash Remarks</span>
-                <span className="text-[10px] font-bold">
-                  {sample.approvalDetails.washApproved ? '✅ Approved' : '⏳ Review'}
-                </span>
-              </div>
-              <p className="text-slate-300 italic text-[11px]">
-                {sample.approvalDetails.washComments || 'No wash remarks entered'}
-              </p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-amber-300">Trims Remarks</span>
-                <span className="text-[10px] font-bold">
-                  {sample.approvalDetails.trimsApproved ? '✅ Approved' : '⏳ Review'}
-                </span>
-              </div>
-              <p className="text-slate-300 italic text-[11px]">
-                {sample.approvalDetails.trimsComments || 'No trims remarks entered'}
-              </p>
-            </div>
-            <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800">
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-pink-300">Accessories Remarks</span>
-                <span className="text-[10px] font-bold">
-                  {sample.approvalDetails.accessoriesApproved ? '✅ Approved' : '⏳ Review'}
-                </span>
-              </div>
-              <p className="text-slate-300 italic text-[11px]">
-                {sample.approvalDetails.accessoriesComments || 'No accessories remarks entered'}
-              </p>
-            </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mb-3">
+            {(
+              [
+                { key: 'wash', title: '1. Wash Approval' },
+                { key: 'thread', title: '2. Thread Approval' },
+                { key: 'zipper', title: '3. Zipper Approval' },
+                { key: 'button', title: '4. Button Approval' },
+              ] as { key: ApprovableComponentKey; title: string }[]
+            ).map(({ key, title }) => {
+              const proof = getComponentApprovalProof(sample, key);
+              return (
+                <div
+                  key={key}
+                  className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 flex flex-col justify-between gap-2"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="font-bold text-slate-900">{title}</span>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                          proof.approved
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-amber-500 text-white'
+                        }`}
+                      >
+                        {proof.approved ? 'Approved' : 'Pending'}
+                      </span>
+                    </div>
+                    <p className="text-slate-700 italic text-[11px]">
+                      {proof.note || `No ${key} approval note submitted yet.`}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center justify-between gap-1.5">
+                    {proof.attachmentUrl ? (
+                      <a
+                        href={proof.attachmentUrl}
+                        download={
+                          proof.attachmentName ||
+                          `${sample.styleCode}_${key}_approval.${
+                            proof.attachmentType === 'pdf' ? 'pdf' : 'jpg'
+                          }`
+                        }
+                        className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded border border-emerald-200"
+                      >
+                        {proof.attachmentType === 'pdf' ? (
+                          <FileText className="w-3 h-3 text-red-600" />
+                        ) : (
+                          <Paperclip className="w-3 h-3 text-emerald-600" />
+                        )}
+                        <span className="truncate max-w-[130px]">
+                          {proof.attachmentName || 'Attached Proof'}
+                        </span>
+                        <Download className="w-2.5 h-2.5" />
+                      </a>
+                    ) : (
+                      <span className="text-[10px] text-amber-700 font-medium">
+                        No PDF/Image attached
+                      </span>
+                    )}
+
+                    {onOpenComponentApproval && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenComponentApproval(sample, key)}
+                        className="px-2 py-1 rounded bg-emerald-600 text-white text-[10px] font-bold cursor-pointer"
+                      >
+                        {proof.approved ? 'View / Update Proof' : 'Approve (Note + File)'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
+
           <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-800">
             <span>
               Overall Verdict: <strong className="text-white uppercase">{sample.approvalDetails.overallVerdict}</strong>
