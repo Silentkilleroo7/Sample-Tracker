@@ -14,6 +14,7 @@ import {
   getEffectiveSizeName,
   getEffectiveRequisitionQuantity,
   getEffectivePerPcsConsumption,
+  rankSamplesBySearchQuery,
 } from '../types/sample';
 import { UserRole, canUserAdvanceStage, ROLE_BADGE_CONFIG } from '../types/auth';
 import { ProgressBar } from './ProgressBar';
@@ -128,19 +129,8 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      result = result.filter(
-        (s) =>
-          s.styleCode.toLowerCase().includes(q) ||
-          s.styleName.toLowerCase().includes(q) ||
-          s.poNumber.toLowerCase().includes(q) ||
-          s.lineCode.toLowerCase().includes(q) ||
-          s.buyer.toLowerCase().includes(q) ||
-          s.fabricCode.toLowerCase().includes(q) ||
-          s.fabricName.toLowerCase().includes(q) ||
-          s.sampleType.toLowerCase().includes(q) ||
-          (s.sewingOperator && s.sewingOperator.toLowerCase().includes(q))
-      );
+      const ranked = rankSamplesBySearchQuery(result, searchQuery);
+      return ranked.map((r) => r.sample);
     }
 
     if (selectedBuyer !== 'all') {

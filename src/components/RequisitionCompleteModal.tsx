@@ -1123,10 +1123,10 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                 </thead>
 
                 <tbody>
-                  {/* Main Requisition Row */}
-                  <tr className="h-[130px]">
+                  {/* Main Requisition Row (Compact height, zero repeated words) */}
+                  <tr className="min-h-[60px]">
                     {/* Col 1: DESCRIPTION (Code) */}
-                    <td className="border-r border-black p-2 text-center align-middle">
+                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <input
                           type="text"
@@ -1145,7 +1145,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                     </td>
 
                     {/* Col 2: STYLE */}
-                    <td className="border-r border-black p-2 text-center align-middle">
+                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <input
                           type="text"
@@ -1162,7 +1162,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                     </td>
 
                     {/* Col 3: BLOCK */}
-                    <td className="border-r border-black p-2 text-center font-bold text-[12px] text-black align-middle">
+                    <td className="border-r border-black py-2.5 px-2 text-center font-bold text-[12px] text-black align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <input
                           type="text"
@@ -1176,8 +1176,8 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                       )}
                     </td>
 
-                    {/* Col 4: SAMPLE SIZE */}
-                    <td className="border-r border-black p-2 text-center align-middle">
+                    {/* Col 4: SAMPLE SIZE (Does NOT repeat Sample Type, since Type of Sample is in header) */}
+                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <div className="space-y-1.5 text-left">
                           <textarea
@@ -1191,7 +1191,6 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                         </div>
                       ) : (
                         <div className="space-y-0.5 font-bold text-[12px] text-black leading-snug">
-                          <div>{form.sampleType}</div>
                           {activeSizeBreakdown.length > 1 ? (
                             <div className="space-y-0.5">
                               {activeSizeBreakdown.map((item, idx) => (
@@ -1210,7 +1209,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                     </td>
 
                     {/* Col 5: COLOR /WASH */}
-                    <td className="border-r border-black p-2 text-center align-middle">
+                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <input
                           type="text"
@@ -1237,7 +1236,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                     </td>
 
                     {/* Col 6: FABRIC CODE */}
-                    <td className="border-r border-black p-2 text-center align-middle">
+                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <input
                           type="text"
@@ -1253,7 +1252,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                     </td>
 
                     {/* Col 7: FITTING */}
-                    <td className="border-r border-black p-2 text-center align-middle">
+                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <textarea
                           rows={2}
@@ -1269,7 +1268,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                     </td>
 
                     {/* Col 8: THREAD */}
-                    <td className="border-r border-black p-2 text-center align-middle">
+                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <textarea
                           rows={2}
@@ -1291,7 +1290,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                     </td>
 
                     {/* Col 9: QTY */}
-                    <td className="p-2 text-center align-middle">
+                    <td className="py-2.5 px-2 text-center align-middle">
                       {isEditMode && !isRequisitionLocked ? (
                         <input
                           type="text"
@@ -1311,98 +1310,50 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
 
                   {/* =========================================================== */}
                   {/* OPTIONS UNDER SINGLE REQUISITION (Thread Mokab, Leg Panel,  */}
-                  {/* Sleeve Panel, etc.) RENDERED AS CLEAN SUB-ROWS              */}
+                  {/* Sleeve Panel) — COMPACT NON-REPETITIVE SUMMARY ROW          */}
                   {/* =========================================================== */}
-                  {activeRequisitionOptions.map((opt, idx) => (
-                    <tr key={opt.id || idx} className="border-t border-black bg-neutral-50/60 print:bg-transparent">
+                  {activeRequisitionOptions.length > 0 && (
+                    <tr className="border-t border-black bg-emerald-50/40 print:bg-transparent">
                       <td className="border-r border-black py-1.5 px-2 text-center font-bold text-[11px] uppercase text-black">
-                        Option #{idx + 1}
+                        Options
                       </td>
                       <td
-                        colSpan={2}
-                        className="border-r border-black py-1.5 px-2 text-center font-bold text-[12px] text-black"
+                        colSpan={7}
+                        className="border-r border-black py-1.5 px-2.5 text-left font-bold text-[11px] text-black"
                       >
-                        {isEditMode && !isRequisitionLocked ? (
-                          <input
-                            type="text"
-                            value={opt.name}
-                            onChange={(e) => {
-                              const next = activeRequisitionOptions.map((item, i) =>
-                                i === idx ? { ...item, name: e.target.value } : item
-                              );
-                              setForm({ ...form, requisitionOptions: next });
-                            }}
-                            className="w-full bg-amber-50 border border-amber-400 px-1 py-0.5 text-center font-bold text-xs"
-                          />
-                        ) : (
-                          opt.name
-                        )}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                          {activeRequisitionOptions.map((opt, idx) => (
+                            <span key={opt.id || idx} className="inline-flex items-center gap-1">
+                              <span>
+                                • {opt.name} ({opt.quantity} {opt.quantity === 1 ? 'Pc' : 'Pcs'})
+                              </span>
+                              {opt.note && opt.note !== 'As per instruction' && (
+                                <span className="font-normal text-neutral-700">
+                                  — {opt.note}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
                       </td>
-                      <td className="border-r border-black py-1.5 px-2 text-center font-bold text-[11px] text-black">
-                        Single Req. Option
-                      </td>
-                      <td className="border-r border-black py-1.5 px-2 text-center font-bold text-[11px] text-black">
-                        {form.colorWash || sample.color || 'Mid wash'}
-                      </td>
-                      <td className="border-r border-black py-1.5 px-2 text-center font-bold text-[11px] text-black">
-                        {form.fabricCode || sample.fabricCode}
-                      </td>
-                      <td
-                        colSpan={2}
-                        className="border-r border-black py-1.5 px-2 text-center font-semibold text-[11px] text-black"
-                      >
-                        {isEditMode && !isRequisitionLocked ? (
-                          <input
-                            type="text"
-                            value={opt.note || ''}
-                            onChange={(e) => {
-                              const next = activeRequisitionOptions.map((item, i) =>
-                                i === idx ? { ...item, note: e.target.value } : item
-                              );
-                              setForm({ ...form, requisitionOptions: next });
-                            }}
-                            placeholder="Option specification / note"
-                            className="w-full bg-amber-50 border border-amber-400 px-1 py-0.5 text-center font-bold text-xs"
-                          />
-                        ) : (
-                          opt.note || 'As per instruction'
-                        )}
-                      </td>
-                      <td className="py-1.5 px-2 text-center font-bold text-[12px] text-black">
-                        {isEditMode && !isRequisitionLocked ? (
-                          <input
-                            type="number"
-                            min={1}
-                            value={opt.quantity}
-                            onChange={(e) => {
-                              const val = Math.max(1, parseInt(e.target.value, 10) || 1);
-                              const next = activeRequisitionOptions.map((item, i) =>
-                                i === idx ? { ...item, quantity: val } : item
-                              );
-                              setForm({ ...form, requisitionOptions: next });
-                            }}
-                            className="w-12 bg-amber-50 border border-amber-400 px-1 py-0.5 text-center font-bold text-xs"
-                          />
-                        ) : (
-                          `${opt.quantity} Pcs`
-                        )}
+                      <td className="py-1.5 px-2 text-center font-bold text-[11px] text-black whitespace-nowrap">
+                        {activeRequisitionOptions.reduce((sum, o) => sum + o.quantity, 0)} Pcs
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
 
               {/* =============================================================== */}
-              {/* 4. BOTTOM RIGHT FABRIC COMPOSITION / SUPP / WEIGHT              */}
-              {/*    (EXACT MATCH TO ATTACHED IMAGE)                              */}
+              {/* 4. COMPACT BOTTOM BAR: FABRIC COMPOSITION / SUPP / WEIGHT       */}
               {/* =============================================================== */}
-              <div className="grid grid-cols-12 mt-4 text-[11px]">
+              <div className="grid grid-cols-12 mt-3 text-[11px] items-start">
                 {/* Left side: Optional Special / Trims Note */}
                 <div className="col-span-6 pr-4">
                   {(form.specialInstructions || form.zipperNote || form.buttonNote || isEditMode) && (
-                    <div className="space-y-1">
-                      <div className="font-bold uppercase text-black">
-                        Special / Trims Instructions:
+                    <div className="space-y-0.5">
+                      <div className="font-bold uppercase text-black text-[10px]">
+                        Special / Trims Notes:
                       </div>
                       {isEditMode && !isRequisitionLocked ? (
                         <textarea
@@ -1429,10 +1380,10 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                   )}
                 </div>
 
-                {/* Right side: FABRIC COMPOSITION, SUPP, WEIGHT (Exact match to attached image) */}
-                <div className="col-span-6 space-y-2">
+                {/* Right side: FABRIC COMPOSITION, SUPP, WEIGHT (Compact) */}
+                <div className="col-span-6 space-y-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="font-bold uppercase text-black w-[150px] shrink-0">
+                    <span className="font-bold uppercase text-black w-[140px] shrink-0">
                       FABRIC COMPOSITION:
                     </span>
                     <div className="border-b border-black flex-1 pb-0.5 font-bold text-black">
@@ -1452,7 +1403,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                   </div>
 
                   <div className="flex items-baseline gap-2">
-                    <span className="font-bold uppercase text-black w-[150px] shrink-0">
+                    <span className="font-bold uppercase text-black w-[140px] shrink-0">
                       SUPP:
                     </span>
                     <div className="border-b border-black flex-1 pb-0.5 font-bold text-black">
@@ -1470,7 +1421,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                   </div>
 
                   <div className="flex items-baseline gap-2">
-                    <span className="font-bold uppercase text-black w-[150px] shrink-0">
+                    <span className="font-bold uppercase text-black w-[140px] shrink-0">
                       WEIGHT:
                     </span>
                     <div className="border-b border-black flex-1 pb-0.5 font-bold text-black">
@@ -1490,27 +1441,22 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
               </div>
 
               {/* =============================================================== */}
-              {/* 5. SIGNATURES FOOTER                                            */}
+              {/* 5. COMPACT SIGNATURES FOOTER (No Repeated Names)                */}
               {/* =============================================================== */}
-              <div className="grid grid-cols-3 gap-8 mt-10 pt-4 text-[11px] text-black">
+              <div className="grid grid-cols-3 gap-8 mt-6 pt-2 text-[11px] text-black">
                 <div className="text-center">
-                  <div className="font-bold min-h-[20px]">
-                    {form.requestedBy || 'Zahid Anwar'}
-                  </div>
                   <div className="border-t border-black pt-1 font-bold uppercase">
                     Merchandiser&apos;s Signature
                   </div>
                 </div>
 
                 <div className="text-center">
-                  <div className="font-bold min-h-[20px]">{form.receivedBy || ''}</div>
                   <div className="border-t border-black pt-1 font-bold uppercase">
                     Received By (Sampling)
                   </div>
                 </div>
 
                 <div className="text-center">
-                  <div className="font-bold min-h-[20px]"></div>
                   <div className="border-t border-black pt-1 font-bold uppercase">
                     Authorized Signature
                   </div>

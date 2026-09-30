@@ -19,6 +19,7 @@ import {
   generateWhatsAppFollowUpLink,
   getSampleImage,
   getEffectivePerPcsConsumption,
+  rankSamplesBySearchQuery,
 } from './types/sample';
 import {
   FabricItem,
@@ -1448,14 +1449,24 @@ export default function App() {
     <ImageZoomProvider onUpdateSampleThumbnail={isMerchandiser ? handleUpdateSampleThumbnail : undefined}>
       <div
         id="app-root-wrapper"
-        className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white print:min-h-0 print:bg-white print:text-black print:block"
+        className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-600 selection:text-white print:min-h-0 print:bg-white print:text-black print:block"
       >
         <div id="app-screen-only-content" className="flex-1 flex flex-col min-h-screen print:hidden">
           {/* 1. Frozen (Sticky) Top Header + Main Tracking Modules */}
-          <div className="sticky top-0 z-40 w-full bg-slate-950/95 backdrop-blur-xl shadow-2xl">
+          <div className="sticky top-0 z-40 w-full bg-white shadow-sm">
             <Navbar
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              samples={samples}
+              onSelectSample={(sample) => {
+                setSelectedSampleForDetail(sample);
+                setIsDetailModalOpen(true);
+              }}
+              onOpenRequisitionSlip={(sample) => {
+                setCompletedRequisitionSample(sample);
+                setIsRequisitionCompleteModalOpen(true);
+              }}
+              onNavigateToSamples={() => setCurrentView('all_samples')}
               notifications={notifications}
               onOpenNotifications={() => setIsNotificationDrawerOpen(true)}
               onNewRequisition={() => {
@@ -1494,6 +1505,171 @@ export default function App() {
           {/* 2. Main Full-Width View Container */}
           <div className="flex-1 max-w-7xl w-full mx-auto">
             <main className="p-3 sm:p-6 lg:p-8 pb-12 min-w-0">
+              {/* Universal Live Search Results Panel (Visible on ANY view when typing in Search Bar) */}
+              {searchQuery.trim() && (() => {
+                const qLower = searchQuery.trim().toLowerCase();
+                const rankedSampleResults = rankSamplesBySearchQuery(samples, searchQuery);
+
+                const matchedFabrics = fabrics.filter((f) =>
+                  [
+                    f.code,
+                    f.name,
+                    f.color,
+                    f.supplier,
+                    f.rackLocation,
+                    f.composition,
+                    String(f.availableYards || ''),
+                    ...(f.awbShipments || []).map((a) => `${a.awbNumber} ${a.courier} ${a.status}`),
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase()
+                    .includes(qLower)
+                );
+
+                const matchedTests = tests.filter((t) =>
+                  [
+                    t.styleCode,
+                    t.styleName,
+                    t.buyer,
+                    t.poNumber,
+                    t.fabricCode,
+                    t.color,
+                    t.reportNumber,
+                    t.labName,
+                    t.status,
+                    t.testStage,
+                    t.failureParameter,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')
+                    .toLowerCase()
+                    .includes(qLower)
+                );
+
+                const totalMatches =
+                  rankedSampleResults.length + matchedFabrics.length + matchedTests.length;
+
+                return (
+                  <div className="mb-5 p-4 rounded-2xl bg-white border-2 border-emerald-500 shadow-md space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 pb-2.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white text-xs font-bold">
+                          Universal Search Active
+                        </span>
+                        <span className="text-xs sm:text-sm font-bold text-slate-900">
+                          Instant matches for &ldquo;{searchQuery}&rdquo; — {rankedSampleResults.length} Style{rankedSampleResults.length === 1 ? '' : 's'}, {matchedFabrics.length} Fabric{matchedFabrics.length === 1 ? '' : 's'}, {matchedTests.length} Test{matchedTests.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {currentView !== 'all_samples' && rankedSampleResults.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setCurrentView('all_samples')}
+                            className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-bold cursor-pointer"
+                          >
+                            Open Full Filtered Table ({rankedSampleResults.length})
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="px-3 py-1 rounded-lg bg-emerald-50 text-emerald-900 border border-emerald-200 text-xs font-bold cursor-pointer"
+                        >
+                          Clear Search
+                        </button>
+                      </div>
+                    </div>
+
+                    {totalMatches === 0 ? (
+                      <div className="text-xs text-slate-600 py-2">
+                        No records matched &ldquo;{searchQuery}&rdquo;. Try searching any letter (e.g. &ldquo;a&rdquo;), PO #, Style Name, Style Code, Buyer, Color, Fabric, or Option.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {rankedSampleResults.length > 0 && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                            {rankedSampleResults.slice(0, 6).map(({ sample, score, matchReason }, idx) => (
+                              <div
+                                key={sample.id}
+                                onClick={() => {
+                                  setSelectedSampleForDetail(sample);
+                                  setIsDetailModalOpen(true);
+                                }}
+                                className="p-3 rounded-xl bg-white border border-emerald-200 hover:border-emerald-500 transition-all cursor-pointer flex items-center justify-between gap-2 shadow-2xs"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {idx === 0 && (
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-bold uppercase">
+                                        Auto-Detected ({score}%)
+                                      </span>
+                                    )}
+                                    <span className="font-mono font-black text-xs text-emerald-950">
+                                      {sample.styleCode}
+                                    </span>
+                                    <span className="font-bold text-xs text-slate-900 truncate">
+                                      {sample.styleName}
+                                    </span>
+                                    {sample.priority === 'urgent' ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[9px] font-bold uppercase">
+                                        Urgent
+                                      </span>
+                                    ) : sample.approvalDetails?.overallVerdict === 'approved' ? (
+                                      <span className="px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-bold uppercase">
+                                        Approved
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-500 text-white text-[9px] font-bold uppercase">
+                                        Pending
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-slate-600 mt-1 truncate">
+                                    PO: <strong className="text-slate-900">{sample.poNumber}</strong> · Buyer: <strong className="text-slate-900">{sample.buyer}</strong> · {sample.color}
+                                  </div>
+                                  <div className="text-[10px] font-semibold text-emerald-800 mt-0.5 truncate">
+                                    {matchReason}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCompletedRequisitionSample(sample);
+                                    setIsRequisitionCompleteModalOpen(true);
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold shrink-0 cursor-pointer"
+                                >
+                                  Print
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {matchedFabrics.length > 0 && (
+                          <div className="pt-2 border-t border-emerald-100 flex flex-wrap items-center gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-900">
+                              Matching Fabrics ({matchedFabrics.length}):
+                            </span>
+                            {matchedFabrics.slice(0, 5).map((fab) => (
+                              <button
+                                key={fab.id}
+                                type="button"
+                                onClick={() => setCurrentView('fabric_inventory')}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-950 hover:border-emerald-500 cursor-pointer"
+                              >
+                                <strong className="font-mono">{fab.code}</strong> · {fab.name} ({fab.availableYards} yds)
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {currentView === 'dashboard' && isMerchandiser && (
                 <DashboardView
                   samples={samples}

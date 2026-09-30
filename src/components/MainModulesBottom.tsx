@@ -148,24 +148,24 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
   return (
     <nav
       aria-label="Main tracking modules top header navigation"
-      className="w-full bg-slate-950/95 backdrop-blur-xl border-b border-indigo-500/30 shadow-xl"
+      className="w-full bg-white border-b border-emerald-200 shadow-xs"
     >
       <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-1.5 sm:py-2">
         {/* Desktop-only Status Header */}
-        <div className="hidden sm:flex items-center justify-between px-2 mb-1.5 text-[10px] text-slate-400">
+        <div className="hidden sm:flex items-center justify-between px-2 mb-1.5 text-[10px] text-slate-600">
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="font-semibold text-indigo-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+            <span className="font-semibold text-emerald-900">
               Main Tracking Modules
             </span>
           </div>
           <div className="flex items-center gap-3 font-mono text-[10px]">
-            <span className="text-slate-400">
-              In Pipeline: <strong className="text-white">{counts.total}</strong> styles
+            <span className="text-slate-600">
+              In Pipeline: <strong className="text-emerald-950">{counts.total}</strong> styles
             </span>
             {counts.lowFabric > 0 && (
-              <span className="text-rose-400 font-semibold flex items-center gap-1">
-                <AlertOctagon className="w-3 h-3" />
+              <span className="px-1.5 py-0.5 rounded bg-red-600 text-white font-semibold flex items-center gap-1">
+                <AlertOctagon className="w-3 h-3 text-white" />
                 {counts.lowFabric} Fabric Alert
               </span>
             )}
@@ -193,37 +193,33 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                   isCompactRole ? 'w-full' : 'min-w-[82px] sm:min-w-0 shrink-0'
                 } flex flex-col sm:flex-row items-center justify-center sm:justify-between px-2.5 py-1.5 sm:py-2 rounded-xl transition-all group cursor-pointer text-left ${
                   isActive
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400/60'
-                    : 'bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white border border-slate-800/80'
+                    ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700'
+                    : 'bg-emerald-50/50 text-slate-800 hover:bg-emerald-100/70 border border-emerald-200'
                 }`}
               >
-                {isActive && (
-                  <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-emerald-300 rounded-full" />
-                )}
-
                 <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 min-w-0">
                   <div
                     className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 ${
                       isActive
-                        ? 'bg-white/20 text-white'
-                        : 'bg-slate-800 text-slate-300'
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-white text-emerald-700 border border-emerald-200'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : item.color}`} />
+                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-emerald-700'}`} />
                   </div>
                   <div className="hidden lg:block truncate min-w-0">
-                    <div className="font-semibold text-xs truncate leading-tight">
+                    <div className={`font-semibold text-xs truncate leading-tight ${isActive ? 'text-white' : 'text-slate-900'}`}>
                       {item.label}
                     </div>
                     <div
                       className={`text-[9px] truncate ${
-                        isActive ? 'text-indigo-200' : 'text-slate-500'
+                        isActive ? 'text-emerald-100' : 'text-slate-500'
                       }`}
                     >
                       {item.subtitle}
                     </div>
                   </div>
-                  <span className="lg:hidden text-[10px] sm:text-[11px] font-semibold truncate whitespace-nowrap">
+                  <span className={`lg:hidden text-[10px] sm:text-[11px] font-semibold truncate whitespace-nowrap ${isActive ? 'text-white' : 'text-slate-900'}`}>
                     {item.mobileLabel}
                   </span>
                 </div>
@@ -234,10 +230,8 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                     <span
                       className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap ${
                         item.badgeVariant === 'critical'
-                          ? isActive
-                            ? 'bg-rose-500 text-white'
-                            : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                          : 'bg-slate-800 text-slate-300'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-emerald-100 text-emerald-900'
                       }`}
                     >
                       {item.badge}
@@ -246,8 +240,8 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                     <span
                       className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold tabular-nums ${
                         isActive
-                          ? 'bg-indigo-800 text-white'
-                          : 'bg-slate-800 text-slate-400 group-hover:text-slate-200'
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-white text-emerald-900 border border-emerald-200'
                       }`}
                     >
                       {item.count}
@@ -260,8 +254,8 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                   <span
                     className={`sm:hidden absolute top-1 right-1.5 text-[9px] font-mono font-bold tabular-nums px-1 rounded ${
                       isActive
-                        ? 'bg-indigo-800/90 text-white'
-                        : 'bg-slate-800 text-slate-400'
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-white text-emerald-900 border border-emerald-200'
                     }`}
                   >
                     {item.count}

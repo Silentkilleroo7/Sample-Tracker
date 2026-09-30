@@ -964,37 +964,63 @@ export interface RankedSampleSearchResult {
   sample: SampleItem;
   score: number;
   matchReason: string;
-  matchedField: 'poNumber' | 'styleName' | 'styleCode' | 'blNumber' | 'buyer' | 'color' | 'other';
+  matchedField:
+    | 'poNumber'
+    | 'styleName'
+    | 'styleCode'
+    | 'blNumber'
+    | 'buyer'
+    | 'color'
+    | 'size'
+    | 'fabric'
+    | 'option'
+    | 'trims'
+    | 'stage'
+    | 'parcel'
+    | 'other';
 }
 
 function computeStringCloseness(targetRaw: string, queryRaw: string): number {
-  const target = targetRaw.toLowerCase().trim();
-  const query = queryRaw.toLowerCase().trim();
+  const target = String(targetRaw || '').toLowerCase().trim();
+  const query = String(queryRaw || '').toLowerCase().trim();
   if (!target || !query) return 0;
   if (target === query) return 100;
 
-  const targetClean = target.replace(/[\s\-_/#.]/g, '');
-  const queryClean = query.replace(/[\s\-_/#.]/g, '');
-  if (targetClean && queryClean) {
-    if (targetClean === queryClean) return 98;
-    if (targetClean.startsWith(queryClean)) return 90;
-    if (targetClean.includes(queryClean)) return 82;
+  const targetClean = target.replace(/[\s\-_/#.,:;()]/g, '');
+  const queryClean = query.replace(/[\s\-_/#.,:;()]/g, '');
+
+  // Single-character search support (e.g. searching "a" or "1")
+  if (query.length === 1) {
+    if (target.startsWith(query)) return 92;
+    const words = target.split(/[\s\-_/#.,:;()]+/);
+    if (words.some((w) => w.startsWith(query))) return 86;
+    if (target.includes(query)) return 75;
+    return 0;
   }
 
-  if (target.startsWith(query)) return 92;
+  if (targetClean && queryClean) {
+    if (targetClean === queryClean) return 98;
+    if (targetClean.startsWith(queryClean)) return 91;
+    if (targetClean.includes(queryClean)) return 83;
+  }
+
+  if (target.startsWith(query)) return 94;
+  const targetWords = target.split(/[\s\-_/#.,:;()]+/).filter(Boolean);
+  if (targetWords.some((w) => w === query)) return 90;
+  if (targetWords.some((w) => w.startsWith(query))) return 87;
   if (target.includes(query)) return 84;
 
-  // Token / word-level matching
-  const queryTokens = query.split(/[\s\-_,/]+/).filter((t) => t.length >= 2);
-  if (queryTokens.length > 0) {
+  // Multi-word / token matching (supports 1+ char tokens)
+  const queryTokens = query.split(/[\s\-_,/]+/).filter((t) => t.length >= 1);
+  if (queryTokens.length > 1) {
     let matchedTokens = 0;
     for (const token of queryTokens) {
       if (target.includes(token) || targetClean.includes(token)) {
         matchedTokens++;
       }
     }
-    if (matchedTokens === queryTokens.length) return 76;
-    if (matchedTokens > 0) return 55 + Math.round((matchedTokens / queryTokens.length) * 15);
+    if (matchedTokens === queryTokens.length) return 80;
+    if (matchedTokens > 0) return 55 + Math.round((matchedTokens / queryTokens.length) * 20);
   }
 
   // Character bigram similarity (Dice coefficient) for close / typo-tolerant matching
@@ -1018,8 +1044,8 @@ function computeStringCloseness(targetRaw: string, queryRaw: string): number {
       }
     }
     const dice = (2 * intersection) / (tBigrams.length + qBigrams.length);
-    if (dice >= 0.35) {
-      return Math.round(dice * 75);
+    if (dice >= 0.32) {
+      return Math.round(dice * 76);
     }
   }
 
@@ -1027,9 +1053,10 @@ function computeStringCloseness(targetRaw: string, queryRaw: string): number {
 }
 
 /**
- * Instant Auto-Detect & Closeness Ranking Search Engine:
- * Detects styles by PO Number, Style Name, Style Code, BL Number, Buyer, Color/Wash, or Line Code
- * and returns matching & closely related styles ordered by relevance score.
+ * Universal Deep-Index Search Engine:
+ * Searches EVERY field in SampleItem (PO #, Style Name, Style Code, BL #, Buyer, Color, Wash,
+ * Sizes, Options like Thread Mokab / Leg Panel / Sleeve Panel, Fabric Code/Name, Trims,
+ * Courier/Tracking, Stage, Priority, Operator, Notes) and supports 1-character ("a") to full queries.
  */
 export function rankSamplesBySearchQuery(
   samples: SampleItem[],
@@ -1047,83 +1074,85 @@ export function rankSamplesBySearchQuery(
       field: RankedSampleSearchResult['matchedField'];
     }[] = [];
 
-    const poScore = computeStringCloseness(sample.poNumber || '', trimmed);
-    if (poScore > 0) {
-      candidates.push({
-        score: poScore + 4, // Boost PO Number matches
-        reason: poScore >= 90 ? `PO # Exact Match (${sample.poNumber})` : `Close PO # (${sample.poNumber})`,
-        field: 'poNumber',
-      });
-    }
+    const checkField = (
+      val: string | undefined | null,
+      label: string,
+      field: RankedSampleSearchResult['matchedField'],
+      boost = 0
+    ) => {
+      if (!val) return;
+      const sc = computeStringCloseness(val, trimmed);
+      if (sc > 0) {
+        candidates.push({
+          score: sc + boost,
+          reason: `${label}: ${val}`,
+          field,
+        });
+      }
+    };
 
-    const nameScore = computeStringCloseness(sample.styleName || '', trimmed);
-    if (nameScore > 0) {
-      candidates.push({
-        score: nameScore + 3, // Boost Style Name matches
-        reason:
-          nameScore >= 90
-            ? `Style Name Match (${sample.styleName})`
-            : `Related Style Name (${sample.styleName})`,
-        field: 'styleName',
-      });
-    }
-
-    const codeScore = computeStringCloseness(sample.styleCode || '', trimmed);
-    if (codeScore > 0) {
-      candidates.push({
-        score: codeScore + 3,
-        reason:
-          codeScore >= 90
-            ? `Style Code Match (${sample.styleCode})`
-            : `Close Style Code (${sample.styleCode})`,
-        field: 'styleCode',
-      });
-    }
-
-    const blScore = computeStringCloseness(
-      sample.blNumber || sample.requisitionForm?.blNumber || '',
-      trimmed
+    // Primary Identifiers (Highest Priority)
+    checkField(sample.poNumber, 'PO #', 'poNumber', 6);
+    checkField(sample.styleName, 'Style Name', 'styleName', 5);
+    checkField(sample.styleCode, 'Style Code', 'styleCode', 5);
+    checkField(
+      sample.blNumber || sample.requisitionForm?.blNumber,
+      'BL #',
+      'blNumber',
+      4
     );
-    if (blScore > 0) {
-      candidates.push({
-        score: blScore,
-        reason: `BL # Match (${sample.blNumber || sample.requisitionForm?.blNumber})`,
-        field: 'blNumber',
-      });
+    checkField(sample.buyer, 'Buyer', 'buyer', 3);
+
+    // Single Requisition Options (Thread Mokab, Leg Panel, Sleeve Panel, etc.)
+    const allOptions = [
+      ...(sample.requisitionOptions || []),
+      ...(sample.requisitionForm?.requisitionOptions || []),
+    ];
+    for (const opt of allOptions) {
+      checkField(`${opt.name} ${opt.note || ''}`, 'Option', 'option', 3);
     }
 
-    const buyerScore = computeStringCloseness(sample.buyer || '', trimmed);
-    if (buyerScore > 0) {
-      candidates.push({
-        score: Math.min(85, buyerScore),
-        reason: `Buyer Match (${sample.buyer})`,
-        field: 'buyer',
-      });
+    // Colors & Washes
+    checkField(sample.color, 'Color', 'color', 2);
+    checkField(sample.washDetails?.washType, 'Wash', 'color', 2);
+    checkField(sample.requisitionForm?.colorWash, 'Color/Wash', 'color', 2);
+    for (const cb of sample.colorBreakdown || []) {
+      checkField(`${cb.color} ${cb.wash || ''}`, 'Color Breakdown', 'color', 2);
     }
 
-    const colorScore = computeStringCloseness(
-      `${sample.color || ''} ${sample.washDetails?.washType || ''}`,
-      trimmed
+    // Sizes & Breakdown
+    checkField(getEffectiveSizeName(sample), 'Size', 'size', 2);
+    checkField(sample.sampleType, 'Sample Type', 'other', 2);
+    checkField(sample.priority, 'Priority', 'other', 2);
+    checkField(STAGE_CONFIG[sample.stage]?.label || sample.stage, 'Stage', 'stage', 2);
+
+    // Fabric & Supplier
+    checkField(sample.fabricCode, 'Fabric Code', 'fabric', 2);
+    checkField(sample.fabricName, 'Fabric', 'fabric', 2);
+    checkField(sample.requisitionForm?.supplier, 'Supplier', 'fabric', 1);
+    checkField(sample.requisitionForm?.weight, 'Weight', 'fabric', 1);
+
+    // Trims, Thread, Zipper, Button & Instructions
+    checkField(
+      sample.threadNote || sample.requisitionForm?.threadInstruction,
+      'Thread',
+      'trims',
+      1
     );
-    if (colorScore > 0) {
-      candidates.push({
-        score: Math.min(80, colorScore),
-        reason: `Color / Wash Match`,
-        field: 'color',
-      });
-    }
+    checkField(sample.zipperNote, 'Zipper', 'trims', 1);
+    checkField(sample.buttonNote, 'Button', 'trims', 1);
+    checkField(sample.requisitionForm?.fitting, 'Fitting', 'trims', 1);
+    checkField(sample.requisitionForm?.specialInstructions, 'Instructions', 'trims', 1);
 
-    const otherScore = computeStringCloseness(
-      `${sample.lineCode || ''} ${sample.fabricCode || ''} ${sample.sampleType || ''}`,
-      trimmed
-    );
-    if (otherScore > 0) {
-      candidates.push({
-        score: Math.min(75, otherScore),
-        reason: `Spec / Line / Fabric Match`,
-        field: 'other',
-      });
-    }
+    // Line, Operator, Courier, Tracking & Approval Notes
+    checkField(sample.lineCode, 'Line', 'other', 1);
+    checkField(sample.sewingOperator, 'Operator', 'other', 1);
+    checkField(sample.requisitionForm?.requestedBy, 'Requested By', 'other', 1);
+    checkField(sample.parcelDetails?.courier, 'Courier', 'parcel', 1);
+    checkField(sample.parcelDetails?.trackingNumber, 'Tracking #', 'parcel', 2);
+    checkField(sample.approvalDetails?.overallVerdict, 'Approval', 'other', 1);
+    checkField(sample.approvalDetails?.washComments, 'Wash Comment', 'other', 0);
+    checkField(sample.approvalDetails?.trimsComments, 'Trims Comment', 'other', 0);
 
     if (candidates.length > 0) {
       candidates.sort((a, b) => b.score - a.score);
