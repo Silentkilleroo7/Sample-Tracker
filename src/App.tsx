@@ -332,16 +332,15 @@ export default function App() {
 
   // 2. Navigation & Search State
   const [currentView, setCurrentView] = useState<AppView>(() => {
-    if (currentUser?.role === 'sewing' || currentUser?.role === 'wash') {
+    if (currentUser?.role === 'wash') {
       return 'all_samples';
     }
     return 'dashboard';
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [initialStageFilter, setInitialStageFilter] = useState<SampleStage | 'all'>(() => {
-    if (currentUser?.role === 'sewing') return 'requisition';
     if (currentUser?.role === 'wash') return 'sewing';
-    return 'all';
+    return 'requisition';
   });
 
   const handleLogin = (user: AppUser) => {
@@ -353,15 +352,12 @@ export default function App() {
     }
     void recordUserLoginInSupabase(user.username);
 
-    if (user.role === 'sewing') {
-      setCurrentView('all_samples');
-      setInitialStageFilter('requisition');
-    } else if (user.role === 'wash') {
+    if (user.role === 'wash') {
       setCurrentView('all_samples');
       setInitialStageFilter('sewing');
     } else {
       setCurrentView('dashboard');
-      setInitialStageFilter('all');
+      setInitialStageFilter('requisition');
     }
   };
 
@@ -1628,6 +1624,9 @@ export default function App() {
                                     <span className="font-bold text-xs text-slate-900 truncate">
                                       {sample.styleName}
                                     </span>
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-300 text-emerald-900 text-[9px] font-bold">
+                                      {STAGE_CONFIG[sample.stage].shortLabel} Page
+                                    </span>
                                     {sample.priority === 'urgent' ? (
                                       <span className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[9px] font-bold uppercase">
                                         Urgent
@@ -1649,17 +1648,37 @@ export default function App() {
                                     {matchReason}
                                   </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setCompletedRequisitionSample(sample);
-                                    setIsRequisitionCompleteModalOpen(true);
-                                  }}
-                                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold shrink-0 cursor-pointer"
-                                >
-                                  Print
-                                </button>
+                                <div className="flex flex-col sm:flex-row items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const pageMap: Record<SampleStage, AppView> = {
+                                        requisition: 'dashboard',
+                                        sewing: 'all_samples',
+                                        wash: 'wash',
+                                        finishing: 'finishing',
+                                        ready_for_parcel: 'ready_for_parcel',
+                                        approval_comments: 'approvals',
+                                      };
+                                      setCurrentView(pageMap[sample.stage]);
+                                    }}
+                                    className="px-2 py-1.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-900 text-[10px] font-bold cursor-pointer"
+                                  >
+                                    Open Page
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setCompletedRequisitionSample(sample);
+                                      setIsRequisitionCompleteModalOpen(true);
+                                    }}
+                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-bold shrink-0 cursor-pointer"
+                                  >
+                                    Print
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -1687,7 +1706,7 @@ export default function App() {
                   </div>
                 );
               })()}
-              {currentView === 'dashboard' && isMerchandiser && (
+              {currentView === 'dashboard' && (isMerchandiser || isSewingUser) && (
                 <DashboardView
                   samples={samples}
                   fabrics={fabrics}
@@ -1703,18 +1722,24 @@ export default function App() {
                     setIsDetailModalOpen(true);
                   }}
                   onAdvanceStage={handleTriggerAdvance}
-                  onNewRequisition={() => setIsNewSampleModalOpen(true)}
+                  onNewRequisition={() => {
+                    if (!isMerchandiser) return;
+                    setIsNewSampleModalOpen(true);
+                  }}
                   onRestockFabric={(fabric) => {
+                    if (!isMerchandiser) return;
                     setSelectedFabricForRestock(fabric);
                     setIsRestockModalOpen(true);
                   }}
-                  onConfirmFabricAwbArrival={handleConfirmFabricAwbArrival}
-                  onOpenFollowUp={handleOpenFollowUp}
-                  onToggleWorkbookSent={handleToggleWorkbookSent}
-                  onSendWhatsApp={handleSendWhatsAppNotification}
-                  onUpdateApprovalDetails={handleUpdateApprovalDetails}
-                  onOpenComponentApproval={(sample, component) =>
-                    setComponentApprovalTarget({ sample, component })
+                  onConfirmFabricAwbArrival={isMerchandiser ? handleConfirmFabricAwbArrival : undefined}
+                  onOpenFollowUp={isMerchandiser ? handleOpenFollowUp : undefined}
+                  onToggleWorkbookSent={isMerchandiser ? handleToggleWorkbookSent : undefined}
+                  onSendWhatsApp={isMerchandiser ? handleSendWhatsAppNotification : undefined}
+                  onUpdateApprovalDetails={isMerchandiser ? handleUpdateApprovalDetails : undefined}
+                  onOpenComponentApproval={
+                    isMerchandiser
+                      ? (sample, component) => setComponentApprovalTarget({ sample, component })
+                      : undefined
                   }
                   onOpenRequisitionSlip={(sample) => {
                     setCompletedRequisitionSample(sample);
@@ -1723,10 +1748,7 @@ export default function App() {
                 />
               )}
 
-              {(currentView === 'all_samples' ||
-                (!isMerchandiser &&
-                  currentView !== 'fabric_inventory' &&
-                  currentView !== 'wash')) && (
+              {currentView === 'all_samples' && (
                 <AllSamplesView
                   samples={samples}
                   searchQuery={searchQuery}
@@ -1744,13 +1766,7 @@ export default function App() {
                   }}
                   onModifyStoredStyle={isMerchandiser ? handleSelectStoredStyleToModify : undefined}
                   onDeleteSample={handleDeleteSample}
-                  initialStageFilter={
-                    isSewingUser
-                      ? 'requisition'
-                      : isWashUser
-                      ? 'sewing'
-                      : initialStageFilter
-                  }
+                  initialStageFilter="sewing"
                   onOpenFollowUp={isMerchandiser ? handleOpenFollowUp : undefined}
                   onToggleWorkbookSent={isMerchandiser ? handleToggleWorkbookSent : undefined}
                   onSendWhatsApp={isMerchandiser ? handleSendWhatsAppNotification : undefined}
@@ -1785,9 +1801,30 @@ export default function App() {
                 />
               )}
 
+              {currentView === 'ready_for_parcel' && isMerchandiser && (
+                <ApprovalParcelView
+                  samples={samples}
+                  stageMode="ready_for_parcel"
+                  onSelectSample={(sample) => {
+                    setSelectedSampleForDetail(sample);
+                    setIsDetailModalOpen(true);
+                  }}
+                  onAdvanceStage={handleTriggerAdvance}
+                  onUpdateApprovalDetails={handleUpdateApprovalDetails}
+                  onUpdateParcelDetails={handleUpdateParcelDetails}
+                  onOpenComponentApproval={(sample, component) =>
+                    setComponentApprovalTarget({ sample, component })
+                  }
+                  onOpenFollowUp={handleOpenFollowUp}
+                  onToggleWorkbookSent={handleToggleWorkbookSent}
+                  onSendWhatsApp={handleSendWhatsAppNotification}
+                />
+              )}
+
               {currentView === 'approvals' && isMerchandiser && (
                 <ApprovalParcelView
                   samples={samples}
+                  stageMode="approval_comments"
                   onSelectSample={(sample) => {
                     setSelectedSampleForDetail(sample);
                     setIsDetailModalOpen(true);

@@ -63,7 +63,7 @@ interface DashboardViewProps {
   samples: SampleItem[];
   fabrics: FabricItem[];
   tests?: BVTestItem[];
-  onNavigateToView: (view: 'all_samples' | 'wash' | 'finishing' | 'approvals' | 'test' | 'fabric_inventory', filter?: any) => void;
+  onNavigateToView: (view: 'dashboard' | 'all_samples' | 'wash' | 'finishing' | 'ready_for_parcel' | 'approvals' | 'test' | 'fabric_inventory', filter?: any) => void;
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
   onNewRequisition: () => void;
@@ -104,29 +104,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     'all' | 'button' | 'thread' | 'zipper' | 'wash' | 'trims_accessories'
   >('all');
 
-  // Counts & Filtered lists
+  // Strictly filter Dashboard style displays to ONLY Requisition Status (stage === 'requisition')
+  const requisitionSamples = useMemo(
+    () => samples.filter((s) => s.stage === 'requisition'),
+    [samples]
+  );
+
+  // Counts for navigation links to other dedicated status pages
   const inSewing = samples.filter((s) => s.stage === 'sewing');
   const inWash = samples.filter((s) => s.stage === 'wash');
   const inFinishing = samples.filter((s) => s.stage === 'finishing');
   const readyToParcel = samples.filter((s) => s.stage === 'ready_for_parcel');
   const commentsPending = samples.filter((s) => s.stage === 'approval_comments');
 
-  // Styles with completed parcel
-  const parcelCompletedSamples = samples.filter(isParcelCompleted);
-  const pendingWorkbookSamples = parcelCompletedSamples.filter(
-    (s) => !s.parcelDetails.workbookSent
-  );
-  const followUpDueSamples = parcelCompletedSamples.filter(
-    (s) => s.parcelDetails.followUp?.status !== 'completed'
-  );
-
   // Low fabric items (availableYards <= 5)
   const lowFabrics = fabrics.filter(isFabricLowStock);
 
-  // Earlier Priority Samples Pending Approval for Trims / Accessories (Button, Thread, Wash, Trims, Accessories)
-  // Sorted by earliest Shipment Date first so merchandisers know which sample needs approval fast!
+  // Earlier Priority Requisition Samples Pending Approval for Trims / Accessories (Button, Thread, Zipper, Wash)
+  // Strictly shows ONLY Requisition Status styles on the Dashboard!
   const allUnapprovedPrioritySamples = useMemo(() => {
-    return samples
+    return requisitionSamples
       .filter((s) => !getGranularApprovalStatus(s).isFullyApproved)
       .sort((a, b) => {
         const shipA = getEffectiveShipmentDate(a) || '9999-12-31';
@@ -135,7 +132,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         const pMap: Record<string, number> = { urgent: 3, high: 2, normal: 1 };
         return (pMap[b.priority] || 0) - (pMap[a.priority] || 0);
       });
-  }, [samples]);
+  }, [requisitionSamples]);
 
   const filteredPriorityApprovalSamples = useMemo(() => {
     return allUnapprovedPrioritySamples.filter((s) => {
@@ -227,15 +224,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     onUpdateApprovalDetails(sample.id, updatedDetails);
   };
 
-  // Dynamic Filtered Summary list
+  // Dashboard strictly displays ONLY Requisition Status (stage === 'requisition') styles
   const filteredSummarySamples = useMemo(() => {
-    let list = samples;
-    if (summaryFilter === 'sewing') list = inSewing;
-    else if (summaryFilter === 'wash') list = inWash;
-    else if (summaryFilter === 'finishing') list = inFinishing;
-    else if (summaryFilter === 'parcel') list = readyToParcel;
-    else if (summaryFilter === 'approvals') list = commentsPending;
-    else if (summaryFilter === 'followup') list = followUpDueSamples;
+    let list = requisitionSamples;
 
     if (summarySearch.trim()) {
       const q = summarySearch.toLowerCase();
@@ -266,7 +257,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       const dateB = b.parcelDetails.parcelDate || b.targetParcelDate || '';
       return dateA.localeCompare(dateB);
     });
-  }, [samples, inSewing, inWash, inFinishing, readyToParcel, commentsPending, followUpDueSamples, summaryFilter, summarySearch, summarySort]);
+  }, [requisitionSamples, summarySearch, summarySort]);
 
   return (
     <div className="space-y-6">
@@ -276,13 +267,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-semibold mb-2">
               <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
-              Production Control Center • Dynamic Summary View
+              Step 1 of 6 • Dedicated Requisition Status Dashboard
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Sample Tracking & Merchandising Dashboard
+              Requisition Status Dashboard ({requisitionSamples.length} Requisition Styles)
             </h1>
             <p className="text-slate-400 text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
-              Real-time pipeline monitoring from Sample Requisition, Sewing, Wash Plant, Finishing to Parcel Dispatch & Buyer Approvals.
+              Only <strong>Requisition Status</strong> styles are displayed on this Dashboard. When a style moves to Sewing, Wash, Finishing, Ready for Parcel, or Approval Comments, it appears exclusively on its dedicated status page.
             </p>
           </div>
           <div className="flex items-center gap-3 relative z-10 shrink-0">
@@ -296,91 +287,65 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Live Summary KPI Quick-Ribbon */}
+        {/* Status Page Navigation Quick-Ribbon */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-3 border-t border-slate-800/80 relative z-10 text-xs">
           <div
             onClick={() => setSummaryFilter('all')}
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
-              summaryFilter === 'all'
-                ? 'bg-indigo-600/30 border border-indigo-500/60 ring-1 ring-indigo-400/40'
-                : 'bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50'
-            }`}
+            className="p-2 rounded-xl transition-all cursor-pointer bg-indigo-600/30 border border-indigo-500/60 ring-1 ring-indigo-400/40"
           >
-            <div className="text-[10px] text-slate-400">Total Styles</div>
-            <div className="text-base font-black font-mono text-white">{samples.length}</div>
+            <div className="text-[10px] text-slate-400">1. Requisition (Here)</div>
+            <div className="text-base font-black font-mono text-white">{requisitionSamples.length}</div>
           </div>
 
           <div
-            onClick={() => setSummaryFilter('sewing')}
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
-              summaryFilter === 'sewing'
-                ? 'bg-purple-600/30 border border-purple-500/60 ring-1 ring-purple-400/40'
-                : 'bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50'
-            }`}
+            onClick={() => onNavigateToView('all_samples')}
+            className="p-2 rounded-xl transition-all cursor-pointer bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50"
           >
-            <div className="text-[10px] text-purple-300">In Sewing</div>
+            <div className="text-[10px] text-purple-300">2. Sewing Page →</div>
             <div className="text-base font-black font-mono text-purple-200">{inSewing.length}</div>
           </div>
 
           <div
-            onClick={() => setSummaryFilter('wash')}
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
-              summaryFilter === 'wash'
-                ? 'bg-cyan-600/30 border border-cyan-500/60 ring-1 ring-cyan-400/40'
-                : 'bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50'
-            }`}
+            onClick={() => onNavigateToView('wash')}
+            className="p-2 rounded-xl transition-all cursor-pointer bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50"
           >
-            <div className="text-[10px] text-cyan-300">In Wash</div>
+            <div className="text-[10px] text-cyan-300">3. Wash Page →</div>
             <div className="text-base font-black font-mono text-cyan-200">{inWash.length}</div>
           </div>
 
           <div
-            onClick={() => setSummaryFilter('finishing')}
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
-              summaryFilter === 'finishing'
-                ? 'bg-amber-600/30 border border-amber-500/60 ring-1 ring-amber-400/40'
-                : 'bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50'
-            }`}
+            onClick={() => onNavigateToView('finishing')}
+            className="p-2 rounded-xl transition-all cursor-pointer bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50"
           >
-            <div className="text-[10px] text-amber-300">In Finishing</div>
+            <div className="text-[10px] text-amber-300">4. Finishing Page →</div>
             <div className="text-base font-black font-mono text-amber-200">{inFinishing.length}</div>
           </div>
 
           <div
-            onClick={() => setSummaryFilter('parcel')}
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
-              summaryFilter === 'parcel'
-                ? 'bg-emerald-600/30 border border-emerald-500/60 ring-1 ring-emerald-400/40'
-                : 'bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50'
-            }`}
+            onClick={() => onNavigateToView('ready_for_parcel')}
+            className="p-2 rounded-xl transition-all cursor-pointer bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50"
           >
-            <div className="text-[10px] text-emerald-300">Ready Parcel</div>
+            <div className="text-[10px] text-emerald-300">5. Ready Parcel Page →</div>
             <div className="text-base font-black font-mono text-emerald-200">{readyToParcel.length}</div>
           </div>
 
           <div
-            onClick={() => setSummaryFilter('approvals')}
-            className={`p-2 rounded-xl transition-all cursor-pointer ${
-              summaryFilter === 'approvals'
-                ? 'bg-pink-600/30 border border-pink-500/60 ring-1 ring-pink-400/40'
-                : 'bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50'
-            }`}
+            onClick={() => onNavigateToView('approvals')}
+            className="p-2 rounded-xl transition-all cursor-pointer bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50"
           >
-            <div className="text-[10px] text-pink-300">Comments Pending</div>
+            <div className="text-[10px] text-pink-300">6. Approvals Page →</div>
             <div className="text-base font-black font-mono text-pink-200">{commentsPending.length}</div>
           </div>
 
           <div
-            onClick={() => setSummaryFilter('fabric')}
+            onClick={() => onNavigateToView('fabric_inventory')}
             className={`p-2 rounded-xl transition-all cursor-pointer ${
-              summaryFilter === 'fabric'
-                ? 'bg-rose-600/30 border border-rose-500/60 ring-1 ring-rose-400/40'
-                : lowFabrics.length > 0
+              lowFabrics.length > 0
                 ? 'bg-rose-950/60 border border-rose-500/50 animate-pulse'
                 : 'bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50'
             }`}
           >
-            <div className="text-[10px] text-rose-300">Critical Fabric</div>
+            <div className="text-[10px] text-rose-300">Fabric Page →</div>
             <div className="text-base font-black font-mono text-rose-200">
               {lowFabrics.length} {lowFabrics.length > 0 ? 'Alert!' : 'OK'}
             </div>
@@ -879,21 +844,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {/* ============================================================ */}
-      {/* 2. SUMMARY METRIC CARDS (In Sewing, In Wash, Ready to Parcel, Comments Pending) */}
+      {/* 2. DEDICATED STATUS PAGE NAVIGATION CARDS */}
       {/* ============================================================ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: In Sewing */}
+        {/* Card 1: Sewing Page */}
         <div
-          onClick={() => setSummaryFilter(summaryFilter === 'sewing' ? 'all' : 'sewing')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer group ${
-            summaryFilter === 'sewing'
-              ? 'bg-purple-950/40 border-purple-500 shadow-xl shadow-purple-950/30 ring-2 ring-purple-400/40'
-              : 'bg-slate-900/80 border-slate-800 hover:border-purple-500/50 hover:shadow-xl hover:shadow-purple-950/20'
-          }`}
+          onClick={() => onNavigateToView('all_samples')}
+          className="p-4 rounded-2xl border transition-all cursor-pointer group bg-slate-900/80 border-slate-800 hover:border-purple-500/50 hover:shadow-xl"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Sewing Status
+              Sewing Status Page
             </span>
             <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Scissors className="w-5 h-5" />
@@ -903,30 +864,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-3xl font-black text-white font-mono">
               {inSewing.length}
             </span>
-            <span className="text-xs text-purple-400 font-medium">Styles in Assembly</span>
+            <span className="text-xs text-purple-400 font-medium">Styles on Sewing Page</span>
           </div>
           <div className="mt-2 text-xs text-slate-400 line-clamp-1">
             Lines active:{' '}
             {Array.from(new Set(inSewing.map((s) => s.lineCode))).join(', ') || 'None'}
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-purple-400 font-medium">
-            <span>{summaryFilter === 'sewing' ? 'Showing In Summary' : 'Filter Sewing Summary'}</span>
+            <span>Open Sewing Status Page</span>
             <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
 
-        {/* Card 2: In Wash */}
+        {/* Card 2: Wash Page */}
         <div
-          onClick={() => setSummaryFilter(summaryFilter === 'wash' ? 'all' : 'wash')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer group ${
-            summaryFilter === 'wash'
-              ? 'bg-cyan-950/40 border-cyan-500 shadow-xl shadow-cyan-950/30 ring-2 ring-cyan-400/40'
-              : 'bg-slate-900/80 border-slate-800 hover:border-cyan-500/50 hover:shadow-xl hover:shadow-cyan-950/20'
-          }`}
+          onClick={() => onNavigateToView('wash')}
+          className="p-4 rounded-2xl border transition-all cursor-pointer group bg-slate-900/80 border-slate-800 hover:border-cyan-500/50 hover:shadow-xl"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Wash Status
+              Wash Status Page
             </span>
             <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Waves className="w-5 h-5" />
@@ -936,29 +893,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-3xl font-black text-white font-mono">
               {inWash.length}
             </span>
-            <span className="text-xs text-cyan-400 font-medium">Styles in Washing</span>
+            <span className="text-xs text-cyan-400 font-medium">Styles on Wash Page</span>
           </div>
           <div className="mt-2 text-xs text-slate-400 line-clamp-1">
-            Enzyme, stone, acid & bleach treatments in progress
+            Enzyme, stone, acid &amp; bleach treatments in progress
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-cyan-400 font-medium">
-            <span>{summaryFilter === 'wash' ? 'Showing In Summary' : 'Filter Wash Summary'}</span>
+            <span>Open Wash Status Page</span>
             <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
 
-        {/* Card 3: Ready for Parcel */}
+        {/* Card 3: Ready for Parcel Page */}
         <div
-          onClick={() => setSummaryFilter(summaryFilter === 'parcel' ? 'all' : 'parcel')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer group ${
-            summaryFilter === 'parcel'
-              ? 'bg-emerald-950/40 border-emerald-500 shadow-xl shadow-emerald-950/30 ring-2 ring-emerald-400/40'
-              : 'bg-slate-900/80 border-slate-800 hover:border-emerald-500/50 hover:shadow-xl hover:shadow-emerald-950/20'
-          }`}
+          onClick={() => onNavigateToView('ready_for_parcel')}
+          className="p-4 rounded-2xl border transition-all cursor-pointer group bg-slate-900/80 border-slate-800 hover:border-emerald-500/50 hover:shadow-xl"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Ready to Parcel
+              Ready for Parcel Page
             </span>
             <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <PackageCheck className="w-5 h-5" />
@@ -968,30 +921,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-3xl font-black text-white font-mono">
               {readyToParcel.length}
             </span>
-            <span className="text-xs text-emerald-400 font-medium">Styles Ready / Packed</span>
+            <span className="text-xs text-emerald-400 font-medium">Styles on Parcel Page</span>
           </div>
           <div className="mt-2 text-xs text-slate-400 line-clamp-1">
             Next parcel date:{' '}
             {readyToParcel[0]?.parcelDetails.parcelDate || 'Scheduled daily'}
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-emerald-400 font-medium">
-            <span>{summaryFilter === 'parcel' ? 'Showing In Summary' : 'Filter Parcel Summary'}</span>
+            <span>Open Ready for Parcel Page</span>
             <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
 
-        {/* Card 4: Comments Pending & Approvals */}
+        {/* Card 4: Approval Comments Page */}
         <div
-          onClick={() => setSummaryFilter(summaryFilter === 'approvals' ? 'all' : 'approvals')}
-          className={`p-4 rounded-2xl border transition-all cursor-pointer group ${
-            summaryFilter === 'approvals'
-              ? 'bg-pink-950/40 border-pink-500 shadow-xl shadow-pink-950/30 ring-2 ring-pink-400/40'
-              : 'bg-slate-900/80 border-slate-800 hover:border-pink-500/50 hover:shadow-xl hover:shadow-pink-950/20'
-          }`}
+          onClick={() => onNavigateToView('approvals')}
+          className="p-4 rounded-2xl border transition-all cursor-pointer group bg-slate-900/80 border-slate-800 hover:border-pink-500/50 hover:shadow-xl"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Comments Pending
+              Approval Comments Page
             </span>
             <div className="w-9 h-9 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <MessageSquare className="w-5 h-5" />
@@ -1001,20 +950,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-3xl font-black text-white font-mono">
               {commentsPending.length}
             </span>
-            <span className="text-xs text-pink-400 font-medium">Awaiting Buyer Remarks</span>
+            <span className="text-xs text-pink-400 font-medium">Styles on Approvals Page</span>
           </div>
           <div className="mt-2 text-xs text-slate-400 line-clamp-1">
-            Wash, Trims & Accessories approval reviews
+            Wash, Thread, Zipper &amp; Button approval reviews
           </div>
           <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-pink-400 font-medium">
-            <span>{summaryFilter === 'approvals' ? 'Showing In Summary' : 'Filter Remarks Summary'}</span>
+            <span>Open Approval Comments Page</span>
             <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
       </div>
 
       {/* ============================================================ */}
-      {/* 2.2 DYNAMIC SUMMARY VIEW CONTROL CENTER & LIVE WORKBENCH */}
+      {/* 2.2 REQUISITION STATUS STYLES — DASHBOARD WORKBENCH */}
       {/* ============================================================ */}
       <div className="bg-slate-900/90 border border-slate-800 p-5 rounded-2xl shadow-xl space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -1022,24 +971,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse"></span>
               <h2 className="text-base font-black text-white tracking-wide uppercase flex items-center gap-2">
-                Dynamic Pipeline Summary View
+                Requisition Status Styles Only (Dashboard View)
               </h2>
               <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-mono font-bold">
-                {filteredSummarySamples.length} Styles Shown
+                {filteredSummarySamples.length} Requisition Style{filteredSummarySamples.length === 1 ? '' : 's'}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Interactive summary tracking across Sewing lines, Wash recipes, Parcel dispatch schedules, and Buyer approval remarks.
+              Showing exclusively styles in <strong>Requisition Status</strong>. Move a style to Sewing Status to transfer it to the Sewing Page.
             </p>
           </div>
 
-          {/* Quick Search & Sort within Summary */}
+          {/* Quick Search & Sort within Requisition Summary */}
           <div className="flex items-center gap-2">
             <div className="relative w-full sm:w-64">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search style, line, PO, buyer..."
+                placeholder="Search requisition style, PO, buyer..."
                 value={summarySearch}
                 onChange={(e) => setSummarySearch(e.target.value)}
                 className="w-full pl-8 pr-7 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
@@ -1059,47 +1008,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onChange={(e) => setSummarySort(e.target.value as any)}
               className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none"
             >
+              <option value="shipmentDate">Sort: Shipment Date</option>
               <option value="parcelDate">Sort: Parcel Date</option>
               <option value="priority">Sort: Priority</option>
               <option value="styleCode">Sort: Style Code</option>
             </select>
           </div>
-        </div>
-
-        {/* Dynamic Category Selector Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin text-xs">
-          {[
-            { id: 'all', label: '📋 All Summary', count: samples.length },
-            { id: 'sewing', label: '✂️ In Sewing', count: inSewing.length },
-            { id: 'wash', label: '🌊 In Wash', count: inWash.length },
-            { id: 'finishing', label: '✨ In Finishing', count: inFinishing.length },
-            { id: 'parcel', label: '📦 Ready Parcel', count: readyToParcel.length },
-            { id: 'approvals', label: '💬 Comments Pending', count: commentsPending.length },
-            { id: 'followup', label: '📱 WhatsApp Follow-Up', count: followUpDueSamples.length },
-          ].map((tab) => {
-            const isSelected = summaryFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setSummaryFilter(tab.id as any)}
-                className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer shrink-0 flex items-center gap-1.5 ${
-                  isSelected
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/40 ring-1 ring-indigo-400'
-                    : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-750'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    isSelected ? 'bg-indigo-800 text-white' : 'bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
         </div>
 
         {/* Summary Filtered Styles Live Cards */}
@@ -1338,505 +1252,105 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* ============================================================ */}
-      {/* 2.5 DEDICATED PARCEL FOLLOW-UP & WHATSAPP NOTIFICATION CENTER */}
+      {/* 3. FABRIC INVENTORY SNAPSHOT */}
       {/* ============================================================ */}
-      {parcelCompletedSamples.length > 0 && (
-        <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-slate-900 to-indigo-950/70 border border-emerald-500/40 shadow-xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 mb-4 border-b border-emerald-500/20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-md">
-                <MessageCircle className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-black text-white tracking-wide flex items-center gap-2">
-                    Parcel Follow-Up & WhatsApp Notification Center
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-xs font-bold">
-                    {parcelCompletedSamples.length} Completed Parcel{parcelCompletedSamples.length > 1 ? 's' : ''}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Follow up on dispatched sample parcels with buyer tech teams. Send instant notifications to connected WhatsApp numbers and confirm Workbook dispatch.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              {pendingWorkbookSamples.length > 0 && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  {pendingWorkbookSamples.length} Workbook{pendingWorkbookSamples.length > 1 ? 's' : ''} Pending
-                </span>
-              )}
-              {followUpDueSamples.length > 0 && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold animate-pulse">
-                  <Bell className="w-3.5 h-3.5 text-emerald-400" />
-                  {followUpDueSamples.length} Follow-Up{followUpDueSamples.length > 1 ? 's' : ''} Active
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Cards for each completed parcel style */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-            {parcelCompletedSamples.map((sample) => {
-              const p = sample.parcelDetails;
-              const f = p.followUp;
-              const isWbSent = p.workbookSent;
-              const phone = f?.whatsAppNumber || '+1 (215) 555-0199';
-              const pTone = getPriorityTone(sample.priority);
-
-              return (
-                <div
-                  key={sample.id}
-                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${pTone.cardClass}`}
-                >
-                  <div>
-                    {/* Header: Style Name & Style Code */}
-                    <div className="flex items-start gap-3 mb-2.5">
-                      <StyleProductImage sample={sample} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-mono text-xs font-black text-indigo-300 bg-indigo-950/90 px-2 py-0.5 rounded border border-indigo-500/40">
-                            {sample.styleCode}
-                          </span>
-                          <span
-                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] ${pTone.badgeClass}`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
-                            <span>{pTone.label}</span>
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                              p.dispatchStatus === 'delivered'
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                            }`}
-                          >
-                            {p.dispatchStatus.toUpperCase()}
-                          </span>
-                        </div>
-                        <h4
-                          onClick={() => onSelectSample(sample)}
-                          className="font-bold text-white text-xs mt-1 cursor-pointer hover:text-emerald-400 transition-colors line-clamp-1"
-                        >
-                          {sample.styleName}
-                        </h4>
-                        <div className="text-[11px] text-slate-300">
-                          Buyer: <strong className="text-white">{sample.buyer}</strong> • PO: {sample.poNumber}
-                        </div>
-                        <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-[10px] font-mono">
-                          <div className="bg-indigo-950/80 px-2 py-1 rounded border border-indigo-500/40">
-                            <span className="text-[9px] uppercase text-indigo-300 font-bold block">
-                              Size Name
-                            </span>
-                            <strong className="text-white text-xs">
-                              {getEffectiveSizeName(sample)}
-                            </strong>
-                          </div>
-                          <div className="bg-emerald-950/80 px-2 py-1 rounded border border-emerald-500/40">
-                            <span className="text-[9px] uppercase text-emerald-300 font-bold block">
-                              Total Req Qty
-                            </span>
-                            <strong className="text-emerald-300 text-xs font-black">
-                              {getEffectiveRequisitionQuantity(sample)} Pcs
-                            </strong>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Courier and AWB info */}
-                    <div className="text-[11px] bg-slate-800/60 p-2 rounded-lg border border-slate-700/60 space-y-1 mb-2.5">
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Courier & AWB:</span>
-                        <span className="font-mono text-slate-200 truncate max-w-[170px]">
-                          {p.courier} ({p.trackingNumber || 'Pending'})
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-400">Parcel Date:</span>
-                        <span className="font-mono text-emerald-400 font-semibold">{p.parcelDate}</span>
-                      </div>
-                    </div>
-
-                    {/* WORKBOOK SENT OR NOT CONFIRMATION OPTION */}
-                    <div className="p-2 rounded-lg bg-slate-800/40 border border-slate-700/60 mb-2.5 space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-300 font-semibold flex items-center gap-1">
-                          <FileCheck2 className="w-3.5 h-3.5 text-indigo-400" />
-                          Workbook Sent Option:
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => onToggleWorkbookSent && onToggleWorkbookSent(sample.id)}
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                            isWbSent
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 animate-pulse'
-                          }`}
-                          title="Click to toggle Workbook Sent confirmation"
-                        >
-                          {isWbSent ? (
-                            <>
-                              <CheckCircle2 className="w-3 h-3" />
-                              <span>Sent: YES</span>
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle className="w-3 h-3" />
-                              <span>Sent: NO (Click to Confirm)</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      {isWbSent ? (
-                        <div className="text-[10px] text-slate-400 flex justify-between">
-                          <span>Dispatched: {p.workbookSentDate || p.parcelDate}</span>
-                          <span className="text-emerald-400">Techpack Verified</span>
-                        </div>
-                      ) : (
-                        <div className="text-[10px] text-amber-300/80">
-                          ⚠️ Techpack & trim measurement workbook pending dispatch
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Follow-up status & connected WhatsApp */}
-                    <div className="p-2 rounded-lg bg-slate-800/40 border border-slate-700/60 text-[11px] space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400 flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-indigo-400" />
-                          Follow-Up:
-                        </span>
-                        <span
-                          className={`font-semibold text-[10px] px-1.5 py-0.2 rounded ${
-                            f?.status === 'completed'
-                              ? 'bg-emerald-500/20 text-emerald-300'
-                              : f?.status === 'scheduled'
-                              ? 'bg-indigo-500/20 text-indigo-300'
-                              : 'bg-amber-500/20 text-amber-300'
-                          }`}
-                        >
-                          {f?.status ? f.status.toUpperCase() : 'PENDING'} ({f?.followUpDate || 'TBD'})
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-400 flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-emerald-400" />
-                          Connected WhatsApp:
-                        </span>
-                        <span className="font-mono text-emerald-300 text-[10px] font-semibold">
-                          {phone}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions: Send WhatsApp & Open Follow-Up Modal */}
-                  <div className="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onOpenFollowUp && onOpenFollowUp(sample)}
-                      className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold border border-slate-700 transition-colors cursor-pointer"
-                    >
-                      Follow-Up Details
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onSendWhatsApp && onSendWhatsApp(sample, phone)}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold shadow-md shadow-emerald-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
-                      title={`Send WhatsApp Follow-up notification for style ${sample.styleName} to ${phone}`}
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                      <span>WhatsApp Notification</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* 3. PARCEL DELIVERY & APPROVAL COMMENTS SUMMARY WITH DATES */}
-      {/* ============================================================ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Active Parcel & Approvals with Dates and Remarks */}
-        <div className="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
+        <div>
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-            <div>
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <PackageCheck className="w-4 h-4 text-emerald-400" />
-                Ready to Parcel & Approval Comments Status
-              </h2>
-              <p className="text-xs text-slate-400">
-                Tracking courier parcel dates and buyer wash, trims, accessories remarks
-              </p>
-            </div>
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <Layers className="w-4 h-4 text-indigo-400" />
+              Fabric Inventory Status
+            </h2>
             <button
-              onClick={() => onNavigateToView('approvals')}
-              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 cursor-pointer"
+              onClick={() => onNavigateToView('fabric_inventory')}
+              className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
             >
-              See all ({readyToParcel.length + commentsPending.length})
-              <ChevronRight className="w-3.5 h-3.5" />
+              View all ({fabrics.length})
             </button>
           </div>
 
-          <div className="space-y-3">
-            {[...readyToParcel, ...commentsPending].map((sample) => {
-              const isApprovalStage = sample.stage === 'approval_comments';
-              const pDetails = sample.parcelDetails;
-              const aDetails = sample.approvalDetails;
-              const pTone = getPriorityTone(sample.priority);
-              const sizeName = getEffectiveSizeName(sample);
-              const totalReqQty = getEffectiveRequisitionQuantity(sample);
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {fabrics.slice(0, 5).map((fab) => {
+              const isCritical = fab.availableYards <= 5;
               return (
                 <div
-                  key={sample.id}
-                  onClick={() => onSelectSample(sample)}
-                  className={`p-4 rounded-xl border transition-all cursor-pointer group ${pTone.cardClass}`}
+                  key={fab.id}
+                  className={`p-3 rounded-xl border transition-all ${
+                    isCritical
+                      ? 'bg-rose-950/40 border-rose-500/60 text-rose-200'
+                      : 'bg-slate-800/40 border-slate-700/60 text-slate-300 hover:border-slate-600'
+                  }`}
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2 min-w-0">
-                      <StyleProductImage sample={sample} size="xs" />
-                      <span className="font-mono text-xs font-black text-indigo-300 px-2 py-0.5 rounded bg-indigo-950/90 border border-indigo-500/40 shrink-0">
-                        {sample.styleCode}
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] shrink-0 ${pTone.badgeClass}`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${pTone.dotClass}`}></span>
-                        <span>{pTone.label}</span>
-                      </span>
-                      <span className="text-xs font-bold text-white truncate max-w-xs">
-                        {sample.styleName}
-                      </span>
-                      <span className="text-[10px] text-slate-300 font-medium shrink-0">
-                        • {sample.buyer}
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-lg bg-indigo-950/90 border border-indigo-400/50 text-[11px] font-mono text-indigo-200 font-bold shrink-0">
-                        Size Name: <strong className="text-white">{sizeName}</strong>
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-lg bg-emerald-950/90 border border-emerald-400/50 text-[11px] font-mono text-emerald-300 font-black shrink-0">
-                        Total Req Qty: {totalReqQty} Pcs
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                          STAGE_CONFIG[sample.stage].badgeBg
-                        }`}
-                      >
-                        {STAGE_CONFIG[sample.stage].badgeText}
-                      </span>
-                      <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
-                        <Calendar className="w-3 h-3" />
-                        Parcel: {pDetails.parcelDate || 'Scheduled'}
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded ${
+                        isCritical
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-slate-700 text-slate-200'
+                      }`}
+                    >
+                      {fab.code}
+                    </span>
+                    <span
+                      className={`font-mono text-xs font-black ${
+                        isCritical ? 'text-rose-400 animate-pulse' : 'text-slate-200'
+                      }`}
+                    >
+                      {fab.availableYards.toFixed(1)} yds
+                    </span>
                   </div>
-
-                  {/* Progress bar */}
-                  <div className="mt-3">
-                    <ProgressBar currentStage={sample.stage} size="compact" />
+                  <div className="text-xs font-semibold text-white mt-1.5 truncate">
+                    {fab.name}
                   </div>
-
-                  {/* Remarks Summary */}
-                  {isApprovalStage ? (
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
-                      <div>
-                        <span className="text-slate-400 font-semibold block">Wash Remarks:</span>
-                        <span className="text-slate-300 truncate block">
-                          {aDetails.washComments || 'Pending review'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 font-semibold block">Trims Remarks:</span>
-                        <span className="text-slate-300 truncate block">
-                          {aDetails.trimsComments || 'Pending review'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 font-semibold block">Accessories Remarks:</span>
-                        <span className="text-slate-300 truncate block">
-                          {aDetails.accessoriesComments || 'Pending review'}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-2.5 flex items-center justify-between text-xs text-slate-400">
-                      <span>Courier: {pDetails.courier || 'DHL Express'}</span>
-                      <span className="font-mono text-slate-300">
-                        AWB: {pDetails.trackingNumber || 'Pending AWB Generation'}
+                  <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Linked Styles: {fab.linkedStyleCodes.join(', ') || 'N/A'}</span>
+                    {isCritical && (
+                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">
+                        ≤ 5 yds Alert!
                       </span>
-                    </div>
-                  )}
-
-                  {/* Workbook Sent & Follow Up quick actions bar */}
-                  <div className="mt-3 pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-slate-400">Workbook:</span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleWorkbookSent && onToggleWorkbookSent(sample.id);
-                        }}
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded cursor-pointer transition-colors ${
-                          pDetails.workbookSent
-                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-amber-500/20 text-amber-300 border border-amber-500/30 hover:bg-amber-500/30'
-                        }`}
-                        title="Click to toggle Workbook Sent confirmation"
-                      >
-                        {pDetails.workbookSent ? '✅ Workbook Sent' : '⚠️ Workbook Not Sent'}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenFollowUp && onOpenFollowUp(sample);
-                        }}
-                        className="text-[11px] px-2 py-1 bg-slate-700/80 hover:bg-slate-700 text-slate-200 rounded font-semibold cursor-pointer"
-                      >
-                        Follow-Up
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSendWhatsApp &&
-                            onSendWhatsApp(
-                              sample,
-                              pDetails.followUp?.whatsAppNumber || '+1 (215) 555-0199'
-                            );
-                        }}
-                        className="text-[11px] px-2 py-1 bg-emerald-600/90 hover:bg-emerald-500 text-white rounded font-bold flex items-center gap-1 cursor-pointer"
-                      >
-                        <MessageCircle className="w-3 h-3" />
-                        <span>WhatsApp</span>
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               );
             })}
-
-            {readyToParcel.length === 0 && commentsPending.length === 0 && (
-              <div className="text-center py-8 text-slate-500 text-xs">
-                No samples currently awaiting parcel dispatch or buyer approval comments.
-              </div>
-            )}
           </div>
         </div>
 
-        {/* Right 1 Col: Fabric Inventory Snapshot with Quick Link */}
-        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-800">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-indigo-400" />
-                Fabric Inventory Status
-              </h2>
-              <button
-                onClick={() => onNavigateToView('fabric_inventory')}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer"
-              >
-                View all ({fabrics.length})
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              {fabrics.slice(0, 5).map((fab) => {
-                const isCritical = fab.availableYards <= 5;
-                return (
-                  <div
-                    key={fab.id}
-                    className={`p-3 rounded-xl border transition-all ${
-                      isCritical
-                        ? 'bg-rose-950/40 border-rose-500/60 text-rose-200'
-                        : 'bg-slate-800/40 border-slate-700/60 text-slate-300 hover:border-slate-600'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded ${
-                          isCritical
-                            ? 'bg-rose-600 text-white'
-                            : 'bg-slate-700 text-slate-200'
-                        }`}
-                      >
-                        {fab.code}
-                      </span>
-                      <span
-                        className={`font-mono text-xs font-black ${
-                          isCritical ? 'text-rose-400 animate-pulse' : 'text-slate-200'
-                        }`}
-                      >
-                        {fab.availableYards.toFixed(1)} yds
-                      </span>
-                    </div>
-                    <div className="text-xs font-semibold text-white mt-1.5 truncate">
-                      {fab.name}
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>Linked Styles: {fab.linkedStyleCodes.join(', ') || 'N/A'}</span>
-                      {isCritical && (
-                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider">
-                          ≤ 5 yds Alert!
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
-            <span className="text-slate-400">
-              Total Fabrics: <strong className="text-white">{fabrics.length}</strong>
-            </span>
-            <span className="text-rose-400 font-bold">
-              Critical (≤5 yds): {lowFabrics.length}
-            </span>
-          </div>
+        <div className="mt-4 pt-3 border-t border-slate-800 flex justify-between items-center text-xs">
+          <span className="text-slate-400">
+            Total Fabrics: <strong className="text-white">{fabrics.length}</strong>
+          </span>
+          <span className="text-rose-400 font-bold">
+            Critical (≤5 yds): {lowFabrics.length}
+          </span>
         </div>
       </div>
 
       {/* ============================================================ */}
-      {/* 4. ACTIVE WORKFLOW PIPELINE PROGRESS OVERVIEW */}
+      {/* 4. ACTIVE REQUISITION PIPELINE PROGRESSION */}
       {/* ============================================================ */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-800">
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-indigo-400" />
-              Active Samples Pipeline Progression
+              Requisition Status Styles — Ready to Move to Sewing ({requisitionSamples.length})
             </h2>
             <p className="text-xs text-slate-400">
-              Visual tracking across: Requisition → Sewing → Wash → Finishing → Ready for Parcel → Approval Comments
+              Only Requisition Status styles are listed here. Click &ldquo;Move to Sewing&rdquo; to advance a style to the Sewing Page.
             </p>
           </div>
           <button
             onClick={() => onNavigateToView('all_samples')}
             className="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
           >
-            Explore Master Table & Kanban
+            Open Sewing Status Page ({inSewing.length})
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
         <div className="space-y-4">
-          {samples.map((sample) => {
+          {requisitionSamples.map((sample) => {
             const pTone = getPriorityTone(sample.priority);
             const sizeRun = getEffectiveSizeBreakdown(sample);
             const sizeName = getEffectiveSizeName(sample);
@@ -1951,9 +1465,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Main Modules Grid (6 Modules with short names) */}
+        {/* Main Modules Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Module 1: Samples */}
+          {/* Module 1: Sewing Status Page */}
           <div
             onClick={() => onNavigateToView('all_samples')}
             className="p-4 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 hover:border-purple-500/60 transition-all cursor-pointer group flex flex-col justify-between"
@@ -1961,26 +1475,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-                  <Layers className="w-5 h-5" />
+                  <Scissors className="w-5 h-5" />
                 </div>
                 <span className="text-xs font-mono font-black text-purple-300 bg-purple-950/80 px-2 py-0.5 rounded border border-purple-500/30">
-                  {samples.length} Total Styles
+                  {inSewing.length} In Sewing
                 </span>
               </div>
               <h3 className="font-bold text-white text-sm group-hover:text-purple-300 transition-colors">
-                Samples
+                Sewing Status Page
               </h3>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Master pipeline from Requisition, Sewing, Wash, Finishing to Parcel Dispatch & Buyer Approvals.
+                Displays only Sewing Status styles. Track sewing lines, operators, and move completed sewing styles to Wash Status.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs font-bold text-purple-400">
-              <span>Open Samples Module</span>
+              <span>Open Sewing Page</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
             </div>
           </div>
 
-          {/* Module 2: Wash */}
+          {/* Module 2: Wash Status Page */}
           <div
             onClick={() => onNavigateToView('wash')}
             className="p-4 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/60 transition-all cursor-pointer group flex flex-col justify-between"
@@ -1995,19 +1509,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </span>
               </div>
               <h3 className="font-bold text-white text-sm group-hover:text-cyan-300 transition-colors">
-                Wash
+                Wash Status Page
               </h3>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Active wet wash recipes: enzyme stone wash, vintage acid burnout, ozone rinse & bleach treatments.
+                Displays only Wash Status styles: enzyme stone wash, vintage acid burnout, ozone rinse &amp; move to Finishing Status.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs font-bold text-cyan-400">
-              <span>Open Wash Module</span>
+              <span>Open Wash Page</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
             </div>
           </div>
 
-          {/* Module 3: Finishing */}
+          {/* Module 3: Finishing Status Page */}
           <div
             onClick={() => onNavigateToView('finishing')}
             className="p-4 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 hover:border-amber-500/60 transition-all cursor-pointer group flex flex-col justify-between"
@@ -2022,21 +1536,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </span>
               </div>
               <h3 className="font-bold text-white text-sm group-hover:text-amber-300 transition-colors">
-                Finishing
+                Finishing Status Page
               </h3>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Post-wash processing: steam ironing, thread trimming, hangtag verification & QA signoff.
+                Displays only Finishing Status styles: steam ironing, thread trimming, hangtag QA signoff &amp; move to Ready for Parcel.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs font-bold text-amber-400">
-              <span>Open Finishing Module</span>
+              <span>Open Finishing Page</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
             </div>
           </div>
 
-          {/* Module 4: Parcel & Approval */}
+          {/* Module 4: Ready for Parcel Page */}
           <div
-            onClick={() => onNavigateToView('approvals')}
+            onClick={() => onNavigateToView('ready_for_parcel')}
             className="p-4 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 hover:border-emerald-500/60 transition-all cursor-pointer group flex flex-col justify-between"
           >
             <div>
@@ -2045,18 +1559,45 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <PackageCheck className="w-5 h-5" />
                 </div>
                 <span className="text-xs font-mono font-black text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">
-                  {readyToParcel.length + commentsPending.length} Parcel Styles
+                  {readyToParcel.length} Ready Parcel
                 </span>
               </div>
               <h3 className="font-bold text-white text-sm group-hover:text-emerald-300 transition-colors">
-                Parcel & Approval
+                Ready for Parcel Page
               </h3>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Courier airway bills, Workbook Sent confirmation option, WhatsApp follow-up & Buyer approval remarks.
+                Displays only Ready for Parcel styles: courier AWB tracking, Workbook Sent confirmation &amp; move to Approval Comments.
               </p>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs font-bold text-emerald-400">
-              <span>Open Parcel & Approval</span>
+              <span>Open Ready for Parcel Page</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
+            </div>
+          </div>
+
+          {/* Module 4B: Approval Comments Page */}
+          <div
+            onClick={() => onNavigateToView('approvals')}
+            className="p-4 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700 hover:border-pink-500/60 transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="w-10 h-10 rounded-xl bg-pink-500/20 border border-pink-500/30 flex items-center justify-center text-pink-400 group-hover:scale-110 transition-transform">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <span className="text-xs font-mono font-black text-pink-300 bg-pink-950/80 px-2 py-0.5 rounded border border-pink-500/30">
+                  {commentsPending.length} In Approvals
+                </span>
+              </div>
+              <h3 className="font-bold text-white text-sm group-hover:text-pink-300 transition-colors">
+                Approval Comments Page
+              </h3>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                Displays only Approval Comments styles: mandatory Note &amp; PDF/Image proofs for Wash, Thread, Zipper, and Button.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs font-bold text-pink-400">
+              <span>Open Approval Comments Page</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform" />
             </div>
           </div>

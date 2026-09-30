@@ -1,10 +1,11 @@
 import React from 'react';
 import {
   LayoutDashboard,
-  Layers,
+  Scissors,
   Waves,
   Sparkles,
   PackageCheck,
+  MessageSquare,
   ScrollText,
   AlertOctagon,
   FlaskConical,
@@ -39,74 +40,64 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
   const allModules = [
     {
       id: 'dashboard' as AppView,
-      label: 'Dashboard',
-      mobileLabel: 'Dashboard',
-      subtitle: 'Summary & KPIs',
+      label: 'Dashboard (Requisition)',
+      mobileLabel: 'Requisition',
+      subtitle: 'Requisition Status Only',
       icon: LayoutDashboard,
+      count: counts.requisition ?? 0,
       badge: counts.lowFabric > 0 ? `${counts.lowFabric} Alert` : undefined,
       badgeVariant: counts.lowFabric > 0 ? 'critical' : 'neutral',
-      color: 'text-indigo-400',
-      allowedRoles: ['merchandiser'] as UserRole[],
+      color: 'text-emerald-700',
+      allowedRoles: ['merchandiser', 'sewing'] as UserRole[],
     },
     {
       id: 'all_samples' as AppView,
-      label:
-        userRole === 'sewing'
-          ? 'Requisition Samples'
-          : userRole === 'wash'
-          ? 'Sewing Status Samples'
-          : 'Samples',
-      mobileLabel:
-        userRole === 'sewing'
-          ? 'Requisitions'
-          : userRole === 'wash'
-          ? 'Sewing Samples'
-          : 'Samples',
-      subtitle:
-        userRole === 'sewing'
-          ? 'Move Req → Sewing Only'
-          : userRole === 'wash'
-          ? 'Move Sewing → Wash → Finishing'
-          : 'Pipeline & Requisition',
-      icon: Layers,
-      count:
-        userRole === 'sewing'
-          ? counts.requisition ?? counts.total
-          : userRole === 'wash'
-          ? counts.sewing + counts.wash
-          : counts.total,
-      color: 'text-purple-400',
+      label: 'Sewing',
+      mobileLabel: 'Sewing',
+      subtitle: 'Sewing Status Only',
+      icon: Scissors,
+      count: counts.sewing,
+      color: 'text-emerald-700',
       allowedRoles: ['merchandiser', 'sewing', 'wash'] as UserRole[],
     },
     {
       id: 'wash' as AppView,
       label: 'Wash',
-      mobileLabel: 'Wash Dept',
-      subtitle:
-        userRole === 'wash' ? 'Move Sewing → Wash → Finishing' : 'Wet Wash Status',
+      mobileLabel: 'Wash',
+      subtitle: 'Wash Status Only',
       icon: Waves,
-      count: userRole === 'wash' ? counts.sewing + counts.wash : counts.wash,
-      color: 'text-cyan-400',
+      count: counts.wash,
+      color: 'text-emerald-700',
       allowedRoles: ['merchandiser', 'wash'] as UserRole[],
     },
     {
       id: 'finishing' as AppView,
       label: 'Finishing',
       mobileLabel: 'Finishing',
-      subtitle: 'Ironing & QA',
+      subtitle: 'Finishing Status Only',
       icon: Sparkles,
       count: counts.finishing,
-      color: 'text-amber-400',
+      color: 'text-emerald-700',
+      allowedRoles: ['merchandiser'] as UserRole[],
+    },
+    {
+      id: 'ready_for_parcel' as AppView,
+      label: 'Ready for Parcel',
+      mobileLabel: 'Parcel',
+      subtitle: 'Parcel Status Only',
+      icon: PackageCheck,
+      count: counts.readyForParcel,
+      color: 'text-emerald-700',
       allowedRoles: ['merchandiser'] as UserRole[],
     },
     {
       id: 'approvals' as AppView,
-      label: 'Parcel & Approval',
+      label: 'Approval Comments',
       mobileLabel: 'Approvals',
-      subtitle: 'Courier & Comments',
-      icon: PackageCheck,
-      count: counts.readyForParcel + counts.approvals,
-      color: 'text-emerald-400',
+      subtitle: 'Approval Status Only',
+      icon: MessageSquare,
+      count: counts.approvals,
+      color: 'text-emerald-700',
       allowedRoles: ['merchandiser'] as UserRole[],
     },
     {
@@ -122,22 +113,19 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
       badgeVariant:
         counts.testOverdue && counts.testOverdue > 0 ? 'critical' : 'neutral',
       count: counts.testCount,
-      color:
-        counts.testOverdue && counts.testOverdue > 0
-          ? 'text-rose-400'
-          : 'text-blue-400',
+      color: 'text-emerald-700',
       allowedRoles: ['merchandiser'] as UserRole[],
     },
     {
       id: 'fabric_inventory' as AppView,
-      label: userRole === 'sewing' ? 'Fabric (View Mode)' : 'Fabric',
-      mobileLabel: userRole === 'sewing' ? 'Fabric (View)' : 'Fabric',
+      label: userRole === 'sewing' ? 'Fabric (View)' : 'Fabric',
+      mobileLabel: 'Fabric',
       subtitle:
-        userRole === 'sewing' ? 'View Only • No Access' : 'Stock & Yardage',
+        userRole === 'sewing' ? 'View Only' : 'Stock & Yardage',
       icon: ScrollText,
       badge: counts.lowFabric > 0 ? `${counts.lowFabric} Low` : undefined,
       badgeVariant: counts.lowFabric > 0 ? 'critical' : 'neutral',
-      color: counts.lowFabric > 0 ? 'text-rose-400' : 'text-slate-300',
+      color: 'text-emerald-700',
       allowedRoles: ['merchandiser', 'sewing'] as UserRole[],
     },
   ];
@@ -156,12 +144,12 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
             <span className="font-semibold text-emerald-900">
-              Main Tracking Modules
+              Status-Based Dedicated Modules (Each Status Has Its Own Page)
             </span>
           </div>
           <div className="flex items-center gap-3 font-mono text-[10px]">
             <span className="text-slate-600">
-              In Pipeline: <strong className="text-emerald-950">{counts.total}</strong> styles
+              Req: <strong className="text-emerald-950">{counts.requisition ?? 0}</strong> · Sew: <strong className="text-emerald-950">{counts.sewing}</strong> · Wash: <strong className="text-emerald-950">{counts.wash}</strong> · Fin: <strong className="text-emerald-950">{counts.finishing}</strong> · Parcel: <strong className="text-emerald-950">{counts.readyForParcel}</strong> · Appr: <strong className="text-emerald-950">{counts.approvals}</strong>
             </span>
             {counts.lowFabric > 0 && (
               <span className="px-1.5 py-0.5 rounded bg-red-600 text-white font-semibold flex items-center gap-1">
@@ -176,8 +164,8 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
         <div
           className={
             isCompactRole
-              ? 'grid grid-cols-2 sm:grid-cols-2 gap-1.5'
-              : 'flex overflow-x-auto no-scrollbar gap-1.5 sm:grid sm:grid-cols-7'
+              ? 'grid grid-cols-3 gap-1.5'
+              : 'flex overflow-x-auto no-scrollbar gap-1.5 sm:grid sm:grid-cols-8'
           }
         >
           {modules.map((item) => {
@@ -191,24 +179,24 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                 onClick={() => onSelectView(item.id)}
                 className={`relative min-h-[46px] ${
                   isCompactRole ? 'w-full' : 'min-w-[82px] sm:min-w-0 shrink-0'
-                } flex flex-col sm:flex-row items-center justify-center sm:justify-between px-2.5 py-1.5 sm:py-2 rounded-xl transition-all group cursor-pointer text-left ${
+                } flex flex-col sm:flex-row items-center justify-center sm:justify-between px-2 py-1.5 sm:py-2 rounded-xl transition-all group cursor-pointer text-left ${
                   isActive
                     ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700'
                     : 'bg-emerald-50/50 text-slate-800 hover:bg-emerald-100/70 border border-emerald-200'
                 }`}
               >
-                <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 min-w-0">
+                <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-1.5 min-w-0">
                   <div
-                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                    className={`w-6 h-6 sm:w-6 sm:h-6 rounded-lg flex items-center justify-center shrink-0 ${
                       isActive
                         ? 'bg-emerald-700 text-white'
                         : 'bg-white text-emerald-700 border border-emerald-200'
                     }`}
                   >
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-emerald-700'}`} />
+                    <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : 'text-emerald-700'}`} />
                   </div>
                   <div className="hidden lg:block truncate min-w-0">
-                    <div className={`font-semibold text-xs truncate leading-tight ${isActive ? 'text-white' : 'text-slate-900'}`}>
+                    <div className={`font-semibold text-[11px] truncate leading-tight ${isActive ? 'text-white' : 'text-slate-900'}`}>
                       {item.label}
                     </div>
                     <div
@@ -226,17 +214,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
 
                 {/* Count / Badge Indicator */}
                 <div className="hidden sm:flex items-center ml-1 shrink-0">
-                  {item.badge ? (
-                    <span
-                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap ${
-                        item.badgeVariant === 'critical'
-                          ? 'bg-red-600 text-white'
-                          : 'bg-emerald-100 text-emerald-900'
-                      }`}
-                    >
-                      {item.badge}
-                    </span>
-                  ) : item.count !== undefined ? (
+                  {item.count !== undefined ? (
                     <span
                       className={`text-[10px] font-mono px-1.5 py-0.5 rounded-md font-bold tabular-nums ${
                         isActive
@@ -245,6 +223,16 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
                       }`}
                     >
                       {item.count}
+                    </span>
+                  ) : item.badge ? (
+                    <span
+                      className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap ${
+                        item.badgeVariant === 'critical'
+                          ? 'bg-red-600 text-white'
+                          : 'bg-emerald-100 text-emerald-900'
+                      }`}
+                    >
+                      {item.badge}
                     </span>
                   ) : null}
                 </div>

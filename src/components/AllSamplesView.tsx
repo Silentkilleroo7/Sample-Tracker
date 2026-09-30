@@ -82,19 +82,12 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
   const isSewingUser = userRole === 'sewing';
   const isWashUser = userRole === 'wash';
 
-  const [selectedStage, setSelectedStage] = useState<SampleStage | 'all'>(
-    isSewingUser ? 'requisition' : isWashUser ? 'sewing' : initialStageFilter
-  );
+  // Sewing Status Page strictly shows ONLY styles in 'sewing' status
+  const [selectedStage, setSelectedStage] = useState<SampleStage | 'all'>('sewing');
 
   useEffect(() => {
-    if (isSewingUser) {
-      setSelectedStage('requisition');
-    } else if (isWashUser) {
-      setSelectedStage(initialStageFilter === 'wash' ? 'wash' : 'sewing');
-    } else {
-      setSelectedStage(initialStageFilter);
-    }
-  }, [userRole, initialStageFilter, isSewingUser, isWashUser]);
+    setSelectedStage('sewing');
+  }, [userRole, initialStageFilter]);
 
   const [selectedBuyer, setSelectedBuyer] = useState<string>('all');
   const [selectedPriority, setSelectedPriority] = useState<SamplePriority | 'all'>('all');
@@ -106,27 +99,18 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
   const [pageSize, setPageSize] = useState<number>(10);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
+  const sewingOnlySamples = useMemo(
+    () => samples.filter((s) => s.stage === 'sewing'),
+    [samples]
+  );
+
   const buyersList = useMemo(() => {
-    return Array.from(new Set(samples.map((s) => s.buyer))).filter(Boolean);
-  }, [samples]);
+    return Array.from(new Set(sewingOnlySamples.map((s) => s.buyer))).filter(Boolean);
+  }, [sewingOnlySamples]);
 
   const filteredSamples = useMemo(() => {
-    let result = [...samples];
-
-    // Strict role-based stage visibility:
-    // - Sewing user sees ONLY 'requisition' status samples
-    // - Wash user sees ONLY 'sewing' status samples (or 'wash' when moving Wash -> Finishing)
-    if (isSewingUser) {
-      result = result.filter((s) => s.stage === 'requisition');
-    } else if (isWashUser) {
-      if (selectedStage === 'wash') {
-        result = result.filter((s) => s.stage === 'wash');
-      } else {
-        result = result.filter((s) => s.stage === 'sewing');
-      }
-    } else if (selectedStage !== 'all') {
-      result = result.filter((s) => s.stage === selectedStage);
-    }
+    // Strictly only Sewing Status styles on the Sewing Page
+    let result = [...sewingOnlySamples];
 
     if (searchQuery.trim()) {
       const ranked = rankSamplesBySearchQuery(result, searchQuery);
@@ -165,7 +149,7 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
     });
 
     return result;
-  }, [samples, searchQuery, selectedStage, selectedBuyer, selectedPriority, sortField, sortOrder]);
+  }, [sewingOnlySamples, searchQuery, selectedStage, selectedBuyer, selectedPriority, sortField, sortOrder]);
 
   const totalItems = filteredSamples.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -185,78 +169,32 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
     }
   };
 
-  const STAGES_LIST: SampleStage[] = isSewingUser
-    ? ['requisition']
-    : isWashUser
-    ? ['sewing', 'wash']
-    : [
-        'requisition',
-        'sewing',
-        'wash',
-        'finishing',
-        'ready_for_parcel',
-        'approval_comments',
-      ];
+  const STAGES_LIST: SampleStage[] = ['sewing'];
 
   return (
     <div className="space-y-5">
-      {/* Role Access Notice Banner for Sewing & Wash Users */}
-      {!isMerchandiser && (
-        <div
-          className={`p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-3 shadow-md ${
-            isSewingUser
-              ? 'bg-sky-950/35 border-sky-500/40 text-sky-200'
-              : 'bg-cyan-950/35 border-cyan-500/40 text-cyan-200'
-          }`}
-        >
-          <div className="flex items-center gap-2.5">
-            <ShieldCheck className={`w-5 h-5 shrink-0 ${isSewingUser ? 'text-sky-400' : 'text-cyan-400'}`} />
-            <div>
-              <span className="text-xs font-extrabold uppercase tracking-wider block">
-                {ROLE_BADGE_CONFIG[userRole].label} Mode — Restricted Stage &amp; Action Scope
-              </span>
-              <span className="text-[11px] text-slate-300">
-                {isSewingUser
-                  ? 'You can view Requisition Status samples only (plus Fabric Inventory in View-Only mode). Allowed action: Move from Requisition Status → Sewing Status only.'
-                  : 'You can view Sewing Status samples (and Wash Status in Wash Section). Allowed actions: Move Sewing Status → Wash Status, and Wash Status → Finishing Status only.'}
-              </span>
-            </div>
-          </div>
-          <span className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold border ${ROLE_BADGE_CONFIG[userRole].bgClass} ${ROLE_BADGE_CONFIG[userRole].textClass} ${ROLE_BADGE_CONFIG[userRole].borderClass}`}>
-            {isSewingUser ? 'Requisition → Sewing Only' : 'Sewing → Wash → Finishing Only'}
-          </span>
-        </div>
-      )}
-
       {/* Top Header Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-6 rounded-2xl bg-white border border-emerald-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
-            {isSewingUser
-              ? 'Requisition Status Samples (Sewing Department)'
-              : isWashUser
-              ? selectedStage === 'wash'
-                ? 'Wash Status Samples (Move to Finishing)'
-                : 'Sewing Status Samples (Wash Department)'
-              : 'Sample Tracking Master Pipeline'}
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold mb-2">
+            Step 2 of 6 • Dedicated Sewing Status Page
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            Sewing Status Styles Only (Move Sewing → Wash)
           </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {isSewingUser
-              ? `Showing ${filteredSamples.length} Requisition Status sample(s) ready to move to Sewing Status`
-              : isWashUser
-              ? `Showing ${filteredSamples.length} sample(s) in ${selectedStage === 'wash' ? 'Wash Status (ready for Finishing)' : 'Sewing Status (ready for Wash)'}`
-              : `Total ${samples.length} styles in workflow • Showing ${filteredSamples.length} filtered styles`}
+          <p className="text-xs text-slate-600 mt-0.5">
+            This page strictly displays only styles currently in <strong>Sewing Status</strong> ({sewingOnlySamples.length} style{sewingOnlySamples.length === 1 ? '' : 's'}). Requisition styles are shown on Dashboard, and Wash styles on the Wash page.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <div className="flex items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
+          <div className="flex items-center bg-emerald-50 p-1 rounded-xl border border-emerald-200">
             <button
               onClick={() => setViewMode('table')}
               className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 viewMode === 'table'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-emerald-600 text-white shadow'
+                  : 'text-emerald-900 hover:bg-emerald-100'
               }`}
               title="Table View"
             >
@@ -267,8 +205,8 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
               onClick={() => setViewMode('kanban')}
               className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 viewMode === 'kanban'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
+                  ? 'bg-emerald-600 text-white shadow'
+                  : 'text-emerald-900 hover:bg-emerald-100'
               }`}
               title="Kanban Board View"
             >
@@ -277,65 +215,11 @@ export const AllSamplesView: React.FC<AllSamplesViewProps> = ({
             </button>
           </div>
 
-          {isMerchandiser && (
-            <button
-              onClick={onNewRequisition}
-              className="flex items-center gap-1.5 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-md transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>New Style</span>
-            </button>
-          )}
+          <div className="px-3.5 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-2">
+            <span>In Sewing Status:</span>
+            <span className="font-mono font-black text-sm">{sewingOnlySamples.length}</span>
+          </div>
         </div>
-      </div>
-
-      {/* Stage Tab Filter Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-        {isMerchandiser && (
-          <button
-            onClick={() => {
-              setSelectedStage('all');
-              setCurrentPage(1);
-            }}
-            className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap cursor-pointer ${
-              selectedStage === 'all'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-700/60'
-            }`}
-          >
-            All Stages ({samples.length})
-          </button>
-        )}
-
-        {STAGES_LIST.map((stage) => {
-          const cfg = STAGE_CONFIG[stage];
-          const count = samples.filter((s) => s.stage === stage).length;
-          const isActive = selectedStage === stage;
-
-          return (
-            <button
-              key={stage}
-              onClick={() => {
-                setSelectedStage(stage);
-                setCurrentPage(1);
-              }}
-              className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                isActive
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'bg-slate-800/80 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700/60'
-              }`}
-            >
-              <span>{cfg.label}</span>
-              <span
-                className={`text-[10px] font-mono px-1.5 py-0.2 rounded-md ${
-                  isActive ? 'bg-indigo-800 text-white' : 'bg-slate-900 text-slate-400'
-                }`}
-              >
-                {count}
-              </span>
-            </button>
-          );
-        })}
       </div>
 
       {/* Secondary Filter & Search Toolbar */}

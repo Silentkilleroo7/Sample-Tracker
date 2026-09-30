@@ -16,6 +16,7 @@ export type AppView =
   | 'all_samples' 
   | 'wash' 
   | 'finishing' 
+  | 'ready_for_parcel'
   | 'approvals' 
   | 'test'
   | 'fabric_inventory';

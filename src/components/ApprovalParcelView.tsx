@@ -40,6 +40,7 @@ import confetti from 'canvas-confetti';
 
 interface ApprovalParcelViewProps {
   samples: SampleItem[];
+  stageMode?: 'ready_for_parcel' | 'approval_comments';
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
   onUpdateApprovalDetails: (sampleId: string, details: ApprovalDetails) => void;
@@ -52,6 +53,7 @@ interface ApprovalParcelViewProps {
 
 export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
   samples,
+  stageMode = 'approval_comments',
   onSelectSample,
   onAdvanceStage,
   onUpdateApprovalDetails,
@@ -60,25 +62,18 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
   onToggleWorkbookSent,
   onSendWhatsApp,
 }) => {
-  const [subTab, setSubTab] = useState<'all' | 'priority_shipment' | 'ready_for_parcel' | 'approval_comments'>('all');
+  const [subTab, setSubTab] = useState<'all' | 'priority_shipment'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Editing state for remarks note
   const [editingSampleId, setEditingSampleId] = useState<string | null>(null);
   const [tempApproval, setTempApproval] = useState<ApprovalDetails | null>(null);
 
-  // Filter styles in ready_for_parcel, approval_comments, or priority shipment styles pending trims/accessories/wash approval
-  const relevantSamples = samples.filter(
-    (s) =>
-      s.stage === 'ready_for_parcel' ||
-      s.stage === 'approval_comments' ||
-      !getGranularApprovalStatus(s).isFullyApproved
-  );
+  // Strictly filter styles by the dedicated status page (Ready for Parcel OR Approval Comments)
+  const relevantSamples = samples.filter((s) => s.stage === stageMode);
 
   const filteredSamples = relevantSamples
     .filter((s) => {
-      if (subTab === 'ready_for_parcel' && s.stage !== 'ready_for_parcel') return false;
-      if (subTab === 'approval_comments' && s.stage !== 'approval_comments') return false;
       if (subTab === 'priority_shipment' && getGranularApprovalStatus(s).isFullyApproved) return false;
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
@@ -99,7 +94,7 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
 
   const readyCount = samples.filter((s) => s.stage === 'ready_for_parcel').length;
   const approvalCount = samples.filter((s) => s.stage === 'approval_comments').length;
-  const priorityPendingCount = samples.filter((s) => !getGranularApprovalStatus(s).isFullyApproved).length;
+  const priorityPendingCount = relevantSamples.filter((s) => !getGranularApprovalStatus(s).isFullyApproved).length;
 
   const handleStartEdit = (sample: SampleItem) => {
     const gran = getGranularApprovalStatus(sample);
@@ -139,33 +134,49 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
       <div className="p-6 rounded-2xl bg-gradient-to-r from-emerald-950/80 via-slate-900 to-slate-900 border border-emerald-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold mb-2">
-            <PackageCheck className="w-3.5 h-3.5" />
-            Parcel Dispatch & Buyer Approval Tracking
+            {stageMode === 'ready_for_parcel' ? (
+              <>
+                <PackageCheck className="w-3.5 h-3.5" />
+                Step 5 of 6 • Dedicated Ready for Parcel Status Page
+              </>
+            ) : (
+              <>
+                <MessageSquare className="w-3.5 h-3.5" />
+                Step 6 of 6 • Dedicated Approval Comments Status Page
+              </>
+            )}
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight">
-            Parcel Styles & Approval Comments
+            {stageMode === 'ready_for_parcel'
+              ? 'Ready for Parcel Status Styles Only (Move → Approval Comments)'
+              : 'Approval Comments Status Styles Only (Buyer Verdict & Proofs)'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
-            Manage parcel delivery schedules, courier airway bills, and record comprehensive buyer remarks for Wash, Trims, and Accessories.
+            {stageMode === 'ready_for_parcel'
+              ? 'This page strictly displays only styles in Ready for Parcel Status. Manage courier dispatch, AWB numbers, and advance dispatched parcels to Approval Comments.'
+              : 'This page strictly displays only styles in Approval Comments Status. Record Wash, Thread, Zipper, and Button approval proofs (Note + PDF/Image) and buyer remarks.'}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-slate-900/90 rounded-xl border border-emerald-500/30 text-center min-w-[110px]">
-            <span className="text-2xl font-mono font-black text-emerald-400">
-              {readyCount}
-            </span>
-            <div className="text-[11px] text-slate-400 uppercase font-semibold">
-              Ready Parcel
+          {stageMode === 'ready_for_parcel' ? (
+            <div className="p-3 bg-slate-900/90 rounded-xl border border-emerald-500/30 text-center min-w-[130px]">
+              <span className="text-2xl font-mono font-black text-emerald-400">
+                {readyCount}
+              </span>
+              <div className="text-[11px] text-slate-400 uppercase font-semibold">
+                In Ready Parcel
+              </div>
             </div>
-          </div>
-          <div className="p-3 bg-slate-900/90 rounded-xl border border-pink-500/30 text-center min-w-[110px]">
-            <span className="text-2xl font-mono font-black text-pink-400">
-              {approvalCount}
-            </span>
-            <div className="text-[11px] text-slate-400 uppercase font-semibold">
-              Comments
+          ) : (
+            <div className="p-3 bg-slate-900/90 rounded-xl border border-emerald-500/30 text-center min-w-[130px]">
+              <span className="text-2xl font-mono font-black text-emerald-400">
+                {approvalCount}
+              </span>
+              <div className="text-[11px] text-slate-400 uppercase font-semibold">
+                In Approval Status
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -180,7 +191,9 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                 : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
           >
-            All Sorted by Shipment Date ({relevantSamples.length})
+            {stageMode === 'ready_for_parcel'
+              ? `All Ready for Parcel Styles (${relevantSamples.length})`
+              : `All Approval Comments Styles (${relevantSamples.length})`}
           </button>
           <button
             onClick={() => setSubTab('priority_shipment')}
@@ -190,27 +203,7 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                 : 'bg-slate-800 text-amber-300 hover:text-white'
             }`}
           >
-            ⚡ Priority Pending Approval ({priorityPendingCount})
-          </button>
-          <button
-            onClick={() => setSubTab('ready_for_parcel')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              subTab === 'ready_for_parcel'
-                ? 'bg-emerald-600 text-white shadow'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            Ready for Parcel ({readyCount})
-          </button>
-          <button
-            onClick={() => setSubTab('approval_comments')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              subTab === 'approval_comments'
-                ? 'bg-pink-600 text-white shadow'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            Approval Comments ({approvalCount})
+            ⚡ Pending Component Approval ({priorityPendingCount})
           </button>
         </div>
 
