@@ -55,6 +55,7 @@ import {
   getPendingAwbShipments,
 } from '../types/fabric';
 import { BVTestItem } from '../types/test';
+import { UserRole } from '../types/auth';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
 import { SampleTypeBadge } from './SampleTypeBadge';
@@ -63,6 +64,7 @@ interface DashboardViewProps {
   samples: SampleItem[];
   fabrics: FabricItem[];
   tests?: BVTestItem[];
+  userRole?: UserRole;
   onNavigateToView: (view: 'dashboard' | 'all_samples' | 'wash' | 'finishing' | 'ready_for_parcel' | 'approvals' | 'test' | 'fabric_inventory', filter?: any) => void;
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
@@ -81,6 +83,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   samples,
   fabrics,
   tests = [],
+  userRole = 'merchandiser',
   onNavigateToView,
   onSelectSample,
   onAdvanceStage,
@@ -277,13 +280,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-3 relative z-10 shrink-0">
-            <button
-              onClick={onNewRequisition}
-              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              New Sample Requisition
-            </button>
+            {userRole === 'merchandiser' ? (
+              <button
+                onClick={onNewRequisition}
+                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                New Sample Requisition
+              </button>
+            ) : (
+              <div className="px-3.5 py-2 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2">
+                <Scissors className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Requisition → Sewing &amp; Fabric Viewer Access</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -829,12 +839,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
 
                   <div className="mt-3 pt-2 flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => onRestockFabric(fabric)}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[11px] font-black shadow transition-all cursor-pointer"
-                    >
-                      ✈️ Inform Supplier &amp; Add AWB / Restock
-                    </button>
+                    {userRole === 'merchandiser' ? (
+                      <button
+                        onClick={() => onRestockFabric(fabric)}
+                        className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[11px] font-black shadow transition-all cursor-pointer"
+                      >
+                        ✈️ Inform Supplier &amp; Add AWB / Restock
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onNavigateToView('fabric_inventory')}
+                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-bold transition-all cursor-pointer"
+                      >
+                        View Fabric Inventory (Read-Only)
+                      </button>
+                    )}
                   </div>
                 </div>
               );

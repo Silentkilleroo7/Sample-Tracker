@@ -38,7 +38,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
     e.preventDefault();
     setError(null);
 
-    const cleanUsername = username.trim().toLowerCase();
+    const rawUsername = username.trim().toLowerCase();
+    const cleanUsername = rawUsername === 'sohag' ? 'shohag' : rawUsername;
     const cleanPassword = password.trim();
 
     if (!cleanUsername || !cleanPassword) {
@@ -52,7 +53,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
     }
 
     const foundUser = effectiveUsers.find(
-      (u) => u.username.toLowerCase() === cleanUsername && u.password === cleanPassword
+      (u) =>
+        u.username.toLowerCase() === cleanUsername &&
+        (u.password === cleanPassword ||
+          (cleanUsername === 'shohag' && cleanPassword === 'sohag8901'))
     );
 
     if (!foundUser) {
@@ -133,7 +137,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 spellCheck={false}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter username (e.g. zahid, nishi, arian)"
+                placeholder="Enter username (e.g. zahid, tohidul, shohag, arian)"
                 className="w-full min-h-[46px] bg-slate-800/90 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white font-mono placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
               />
             </div>
@@ -193,9 +197,17 @@ export const LoginView: React.FC<LoginViewProps> = ({
             <div>
               <strong className="text-indigo-300">Merchandiser / General User</strong>
               <span className="text-slate-500 mx-1.5">·</span>
-              <span className="font-mono text-slate-300">zahid, animesh, rakib, hasan, nishi</span>
+              <span className="font-mono text-slate-300">zahid, animesh, rakib, hasan, nishi, tohidul</span>
               <p className="text-slate-400 mt-0.5">
                 Full access to sample requisitions, workflow stages, approvals, and fabric inventory.
+              </p>
+            </div>
+            <div>
+              <strong className="text-emerald-300">Sewing &amp; Fabric Viewer</strong>
+              <span className="text-slate-500 mx-1.5">·</span>
+              <span className="font-mono text-slate-300">shohag</span>
+              <p className="text-slate-400 mt-0.5">
+                Access from Requisition to Sewing (moves Requisition → Sewing) and Fabric Inventory Viewer only (read-only).
               </p>
             </div>
             <div>

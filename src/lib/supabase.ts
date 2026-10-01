@@ -836,13 +836,25 @@ export async function syncAppUsersWithSupabase(): Promise<AppUser[]> {
         lastLoginAt: row.last_login_at || undefined,
       }));
 
-    // Merge with SYSTEM_USERS so all required active users are always present
+    // Merge with SYSTEM_USERS so all required active users (including tohidul and shohag)
+    // always have their authoritative system role and assigned password
+    const systemMap = new Map<string, AppUser>();
+    SYSTEM_USERS.forEach((u) => systemMap.set(u.username.toLowerCase(), u));
+
     const byUsername = new Map<string, AppUser>();
     SYSTEM_USERS.forEach((u) => byUsername.set(u.username.toLowerCase(), u));
     mapped.forEach((u) => {
       const uname = u.username.toLowerCase();
       if (!removedSet.has(uname)) {
-        byUsername.set(uname, u);
+        const sysUser = systemMap.get(uname);
+        if (sysUser) {
+          byUsername.set(uname, {
+            ...sysUser,
+            lastLoginAt: u.lastLoginAt || sysUser.lastLoginAt,
+          });
+        } else {
+          byUsername.set(uname, u);
+        }
       }
     });
     return Array.from(byUsername.values());

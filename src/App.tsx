@@ -119,10 +119,13 @@ export default function App() {
         if (
           parsed &&
           parsed.username &&
-          parsed.role &&
-          parsed.username.toLowerCase() !== 'sohag'
+          parsed.role
         ) {
-          return parsed;
+          // Ensure latest role & displayName from SYSTEM_USERS if matching
+          const matchedSys = SYSTEM_USERS.find(
+            (u) => u.username.toLowerCase() === parsed.username.toLowerCase()
+          );
+          return matchedSys ? { ...matchedSys, lastLoginAt: parsed.lastLoginAt } : parsed;
         }
         localStorage.removeItem('threadtrack_live_user_v1');
       }
@@ -1684,7 +1687,21 @@ export default function App() {
                                         ready_for_parcel: 'ready_for_parcel',
                                         approval_comments: 'approvals',
                                       };
-                                      setCurrentView(pageMap[sample.stage]);
+                                      const targetView = pageMap[sample.stage];
+                                      if (
+                                        isSewingUser &&
+                                        targetView !== 'dashboard' &&
+                                        targetView !== 'all_samples' &&
+                                        targetView !== 'fabric_inventory'
+                                      ) {
+                                        sendPushNotification(
+                                          'Access Restricted',
+                                          'Your account has access from Requisition to Sewing and Fabric Inventory Viewer only.',
+                                          'warning'
+                                        );
+                                        return;
+                                      }
+                                      setCurrentView(targetView);
                                     }}
                                     className="px-2 py-1.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-900 text-[10px] font-bold cursor-pointer"
                                   >
@@ -1734,7 +1751,21 @@ export default function App() {
                   samples={samples}
                   fabrics={fabrics}
                   tests={tests}
+                  userRole={currentUser.role}
                   onNavigateToView={(view, filter) => {
+                    if (
+                      isSewingUser &&
+                      view !== 'dashboard' &&
+                      view !== 'all_samples' &&
+                      view !== 'fabric_inventory'
+                    ) {
+                      sendPushNotification(
+                        'Access Restricted',
+                        'Your account has access from Requisition to Sewing and Fabric Inventory Viewer only.',
+                        'warning'
+                      );
+                      return;
+                    }
                     setCurrentView(view);
                     if (filter?.stage) {
                       setInitialStageFilter(filter.stage);
@@ -1905,10 +1936,14 @@ export default function App() {
                   onSelectSampleByCode={(code) => {
                     const found = samples.find((s) => s.styleCode === code);
                     if (found) {
-                      if (isSewingUser && found.stage !== 'requisition') {
+                      if (
+                        isSewingUser &&
+                        found.stage !== 'requisition' &&
+                        found.stage !== 'sewing'
+                      ) {
                         sendPushNotification(
                           'Sewing Role View Scope',
-                          'Sewing users can only open Requisition Status samples.',
+                          'Your account can only open Requisition and Sewing Status samples.',
                           'warning'
                         );
                         return;
@@ -2029,9 +2064,11 @@ export default function App() {
                 : undefined
             }
             onUpdateSampleThumbnail={isMerchandiser ? handleUpdateSampleThumbnail : undefined}
-            onUpdateBlNumber={handleUpdateBlNumber}
-            onOpenComponentApproval={(sample, component) =>
-              setComponentApprovalTarget({ sample, component })
+            onUpdateBlNumber={isMerchandiser ? handleUpdateBlNumber : undefined}
+            onOpenComponentApproval={
+              isMerchandiser
+                ? (sample, component) => setComponentApprovalTarget({ sample, component })
+                : undefined
             }
           />
 

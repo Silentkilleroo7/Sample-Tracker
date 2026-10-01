@@ -14,11 +14,12 @@ export interface AppUser {
 }
 
 /**
- * Official 6 System Users:
- * - 5 Merchandiser / General users: zahid, animesh, rakib, hasan, nishi (full general user access)
+ * Official 8 System Users:
+ * - 6 Merchandiser / General users: zahid, animesh, rakib, hasan, nishi, tohidul (full general user access)
+ * - 1 Sewing & Fabric Viewer user: shohag (access from Requisition to Sewing + Fabric Inventory Viewer only)
  * - 1 Wash user: arian (sees Sewing/Wash status samples only; moves Sewing -> Wash and Wash -> Finishing only)
  */
-export const REMOVED_USERNAMES = ['sohag'];
+export const REMOVED_USERNAMES: string[] = [];
 
 export const SYSTEM_USERS: AppUser[] = [
   {
@@ -72,6 +73,26 @@ export const SYSTEM_USERS: AppUser[] = [
       'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
   },
   {
+    id: 'usr-merchandiser-tohidul',
+    username: 'tohidul',
+    displayName: 'Tohidul',
+    password: 'tohidul7890',
+    role: 'merchandiser',
+    department: 'Merchandising Department',
+    permissionsSummary:
+      'Full General User Access — Create requisitions, manage all sample stages, fabric inventory, BV lab tests & approvals.',
+  },
+  {
+    id: 'usr-sewing-shohag',
+    username: 'shohag',
+    displayName: 'Shohag',
+    password: 'shohag8901',
+    role: 'sewing',
+    department: 'Sewing & Sample Room Department',
+    permissionsSummary:
+      'Requisition to Sewing & Fabric Inventory Viewer Only — Access Requisition & Sewing pages, move Requisition → Sewing only, and view Fabric Inventory (read-only).',
+  },
+  {
     id: 'usr-wash-arian',
     username: 'arian',
     displayName: 'Arian',
@@ -105,8 +126,8 @@ export const ROLE_BADGE_CONFIG: Record<
     borderClass: 'border-emerald-300',
   },
   sewing: {
-    label: 'Sewing User (Req → Sewing Only)',
-    shortLabel: 'Sewing',
+    label: 'Sewing & Fabric Viewer (Req → Sewing Only)',
+    shortLabel: 'Sewing / Fabric Viewer',
     badgeClass: 'bg-emerald-50 text-emerald-900 border-emerald-300',
     dotClass: 'bg-emerald-600',
     bgClass: 'bg-emerald-50',
@@ -172,8 +193,8 @@ export function filterSamplesForUserRole<T extends { stage: SampleStage }>(
     return samples;
   }
   if (role === 'sewing') {
-    // Sewing user sees Requisition status samples only
-    return samples.filter((s) => s.stage === 'requisition');
+    // Sewing user accesses Requisition to Sewing status samples only
+    return samples.filter((s) => s.stage === 'requisition' || s.stage === 'sewing');
   }
   if (role === 'wash') {
     // Wash user sees Sewing status samples (to move Sewing -> Wash) and Wash status samples (to move Wash -> Finishing)
