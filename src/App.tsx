@@ -79,36 +79,16 @@ import { ResubmitBVTestModal } from './components/ResubmitBVTestModal';
 import { ComponentApprovalModal } from './components/ComponentApprovalModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { NotificationToastContainer } from './components/NotificationToastContainer';
+import { OfflineIndicator } from './components/PWAInstallButton';
+import { playDefaultNotificationSound } from './utils/notificationSound';
 
-// Sound utility for real-time notification chimes
-function playNotificationChime(type: 'critical' | 'success' | 'info' | 'warning') {
-  try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    if (type === 'critical') {
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      osc.frequency.setValueAtTime(330, ctx.currentTime + 0.12);
-    } else if (type === 'success') {
-      osc.frequency.setValueAtTime(523.25, ctx.currentTime);
-      osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12);
-    } else {
-      osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-    }
-
-    gain.gain.setValueAtTime(0.06, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-
-    osc.start();
-    osc.stop(ctx.currentTime + 0.35);
-  } catch (e) {
-    // Ignore audio restriction errors
-  }
+// Sound utility for real-time notification chimes (plays Default Notification Sound)
+function playNotificationChime(
+  type: 'critical' | 'success' | 'info' | 'warning',
+  title?: string,
+  message?: string
+) {
+  playDefaultNotificationSound(type, title, message);
 }
 
 export default function App() {
@@ -277,8 +257,16 @@ export default function App() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'bv_tests' }, () => {
           void loadCloudData();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
           void loadCloudData();
+          const row = payload?.new as Record<string, any> | undefined;
+          if (row && row.title) {
+            playDefaultNotificationSound(
+              (row.type as 'critical' | 'success' | 'info' | 'warning') || 'info',
+              String(row.title),
+              String(row.message || '')
+            );
+          }
         })
         .subscribe();
     } catch (err) {
@@ -412,7 +400,7 @@ export default function App() {
     };
     setNotifications((prev) => [newNotif, ...prev]);
     void insertNotificationInSupabase(newNotif);
-    playNotificationChime(type);
+    playNotificationChime(type, title, message);
   };
 
   // 4. Sample Requisition Creation (with Per-Pcs Fabric Consumption & Auto Inventory Deduction)
@@ -721,6 +709,13 @@ export default function App() {
           : null
       );
     }
+    const blSample = samples.find((s) => s.id === sampleId);
+    sendPushNotification(
+      'BL Number Updated',
+      `BL Number updated to "${cleanBl || 'N/A'}" for Style ${blSample?.styleCode || 'Style'}.`,
+      'info',
+      { sampleId, styleCode: blSample?.styleCode }
+    );
   };
 
   const handleUpdateSampleThumbnail = (
@@ -766,6 +761,13 @@ export default function App() {
           : null
       );
     }
+    const imgSample = samples.find((s) => s.id === sampleId);
+    sendPushNotification(
+      'Style Image Updated',
+      `Product reference photo updated for Style ${imgSample?.styleCode || 'Style'}.`,
+      'info',
+      { sampleId, styleCode: imgSample?.styleCode }
+    );
   };
 
   // 5. Stage Advancement Engine (with Role-Based Guard)
@@ -911,6 +913,13 @@ export default function App() {
         return s;
       })
     );
+    const parcelSample = samples.find((s) => s.id === sampleId);
+    sendPushNotification(
+      'Parcel Details Updated',
+      `Courier (${details.courier || 'Courier'}) & AWB (${details.trackingNumber || 'Pending'}) updated for Style ${parcelSample?.styleCode || 'Style'}.`,
+      'info',
+      { sampleId, styleCode: parcelSample?.styleCode }
+    );
   };
 
   // 7. Finishing Checklist item toggle
@@ -918,6 +927,8 @@ export default function App() {
     sampleId: string,
     itemKey: 'ironingDone' | 'threadTrimmingDone' | 'taggingDone' | 'qualityPassed'
   ) => {
+    const targetSample = samples.find((s) => s.id === sampleId);
+    const nextVal = targetSample ? !targetSample.finishingDetails[itemKey] : true;
     setSamples((prev) =>
       prev.map((s) => {
         if (s.id === sampleId) {
@@ -935,6 +946,18 @@ export default function App() {
         }
         return s;
       })
+    );
+    const checklistLabels: Record<string, string> = {
+      ironingDone: 'Steam Ironing',
+      threadTrimmingDone: 'Thread Trimming',
+      taggingDone: 'Hangtag & Barcode',
+      qualityPassed: 'QA Final Signoff',
+    };
+    sendPushNotification(
+      `Finishing Updated: ${checklistLabels[itemKey] || itemKey}`,
+      `${checklistLabels[itemKey] || itemKey} marked as ${nextVal ? 'Completed ✅' : 'Pending'} for Style ${targetSample?.styleCode || 'Style'}.`,
+      nextVal ? 'success' : 'info',
+      { sampleId, styleCode: targetSample?.styleCode }
     );
   };
 
@@ -1901,6 +1924,9 @@ export default function App() {
               )}
             </main>
           </div>
+
+          {/* Offline PWA Connectivity Indicator */}
+          <OfflineIndicator />
 
           {/* Floating Push Notification Toasts */}
           <NotificationToastContainer

@@ -1,7 +1,15 @@
 import React, { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import './index.css';
+
+// Register Service Worker for Chrome PWA Installability & Offline Caching
+try {
+  registerSW({ immediate: true });
+} catch {
+  // Ignore SW registration errors in restricted preview contexts
+}
 
 interface ErrorBoundaryState {
   hasError: boolean;

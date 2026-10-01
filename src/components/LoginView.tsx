@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppUser, SYSTEM_USERS, REMOVED_USERNAMES } from '../types/auth';
+import { PWAInstallButton } from './PWAInstallButton';
 import {
   Layers,
   Lock,
@@ -74,18 +75,21 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
       <div className="w-full max-w-md bg-slate-900/95 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl relative z-10">
         {/* Brand Header */}
-        <div className="flex items-center gap-3 pb-5 mb-6 border-b border-slate-800">
-          <div className="w-11 h-11 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/25 shrink-0">
-            <Layers className="w-6 h-6 text-white" />
+        <div className="flex items-center justify-between gap-3 pb-5 mb-6 border-b border-slate-800">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/25 shrink-0">
+              <Layers className="w-6 h-6 text-white" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="font-bold text-lg tracking-tight text-white truncate">
+                GA Sample Tracking Master
+              </h1>
+              <p className="text-xs text-slate-400 truncate">
+                Role-Based Sample &amp; Fabric Inventory Portal
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h1 className="font-bold text-lg tracking-tight text-white truncate">
-              GA Sample Tracking Master
-            </h1>
-            <p className="text-xs text-slate-400 truncate">
-              Role-Based Sample &amp; Fabric Inventory Portal
-            </p>
-          </div>
+          <PWAInstallButton compact />
         </div>
 
         {/* Section Title */}

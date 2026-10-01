@@ -25,6 +25,7 @@ import {
   STAGE_CONFIG,
   rankSamplesBySearchQuery,
 } from '../types/sample';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface NavbarProps {
   currentUser: AppUser;
@@ -357,6 +358,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             </button>
           )}
+
+          {/* Save as Google Chrome App (PWA Install) */}
+          <PWAInstallButton compact />
 
           {/* Export Action (Merchandiser Only on Desktop) */}
           {isMerchandiser && (

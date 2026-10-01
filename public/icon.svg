@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#047857" />
+    </linearGradient>
+  </defs>
+  <!-- Full-bleed background with rounded rect for standard & maskable safe zone -->
+  <rect width="512" height="512" rx="96" fill="url(#bgGrad)" />
+  <!-- Safe-zone inner emblem (centered inside 80% safe circle) -->
+  <g transform="translate(96, 96)">
+    <rect x="16" y="16" width="288" height="288" rx="56" fill="#ffffff" fill-opacity="0.14" stroke="#ffffff" stroke-width="8" stroke-opacity="0.4" />
+    <!-- Layers / Garment Stack Icon -->
+    <path d="M160 64L56 116L160 168L264 116L160 64Z" fill="#ffffff" />
+    <path d="M56 164L160 216L264 164" fill="none" stroke="#a7f3d0" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M56 212L160 264L264 212" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
