@@ -78,7 +78,7 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
       icon: Sparkles,
       count: counts.finishing,
       color: 'text-emerald-700',
-      allowedRoles: ['merchandiser'] as UserRole[],
+      allowedRoles: ['merchandiser', 'wash'] as UserRole[],
     },
     {
       id: 'ready_for_parcel' as AppView,

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { SampleItem, getPriorityTone } from '../types/sample';
+import { UserRole, canUserAdvanceStage } from '../types/auth';
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
 import { SampleTypeBadge } from './SampleTypeBadge';
@@ -15,6 +16,7 @@ import {
 
 interface FinishingSectionViewProps {
   samples: SampleItem[];
+  userRole?: UserRole;
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
   onToggleChecklistItem?: (sampleId: string, itemKey: 'ironingDone' | 'threadTrimmingDone' | 'taggingDone' | 'qualityPassed') => void;
@@ -22,6 +24,7 @@ interface FinishingSectionViewProps {
 
 export const FinishingSectionView: React.FC<FinishingSectionViewProps> = ({
   samples,
+  userRole = 'merchandiser',
   onSelectSample,
   onAdvanceStage,
   onToggleChecklistItem,
@@ -35,11 +38,11 @@ export const FinishingSectionView: React.FC<FinishingSectionViewProps> = ({
     if (!finishingSearch.trim()) return true;
     const q = finishingSearch.toLowerCase();
     return (
-      s.styleCode.toLowerCase().includes(q) ||
-      s.styleName.toLowerCase().includes(q) ||
-      s.poNumber.toLowerCase().includes(q) ||
-      s.buyer.toLowerCase().includes(q) ||
-      s.finishingDetails.supervisor.toLowerCase().includes(q)
+      (s.styleCode || '').toLowerCase().includes(q) ||
+      (s.styleName || '').toLowerCase().includes(q) ||
+      (s.poNumber || '').toLowerCase().includes(q) ||
+      (s.buyer || '').toLowerCase().includes(q) ||
+      (s.finishingDetails?.supervisor || '').toLowerCase().includes(q)
     );
   });
 
@@ -92,7 +95,14 @@ export const FinishingSectionView: React.FC<FinishingSectionViewProps> = ({
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filtered.map((sample) => {
-            const fin = sample.finishingDetails;
+            const fin = sample.finishingDetails || {
+              finishingLine: 'Finishing Line #1',
+              supervisor: '',
+              ironingDone: false,
+              threadTrimmingDone: false,
+              taggingDone: false,
+              qualityPassed: false,
+            };
             const pTone = getPriorityTone(sample.priority);
 
             return (
@@ -242,14 +252,20 @@ export const FinishingSectionView: React.FC<FinishingSectionViewProps> = ({
                     Target Parcel: {sample.targetParcelDate}
                   </div>
 
-                  <button
-                    onClick={() => onAdvanceStage(sample)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                  >
-                    <PackageCheck className="w-3.5 h-3.5" />
-                    <span>Complete Finishing → Ready for Parcel</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
+                  {canUserAdvanceStage(userRole, sample.stage, 'ready_for_parcel') ? (
+                    <button
+                      onClick={() => onAdvanceStage(sample)}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                    >
+                      <PackageCheck className="w-3.5 h-3.5" />
+                      <span>Complete Finishing → Ready for Parcel</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  ) : (
+                    <span className="px-3 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 text-xs font-bold">
+                      In Finishing Status
+                    </span>
+                  )}
                 </div>
               </div>
             );

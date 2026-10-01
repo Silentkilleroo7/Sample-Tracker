@@ -189,18 +189,20 @@ export function mapRowToSample(row: any): SampleItem {
     images: Array.isArray(row.images) ? row.images : [],
     stageHistory: Array.isArray(row.stage_history) ? row.stage_history : [],
     sewingOperator: row.sewing_operator || undefined,
-    washDetails: row.wash_details || {
-      washType: 'Standard Wash',
-      washTechnician: '',
-      washFormula: '',
+    washDetails: {
+      washType: row.wash_details?.washType || 'Standard Wash',
+      washTechnician: row.wash_details?.washTechnician || '',
+      washFormula: row.wash_details?.washFormula || '',
+      ...(row.wash_details || {}),
     },
-    finishingDetails: row.finishing_details || {
-      finishingLine: 'Finishing Line #1',
-      supervisor: '',
-      ironingDone: false,
-      threadTrimmingDone: false,
-      taggingDone: false,
-      qualityPassed: false,
+    finishingDetails: {
+      finishingLine: row.finishing_details?.finishingLine || 'Finishing Line #1',
+      supervisor: row.finishing_details?.supervisor || '',
+      ironingDone: Boolean(row.finishing_details?.ironingDone),
+      threadTrimmingDone: Boolean(row.finishing_details?.threadTrimmingDone),
+      taggingDone: Boolean(row.finishing_details?.taggingDone),
+      qualityPassed: Boolean(row.finishing_details?.qualityPassed),
+      ...(row.finishing_details || {}),
     },
     parcelDetails: {
       courier: pDetails.courier || 'DHL Express Worldwide',
@@ -619,9 +621,9 @@ export async function fetchAllSupabaseData(): Promise<{
 export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> {
   if (!supabase) return;
   const fullRow = mapSampleToRow(sample);
-  const { error } = await supabase.from('samples').upsert(fullRow);
+  const { error } = await supabase.from('samples').upsert(fullRow, { onConflict: 'id' });
   if (error) {
-    // Fallback if new columns are not yet added to table
+    // Fallback 1: omit newer optional columns if not yet migrated
     const {
       bl_number,
       thread_note,
@@ -635,9 +637,39 @@ export async function upsertSampleInSupabase(sample: SampleItem): Promise<void> 
       per_pcs_consumption_yards,
       ...legacyRow
     } = fullRow;
-    const { error: fallbackErr } = await supabase.from('samples').upsert(legacyRow);
+    const { error: fallbackErr } = await supabase
+      .from('samples')
+      .upsert(legacyRow, { onConflict: 'id' });
+
     if (fallbackErr) {
-      console.error('Supabase upsert sample error:', fallbackErr);
+      // Fallback 2: direct stage & JSONB details update by id
+      const { error: updateErr } = await supabase
+        .from('samples')
+        .update({
+          stage: sample.stage,
+          stage_history: sample.stageHistory || [],
+          wash_details: sample.washDetails || {},
+          finishing_details: sample.finishingDetails || {},
+          parcel_details: sample.parcelDetails || {},
+          approval_details: sample.approvalDetails || {},
+          updated_at: sample.updatedAt || new Date().toISOString(),
+        })
+        .eq('id', sample.id);
+
+      if (updateErr) {
+        // Fallback 3: minimal stage update by id
+        const { error: minErr } = await supabase
+          .from('samples')
+          .update({
+            stage: sample.stage,
+            updated_at: sample.updatedAt || new Date().toISOString(),
+          })
+          .eq('id', sample.id);
+
+        if (minErr) {
+          console.error('Supabase upsert/update sample error:', minErr);
+        }
+      }
     }
   }
 }

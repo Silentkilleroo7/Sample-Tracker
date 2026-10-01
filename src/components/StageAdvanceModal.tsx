@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Truck,
   Waves,
+  Sparkles,
 } from 'lucide-react';
 
 interface StageAdvanceModalProps {
@@ -32,6 +33,8 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
   const [note, setNote] = useState('');
   const [operator, setOperator] = useState('');
   const [washRecipe, setWashRecipe] = useState('');
+  const [finishingLine, setFinishingLine] = useState('Finishing Line #1');
+  const [finishingSupervisor, setFinishingSupervisor] = useState('');
   const [courierName, setCourierName] = useState('');
   const [trackingNumber, setTrackingNumber] = useState('');
   const [parcelDate, setParcelDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -40,10 +43,12 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
     if (sample && isOpen) {
       setNote('');
       setOperator('');
-      setWashRecipe(sample.washDetails.washType || '');
-      setCourierName(sample.parcelDetails.courier || '');
-      setTrackingNumber(sample.parcelDetails.trackingNumber || '');
-      setParcelDate(sample.parcelDetails.parcelDate || new Date().toISOString().split('T')[0]);
+      setWashRecipe(sample.washDetails?.washType || 'Standard Wash');
+      setFinishingLine(sample.finishingDetails?.finishingLine || 'Finishing Line #1');
+      setFinishingSupervisor(sample.finishingDetails?.supervisor || '');
+      setCourierName(sample.parcelDetails?.courier || '');
+      setTrackingNumber(sample.parcelDetails?.trackingNumber || '');
+      setParcelDate(sample.parcelDetails?.parcelDate || new Date().toISOString().split('T')[0]);
     }
   }, [sample, isOpen]);
 
@@ -62,16 +67,56 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
     if (nextStageKey === 'wash') {
       stageUpdates = {
         washDetails: {
-          ...sample.washDetails,
-          washType: washRecipe.trim(),
+          ...(sample.washDetails || {
+            washType: 'Standard Wash',
+            washTechnician: '',
+            washFormula: '',
+          }),
+          washType: washRecipe.trim() || sample.washDetails?.washType || 'Standard Wash',
           startedAt: new Date().toISOString(),
+        },
+      };
+    } else if (nextStageKey === 'finishing') {
+      stageUpdates = {
+        washDetails: {
+          ...(sample.washDetails || {
+            washType: 'Standard Wash',
+            washTechnician: '',
+            washFormula: '',
+          }),
+          completedAt: new Date().toISOString(),
+        },
+        finishingDetails: {
+          ...(sample.finishingDetails || {
+            finishingLine: 'Finishing Line #1',
+            supervisor: '',
+            ironingDone: false,
+            threadTrimmingDone: false,
+            taggingDone: false,
+            qualityPassed: false,
+          }),
+          finishingLine: finishingLine.trim() || sample.finishingDetails?.finishingLine || 'Finishing Line #1',
+          supervisor:
+            finishingSupervisor.trim() ||
+            operator.trim() ||
+            sample.finishingDetails?.supervisor ||
+            'Finishing Supervisor',
+          notes: note.trim() || sample.finishingDetails?.notes || '',
         },
       };
     } else if (nextStageKey === 'ready_for_parcel') {
       stageUpdates = {
         parcelDetails: {
-          ...sample.parcelDetails,
-          courier: courierName.trim(),
+          ...(sample.parcelDetails || {
+            courier: 'DHL Express Worldwide',
+            trackingNumber: '',
+            parcelDate,
+            recipient: '',
+            destinationCountry: '',
+            dispatchStatus: 'dispatched',
+            workbookSent: false,
+          }),
+          courier: courierName.trim() || sample.parcelDetails?.courier || 'DHL Express Worldwide',
           trackingNumber: trackingNumber.trim(),
           parcelDate,
           dispatchStatus: 'dispatched',
@@ -87,7 +132,7 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
       sample.id,
       nextStageKey,
       transitionNote,
-      operator.trim() || 'Operator',
+      operator.trim() || finishingSupervisor.trim() || 'Operator',
       stageUpdates
     );
     onClose();
@@ -164,6 +209,37 @@ export const StageAdvanceModal: React.FC<StageAdvanceModalProps> = ({
                 placeholder="Enter Wash Recipe / Formula"
                 className="w-full bg-slate-800 border border-cyan-500/40 rounded-lg p-2 text-white text-xs placeholder-slate-500"
               />
+            </div>
+          )}
+
+          {nextStageKey === 'finishing' && (
+            <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 space-y-2">
+              <div className="flex items-center gap-1.5 text-amber-300 font-semibold">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                Post-Wash Finishing Line &amp; Supervisor Handover:
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 text-[11px] mb-1">Finishing Line</label>
+                  <input
+                    type="text"
+                    value={finishingLine}
+                    onChange={(e) => setFinishingLine(e.target.value)}
+                    placeholder="e.g. Finishing Line #1"
+                    className="w-full bg-slate-800 border border-amber-500/40 rounded-lg p-1.5 text-white font-medium placeholder-slate-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 text-[11px] mb-1">Finishing Supervisor</label>
+                  <input
+                    type="text"
+                    value={finishingSupervisor}
+                    onChange={(e) => setFinishingSupervisor(e.target.value)}
+                    placeholder="Optional Supervisor Name"
+                    className="w-full bg-slate-800 border border-amber-500/40 rounded-lg p-1.5 text-white font-medium placeholder-slate-500"
+                  />
+                </div>
+              </div>
             </div>
           )}
 

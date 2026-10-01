@@ -22,6 +22,8 @@ interface WashSectionViewProps {
   userRole?: UserRole;
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
+  onDirectMoveToFinishing?: (sample: SampleItem) => void;
+  onNavigateToFinishing?: () => void;
   onUpdateWashDetails?: (sampleId: string, details: any) => void;
 }
 
@@ -30,22 +32,25 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
   userRole = 'merchandiser',
   onSelectSample,
   onAdvanceStage,
+  onDirectMoveToFinishing,
+  onNavigateToFinishing,
 }) => {
   const [washSearch, setWashSearch] = useState('');
 
   // Wash Page strictly shows ONLY styles in Wash Status (stage === 'wash')
   const washSamples = samples.filter((s) => s.stage === 'wash');
+  const finishingSamplesCount = samples.filter((s) => s.stage === 'finishing').length;
 
   const filtered = washSamples.filter((s) => {
     if (!washSearch.trim()) return true;
     const q = washSearch.toLowerCase();
     return (
-      s.styleCode.toLowerCase().includes(q) ||
-      s.styleName.toLowerCase().includes(q) ||
-      s.poNumber.toLowerCase().includes(q) ||
-      s.buyer.toLowerCase().includes(q) ||
-      s.washDetails.washType.toLowerCase().includes(q) ||
-      s.washDetails.washTechnician.toLowerCase().includes(q)
+      (s.styleCode || '').toLowerCase().includes(q) ||
+      (s.styleName || '').toLowerCase().includes(q) ||
+      (s.poNumber || '').toLowerCase().includes(q) ||
+      (s.buyer || '').toLowerCase().includes(q) ||
+      (s.washDetails?.washType || '').toLowerCase().includes(q) ||
+      (s.washDetails?.washTechnician || '').toLowerCase().includes(q)
     );
   });
 
@@ -62,11 +67,11 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
             Wash Status Styles Only (Move Wash → Finishing)
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-xl">
-            This page displays only styles currently in <strong>Wash Status</strong>. Advance completed wash styles to the Finishing page.
+            This page displays only styles currently in <strong>Wash Status</strong>. Click <strong>Complete Wash → Move to Finishing</strong> to immediately update status to Finishing.
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
-          <div className="p-3 rounded-xl bg-slate-900/90 border border-cyan-400 text-center min-w-[135px]">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="p-3 rounded-xl bg-slate-900/90 border border-cyan-400 text-center min-w-[125px]">
             <span className="text-2xl font-mono font-black text-cyan-400">
               {washSamples.length}
             </span>
@@ -74,6 +79,23 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
               In Wash Status
             </div>
           </div>
+          {onNavigateToFinishing && (
+            <button
+              type="button"
+              onClick={onNavigateToFinishing}
+              className="p-3 rounded-xl bg-amber-950/70 hover:bg-amber-900/80 border border-amber-500/50 text-left min-w-[145px] transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-2xl font-mono font-black text-amber-400">
+                  {finishingSamplesCount}
+                </span>
+                <ArrowRight className="w-4 h-4 text-amber-400 group-hover:translate-x-1 transition-transform" />
+              </div>
+              <div className="text-[10px] text-amber-200 uppercase font-bold mt-0.5">
+                Open Finishing Page
+              </div>
+            </button>
+          )}
         </div>
       </div>
 
@@ -98,7 +120,11 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {filtered.map((sample) => {
-            const wash = sample.washDetails;
+            const wash = sample.washDetails || {
+              washType: 'Standard Garment Wash',
+              washTechnician: '',
+              washFormula: '',
+            };
             const pTone = getPriorityTone(sample.priority);
 
             return (
@@ -203,32 +229,36 @@ export const WashSectionView: React.FC<WashSectionViewProps> = ({
                   </div>
                 </div>
 
-                {/* Footer with Move to Wash or Move to Finishing button */}
+                {/* Footer with Move to Wash or Move to Finishing buttons */}
                 <div className="mt-4 pt-3 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="text-[11px] text-slate-400 flex items-center gap-1 font-mono">
                     <Calendar className="w-3 h-3 text-slate-500" />
                     Target Parcel: {sample.targetParcelDate}
                   </div>
 
-                  {sample.stage === 'sewing' ? (
+                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    {onDirectMoveToFinishing && (
+                      <button
+                        type="button"
+                        onClick={() => onDirectMoveToFinishing(sample)}
+                        className="flex-1 sm:flex-initial min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+                        title="Immediately update status from Wash to Finishing"
+                      >
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>Complete Wash → Move to Finishing</span>
+                        <ArrowRight className="w-4 h-4 shrink-0" />
+                      </button>
+                    )}
                     <button
+                      type="button"
                       onClick={() => onAdvanceStage(sample)}
-                      className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/30 transition-all cursor-pointer"
+                      className="min-h-[44px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg shadow-amber-600/30 transition-all cursor-pointer"
+                      title="Advance to Finishing with custom handover note"
                     >
-                      <Waves className="w-4 h-4 shrink-0" />
-                      <span>Move Sewing → Wash Status</span>
-                      <ArrowRight className="w-4 h-4 shrink-0" />
+                      <span>{onDirectMoveToFinishing ? 'With Note' : 'Complete Wash → Move to Finishing'}</span>
+                      <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                     </button>
-                  ) : (
-                    <button
-                      onClick={() => onAdvanceStage(sample)}
-                      className="w-full sm:w-auto min-h-[44px] flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-lg shadow-amber-600/30 transition-all cursor-pointer"
-                    >
-                      <Sparkles className="w-4 h-4 shrink-0" />
-                      <span>Complete Wash → Move to Finishing</span>
-                      <ArrowRight className="w-4 h-4 shrink-0" />
-                    </button>
-                  )}
+                  </div>
                 </div>
               </div>
             );

@@ -213,10 +213,31 @@ export default function App() {
       if (!data || !isMounted) return;
 
       // Merge cloud and local state by ID so inputted data is never deleted or lost
+      // and never overwrite a newer local stage/status update with a stale cloud row
       setSamples((prev) => {
         const map = new Map<string, SampleItem>();
         prev.forEach((item) => map.set(item.id, item));
-        data.samples.forEach((item) => map.set(item.id, item));
+        data.samples.forEach((cloudItem) => {
+          const localItem = map.get(cloudItem.id);
+          if (!localItem) {
+            map.set(cloudItem.id, cloudItem);
+          } else {
+            const localTime = new Date(localItem.updatedAt || 0).getTime();
+            const cloudTime = new Date(cloudItem.updatedAt || 0).getTime();
+            const localHistLen = Array.isArray(localItem.stageHistory)
+              ? localItem.stageHistory.length
+              : 0;
+            const cloudHistLen = Array.isArray(cloudItem.stageHistory)
+              ? cloudItem.stageHistory.length
+              : 0;
+            if (cloudTime >= localTime && cloudHistLen >= localHistLen) {
+              map.set(cloudItem.id, cloudItem);
+            } else {
+              // Local item has a newer stage/update — re-sync to Supabase in background
+              void upsertSampleInSupabase(localItem);
+            }
+          }
+        });
         return Array.from(map.values());
       });
 
@@ -782,8 +803,9 @@ export default function App() {
     stageUpdates?: any
   ) => {
     const sample = samples.find((s) => s.id === sampleId);
+    if (!sample) return;
+
     if (
-      sample &&
       currentUser &&
       !canUserAdvanceStage(currentUser.role, sample.stage, targetStage)
     ) {
@@ -796,44 +818,74 @@ export default function App() {
     }
 
     const effectiveOperator = operator?.trim() || currentUser?.displayName || 'Operator';
+    const nowIso = new Date().toISOString();
+
+    const updatedHistory = [
+      ...(sample.stageHistory || []),
+      {
+        stage: targetStage,
+        timestamp: nowIso,
+        note:
+          note?.trim() ||
+          `Completed ${STAGE_CONFIG[sample.stage].label} and advanced to ${STAGE_CONFIG[targetStage].label}`,
+        operator: effectiveOperator,
+      },
+    ];
+
+    const defaultFinishingUpdates =
+      targetStage === 'finishing'
+        ? {
+            washDetails: {
+              ...(sample.washDetails || {
+                washType: 'Standard Wash',
+                washTechnician: '',
+                washFormula: '',
+              }),
+              completedAt: nowIso,
+              ...(stageUpdates?.washDetails || {}),
+            },
+            finishingDetails: {
+              finishingLine: sample.finishingDetails?.finishingLine || 'Finishing Line #1',
+              supervisor: sample.finishingDetails?.supervisor || effectiveOperator,
+              ironingDone: Boolean(sample.finishingDetails?.ironingDone),
+              threadTrimmingDone: Boolean(sample.finishingDetails?.threadTrimmingDone),
+              taggingDone: Boolean(sample.finishingDetails?.taggingDone),
+              qualityPassed: Boolean(sample.finishingDetails?.qualityPassed),
+              ...(stageUpdates?.finishingDetails || {}),
+            },
+          }
+        : {};
+
+    const updatedSample: SampleItem = {
+      ...sample,
+      stage: targetStage,
+      updatedAt: nowIso,
+      stageHistory: updatedHistory,
+      ...stageUpdates,
+      ...defaultFinishingUpdates,
+    };
 
     setSamples((prev) =>
-      prev.map((s) => {
-        if (s.id === sampleId) {
-          const updatedHistory = [
-            ...s.stageHistory,
-            {
-              stage: targetStage,
-              timestamp: new Date().toISOString(),
-              note,
-              operator: effectiveOperator,
-            },
-          ];
-
-          const updated = {
-            ...s,
-            stage: targetStage,
-            updatedAt: new Date().toISOString(),
-            stageHistory: updatedHistory,
-            ...stageUpdates,
-          };
-
-          void upsertSampleInSupabase(updated);
-          return updated;
-        }
-        return s;
-      })
+      prev.map((s) => (s.id === sampleId ? updatedSample : s))
     );
 
-    const styleCode = sample?.styleCode || 'Style';
+    if (selectedSampleForDetail && selectedSampleForDetail.id === sampleId) {
+      setSelectedSampleForDetail(updatedSample);
+    }
+
+    const styleCode = sample.styleCode || 'Style';
     const targetLabel = STAGE_CONFIG[targetStage].label;
 
-    sendPushNotification(
-      `Status Advanced: ${targetLabel}`,
-      `Style ${styleCode} has successfully moved to "${targetLabel}" by ${effectiveOperator}.`,
-      targetStage === 'approval_comments' ? 'success' : 'info',
-      { sampleId, styleCode }
-    );
+    // Persist sample stage change to Supabase first, then send push notification
+    void (async () => {
+      await upsertSampleInSupabase(updatedSample);
+      sendPushNotification(
+        `Status Advanced: ${targetLabel}`,
+        `Style ${styleCode} has successfully moved to "${targetLabel}" by ${effectiveOperator}.`,
+        targetStage === 'approval_comments' || targetStage === 'finishing' ? 'success' : 'info',
+        { sampleId, styleCode }
+      );
+    })();
   };
 
   // Direct advance trigger helper
@@ -931,15 +983,23 @@ export default function App() {
     itemKey: 'ironingDone' | 'threadTrimmingDone' | 'taggingDone' | 'qualityPassed'
   ) => {
     const targetSample = samples.find((s) => s.id === sampleId);
-    const nextVal = targetSample ? !targetSample.finishingDetails[itemKey] : true;
+    const nextVal = targetSample ? !targetSample.finishingDetails?.[itemKey] : true;
     setSamples((prev) =>
       prev.map((s) => {
         if (s.id === sampleId) {
-          const currentVal = s.finishingDetails[itemKey];
+          const currentFin = s.finishingDetails || {
+            finishingLine: 'Finishing Line #1',
+            supervisor: '',
+            ironingDone: false,
+            threadTrimmingDone: false,
+            taggingDone: false,
+            qualityPassed: false,
+          };
+          const currentVal = Boolean(currentFin[itemKey]);
           const updated = {
             ...s,
             finishingDetails: {
-              ...s.finishingDetails,
+              ...currentFin,
               [itemKey]: !currentVal,
             },
             updatedAt: new Date().toISOString(),
@@ -1840,12 +1900,22 @@ export default function App() {
                     setIsDetailModalOpen(true);
                   }}
                   onAdvanceStage={handleTriggerAdvance}
+                  onDirectMoveToFinishing={(sample) => {
+                    handleConfirmAdvanceStage(
+                      sample.id,
+                      'finishing',
+                      `Completed Wash Status and moved directly to Finishing Status`,
+                      currentUser.displayName
+                    );
+                  }}
+                  onNavigateToFinishing={() => setCurrentView('finishing')}
                 />
               )}
 
-              {currentView === 'finishing' && isMerchandiser && (
+              {currentView === 'finishing' && (isMerchandiser || isWashUser) && (
                 <FinishingSectionView
                   samples={samples}
+                  userRole={currentUser.role}
                   onSelectSample={(sample) => {
                     setSelectedSampleForDetail(sample);
                     setIsDetailModalOpen(true);
