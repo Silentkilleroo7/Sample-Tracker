@@ -14,6 +14,7 @@ import {
 export type AppView = 
   | 'dashboard' 
   | 'all_samples' 
+  | 'styles'
   | 'wash' 
   | 'finishing' 
   | 'ready_for_parcel'
@@ -26,6 +27,7 @@ interface SidebarProps {
   onSelectView: (view: AppView) => void;
   counts: {
     total: number;
+    stylesCount?: number;
     sewing: number;
     wash: number;
     finishing: number;
@@ -59,6 +61,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Layers,
       count: counts.total,
       color: 'text-purple-400',
+    },
+    {
+      id: 'styles' as AppView,
+      label: 'Styles',
+      subtitle: 'Styles & Colorways',
+      icon: Layers,
+      count: counts.stylesCount,
+      color: 'text-emerald-400',
     },
     {
       id: 'wash' as AppView,

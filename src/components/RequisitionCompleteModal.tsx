@@ -303,6 +303,123 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
 
   const activeTotalFabricYards = Number((activePerPcsCons * activeTotalQty).toFixed(2));
 
+  // Itemized Rows: whenever multiple size or multiple color are listed in a single requisition,
+  // for each size & size wise (and color wise) different row will be shown in requisition print!
+  interface PrintableTableRow {
+    id: string;
+    descriptionCode: string;
+    styleName: string;
+    block: string;
+    sizeLabel: string;
+    colorWash: string;
+    fabricCode: string;
+    fitting: string;
+    thread: string;
+    quantity: number;
+    colorItemIndex?: number;
+    sizeItemIndex?: number;
+  }
+
+  const printableRows: PrintableTableRow[] = (() => {
+    const desc = form.descriptionCode || sample.styleCode || '';
+    const style = form.styleName || sample.styleName || '';
+    const block = form.block || 'as spec';
+    const fitting = form.fitting || 'As Tech Pack & comments';
+    const thread = form.threadNote || form.threadInstruction || 'Same as Instructions';
+    const defaultColorWash = form.colorWash || sample.color || 'Mid wash';
+    const defaultFabricCode = form.fabricCode || sample.fabricCode || '';
+
+    const hasMultiSizes = activeSizeBreakdown.length > 1;
+    const hasMultiColors = activeColorBreakdown.length > 1;
+
+    // Case 1: Both Multi-color and Multi-size -> Each color × size gets its own distinct row!
+    if (hasMultiColors && hasMultiSizes) {
+      const rows: PrintableTableRow[] = [];
+      activeColorBreakdown.forEach((cItem, cIdx) => {
+        const cWashStr =
+          cItem.wash && !cItem.color.toLowerCase().includes(cItem.wash.toLowerCase())
+            ? `${cItem.color} / ${cItem.wash}`
+            : cItem.color || defaultColorWash;
+        const cFabric = cItem.fabricCode || defaultFabricCode;
+
+        activeSizeBreakdown.forEach((sItem, sIdx) => {
+          rows.push({
+            id: `row-${cIdx}-${sIdx}`,
+            descriptionCode: desc,
+            styleName: style,
+            block,
+            sizeLabel: `Size ${sItem.size}`,
+            colorWash: cWashStr,
+            fabricCode: cFabric,
+            fitting,
+            thread,
+            quantity: sItem.quantity || 1,
+            colorItemIndex: cIdx,
+            sizeItemIndex: sIdx,
+          });
+        });
+      });
+      return rows;
+    }
+
+    // Case 2: Multi-size only (single color) -> For each size, size-wise different row shown!
+    if (hasMultiSizes) {
+      return activeSizeBreakdown.map((sItem, sIdx) => ({
+        id: `row-sz-${sIdx}`,
+        descriptionCode: desc,
+        styleName: style,
+        block,
+        sizeLabel: `Size ${sItem.size}`,
+        colorWash: defaultColorWash,
+        fabricCode: defaultFabricCode,
+        fitting,
+        thread,
+        quantity: sItem.quantity || 1,
+        sizeItemIndex: sIdx,
+      }));
+    }
+
+    // Case 3: Multi-color only (single size) -> For each color, color-wise different row shown!
+    if (hasMultiColors) {
+      return activeColorBreakdown.map((cItem, cIdx) => {
+        const cWashStr =
+          cItem.wash && !cItem.color.toLowerCase().includes(cItem.wash.toLowerCase())
+            ? `${cItem.color} / ${cItem.wash}`
+            : cItem.color || defaultColorWash;
+        const cFabric = cItem.fabricCode || defaultFabricCode;
+        return {
+          id: `row-col-${cIdx}`,
+          descriptionCode: desc,
+          styleName: style,
+          block,
+          sizeLabel: cItem.sizes ? `Size ${cItem.sizes}` : `Size ${activeSizeNames}`,
+          colorWash: cWashStr,
+          fabricCode: cFabric,
+          fitting,
+          thread,
+          quantity: cItem.quantity || 1,
+          colorItemIndex: cIdx,
+        };
+      });
+    }
+
+    // Case 4: Single size, single color
+    return [
+      {
+        id: 'row-single',
+        descriptionCode: desc,
+        styleName: style,
+        block,
+        sizeLabel: `${activeTotalQty}x Size ${activeSizeNames}`,
+        colorWash: defaultColorWash,
+        fabricCode: defaultFabricCode,
+        fitting,
+        thread,
+        quantity: activeTotalQty,
+      },
+    ];
+  })();
+
   const triggerDedicatedPrint = () => {
     const sheetEl = document.getElementById('printable-requisition-sheet');
     if (!sheetEl) {
@@ -929,6 +1046,41 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                   </div>
                 </div>
 
+                {/* Priority Stamp Badge (Top-Right of Requisition Sheet) */}
+                <div className="sm:absolute sm:right-0 sm:top-0 mb-2 sm:mb-0 inline-block">
+                  <div
+                    className="border px-3 py-1 text-center font-black uppercase text-[11px] tracking-wider shadow-xs"
+                    style={{
+                      backgroundColor:
+                        form.priorityType === 'urgent'
+                          ? '#dc2626'
+                          : form.priorityType === 'high'
+                          ? '#fee2e2'
+                          : '#ffffff',
+                      color:
+                        form.priorityType === 'urgent'
+                          ? '#ffffff'
+                          : form.priorityType === 'high'
+                          ? '#991b1b'
+                          : '#000000',
+                      borderColor:
+                        form.priorityType === 'urgent'
+                          ? '#b91c1c'
+                          : form.priorityType === 'high'
+                          ? '#f87171'
+                          : '#000000',
+                      WebkitPrintColorAdjust: 'exact',
+                      printColorAdjust: 'exact',
+                    }}
+                  >
+                    {form.priorityType === 'urgent'
+                      ? 'URGENT PRIORITY ( 1 DAY )'
+                      : form.priorityType === 'high'
+                      ? 'HIGH PRIORITY'
+                      : 'NORMAL PRIORITY'}
+                  </div>
+                </div>
+
                 {/* Centered Underlined Company & Form Title (Exact match to attached image) */}
                 <div className="text-center">
                   {isEditMode && !isRequisitionLocked ? (
@@ -1022,10 +1174,11 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                   </div>
                 </div>
 
-                {/* Row 3 Left: Type (Urgent / Normal Checkboxes like attached image) */}
-                <div className="col-span-7 flex items-center gap-3 pt-1">
-                  <span className="font-bold text-black w-[70px] shrink-0">Type:</span>
-                  <div className="flex items-center gap-5 flex-wrap">
+                {/* Row 3 Left: Priority Type (Normal: White, High: Little Red, Urgent: Full Red) */}
+                <div className="col-span-7 flex items-center gap-2 pt-1">
+                  <span className="font-bold text-black w-[50px] shrink-0">Type:</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* URGENT (1 DAY) - Full Red */}
                     <button
                       type="button"
                       disabled={!isEditMode || isRequisitionLocked}
@@ -1034,18 +1187,66 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                         !isRequisitionLocked &&
                         setForm({ ...form, priorityType: 'urgent' })
                       }
-                      className={`flex items-center gap-2 ${
+                      className={`flex items-center gap-1.5 px-2 py-0.5 border rounded ${
                         isEditMode && !isRequisitionLocked ? 'cursor-pointer' : 'cursor-default'
                       }`}
+                      style={{
+                        backgroundColor: form.priorityType === 'urgent' ? '#dc2626' : '#ffffff',
+                        color: form.priorityType === 'urgent' ? '#ffffff' : '#000000',
+                        borderColor: form.priorityType === 'urgent' ? '#b91c1c' : '#94a3b8',
+                        WebkitPrintColorAdjust: 'exact',
+                        printColorAdjust: 'exact',
+                      }}
                     >
-                      <span className="w-7 h-4 border border-black inline-flex items-center justify-center text-[10px] font-black">
+                      <span
+                        className="w-4 h-4 border inline-flex items-center justify-center text-[9px] font-black"
+                        style={{
+                          borderColor: form.priorityType === 'urgent' ? '#ffffff' : '#000000',
+                          color: form.priorityType === 'urgent' ? '#ffffff' : '#000000',
+                        }}
+                      >
                         {form.priorityType === 'urgent' ? '✓' : ''}
                       </span>
-                      <span className="font-bold text-[11px] uppercase text-black">
+                      <span className="font-bold text-[10px] uppercase">
                         URGENT ( 1 DAY )
                       </span>
                     </button>
 
+                    {/* HIGH - Little Red (Pastel Light Red) */}
+                    <button
+                      type="button"
+                      disabled={!isEditMode || isRequisitionLocked}
+                      onClick={() =>
+                        isEditMode &&
+                        !isRequisitionLocked &&
+                        setForm({ ...form, priorityType: 'high' })
+                      }
+                      className={`flex items-center gap-1.5 px-2 py-0.5 border rounded ${
+                        isEditMode && !isRequisitionLocked ? 'cursor-pointer' : 'cursor-default'
+                      }`}
+                      style={{
+                        backgroundColor: form.priorityType === 'high' ? '#fee2e2' : '#ffffff',
+                        color: form.priorityType === 'high' ? '#991b1b' : '#000000',
+                        borderColor: form.priorityType === 'high' ? '#f87171' : '#94a3b8',
+                        WebkitPrintColorAdjust: 'exact',
+                        printColorAdjust: 'exact',
+                      }}
+                    >
+                      <span
+                        className="w-4 h-4 border inline-flex items-center justify-center text-[9px] font-black"
+                        style={{
+                          borderColor: form.priorityType === 'high' ? '#991b1b' : '#000000',
+                          color: form.priorityType === 'high' ? '#991b1b' : '#000000',
+                        }}
+                      >
+                        {form.priorityType === 'high' ? '✓' : ''}
+                      </span>
+                      <span className="font-bold text-[10px] uppercase">
+                        HIGH
+                      </span>
+                    </button>
+
+                    {/* NORMAL (2 DAYS / MORE) - White Color */}
                     <button
                       type="button"
                       disabled={!isEditMode || isRequisitionLocked}
@@ -1054,14 +1255,23 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                         !isRequisitionLocked &&
                         setForm({ ...form, priorityType: 'normal' })
                       }
-                      className={`flex items-center gap-2 ${
+                      className={`flex items-center gap-1.5 px-2 py-0.5 border border-black rounded ${
                         isEditMode && !isRequisitionLocked ? 'cursor-pointer' : 'cursor-default'
                       }`}
+                      style={{
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        borderColor: '#000000',
+                        WebkitPrintColorAdjust: 'exact',
+                        printColorAdjust: 'exact',
+                      }}
                     >
-                      <span className="w-7 h-4 border border-black inline-flex items-center justify-center text-[10px] font-black">
-                        {form.priorityType !== 'urgent' ? '✓' : ''}
+                      <span className="w-4 h-4 border border-black inline-flex items-center justify-center text-[9px] font-black">
+                        {form.priorityType === 'normal' || (!form.priorityType || (form.priorityType !== 'urgent' && form.priorityType !== 'high'))
+                          ? '✓'
+                          : ''}
                       </span>
-                      <span className="font-bold text-[11px] uppercase text-black">
+                      <span className="font-bold text-[10px] uppercase">
                         NORMAL ( 2 DAYS / MORE )
                       </span>
                     </button>
@@ -1071,7 +1281,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                 {/* Row 3 Right: Type of Sample */}
                 <div className="col-span-5 flex items-baseline justify-end gap-2 pt-1">
                   <span className="font-bold text-black shrink-0">Type of Sample:</span>
-                  <div className="border-b border-black min-w-[190px] pb-0.5 font-bold text-black text-center">
+                  <div className="border-b border-black min-w-[180px] pb-0.5 font-bold text-black text-center">
                     {isEditMode && !isRequisitionLocked ? (
                       <input
                         type="text"
@@ -1087,7 +1297,7 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
               </div>
 
               {/* =============================================================== */}
-              {/* 3. MAIN 9-COLUMN SPECIFICATION TABLE (EXACT MATCH TO IMAGE)     */}
+              {/* 3. MAIN 9-COLUMN SPECIFICATION TABLE (MULTI-ROW FOR SIZES/COLORS) */}
               {/* =============================================================== */}
               <table className="w-full border-collapse border border-black text-[12px]">
                 <thead>
@@ -1104,16 +1314,16 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                     <th className="border-r border-black py-2 px-2 w-[13%] text-center font-bold uppercase text-[11px] text-black">
                       SAMPLE SIZE
                     </th>
-                    <th className="border-r border-black py-2 px-2 w-[12%] text-center font-bold uppercase text-[11px] text-black">
+                    <th className="border-r border-black py-2 px-2 w-[13%] text-center font-bold uppercase text-[11px] text-black">
                       COLOR /WASH
                     </th>
-                    <th className="border-r border-black py-2 px-2 w-[10%] text-center font-bold uppercase text-[11px] text-black">
+                    <th className="border-r border-black py-2 px-2 w-[11%] text-center font-bold uppercase text-[11px] text-black">
                       FABRIC CODE
                     </th>
-                    <th className="border-r border-black py-2 px-2 w-[12%] text-center font-bold uppercase text-[11px] text-black">
+                    <th className="border-r border-black py-2 px-2 w-[11%] text-center font-bold uppercase text-[11px] text-black">
                       FITTING
                     </th>
-                    <th className="border-r border-black py-2 px-2 w-[12%] text-center font-bold uppercase text-[11px] text-black">
+                    <th className="border-r border-black py-2 px-2 w-[11%] text-center font-bold uppercase text-[11px] text-black">
                       THREAD
                     </th>
                     <th className="py-2 px-2 w-[7%] text-center font-bold uppercase text-[11px] text-black">
@@ -1123,190 +1333,181 @@ export const RequisitionCompleteModal: React.FC<RequisitionCompleteModalProps> =
                 </thead>
 
                 <tbody>
-                  {/* Main Requisition Row (Compact height, zero repeated words) */}
-                  <tr className="min-h-[60px]">
-                    {/* Col 1: DESCRIPTION (Code) */}
-                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <input
-                          type="text"
-                          value={form.descriptionCode}
-                          onChange={(e) =>
-                            setForm({ ...form, descriptionCode: e.target.value })
-                          }
-                          placeholder="Description / Code"
-                          className="w-full bg-amber-50 border border-amber-400 px-1.5 py-1 text-center font-bold text-xs uppercase"
-                        />
-                      ) : (
-                        <div className="font-bold text-[13px] text-black uppercase">
-                          {form.descriptionCode || sample.styleCode}
-                        </div>
-                      )}
-                    </td>
+                  {/* Itemized Rows: Each size and/or color is rendered in its own dedicated row */}
+                  {printableRows.map((row, rIdx) => (
+                    <tr key={row.id} className="border-b border-black min-h-[36px]">
+                      {/* Col 1: DESCRIPTION (Code) */}
+                      <td className="border-r border-black py-2 px-2 text-center align-middle">
+                        {isEditMode && !isRequisitionLocked && rIdx === 0 ? (
+                          <input
+                            type="text"
+                            value={form.descriptionCode}
+                            onChange={(e) =>
+                              setForm({ ...form, descriptionCode: e.target.value })
+                            }
+                            placeholder="Description / Code"
+                            className="w-full bg-amber-50 border border-amber-400 px-1 py-0.5 text-center font-bold text-xs uppercase"
+                          />
+                        ) : (
+                          <div className="font-bold text-[12px] text-black uppercase">
+                            {row.descriptionCode}
+                          </div>
+                        )}
+                      </td>
 
-                    {/* Col 2: STYLE */}
-                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <input
-                          type="text"
-                          value={form.styleName}
-                          onChange={(e) => setForm({ ...form, styleName: e.target.value })}
-                          placeholder="Style Name"
-                          className="w-full bg-amber-50 border border-amber-400 px-1.5 py-1 text-center font-bold text-xs uppercase"
-                        />
-                      ) : (
-                        <div className="font-bold text-[12px] uppercase text-black">
-                          {form.styleName || sample.styleName}
-                        </div>
-                      )}
-                    </td>
+                      {/* Col 2: STYLE */}
+                      <td className="border-r border-black py-2 px-2 text-center align-middle">
+                        {isEditMode && !isRequisitionLocked && rIdx === 0 ? (
+                          <input
+                            type="text"
+                            value={form.styleName}
+                            onChange={(e) => setForm({ ...form, styleName: e.target.value })}
+                            placeholder="Style Name"
+                            className="w-full bg-amber-50 border border-amber-400 px-1 py-0.5 text-center font-bold text-xs uppercase"
+                          />
+                        ) : (
+                          <div className="font-bold text-[12px] uppercase text-black">
+                            {row.styleName}
+                          </div>
+                        )}
+                      </td>
 
-                    {/* Col 3: BLOCK */}
-                    <td className="border-r border-black py-2.5 px-2 text-center font-bold text-[12px] text-black align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <input
-                          type="text"
-                          value={form.block}
-                          onChange={(e) => setForm({ ...form, block: e.target.value })}
-                          placeholder="as spec"
-                          className="w-full bg-amber-50 border border-amber-400 px-1 py-1 text-center font-bold text-xs"
-                        />
-                      ) : (
-                        <span>{form.block || 'as spec'}</span>
-                      )}
-                    </td>
+                      {/* Col 3: BLOCK */}
+                      <td className="border-r border-black py-2 px-2 text-center font-bold text-[12px] text-black align-middle">
+                        {isEditMode && !isRequisitionLocked && rIdx === 0 ? (
+                          <input
+                            type="text"
+                            value={form.block}
+                            onChange={(e) => setForm({ ...form, block: e.target.value })}
+                            placeholder="as spec"
+                            className="w-full bg-amber-50 border border-amber-400 px-1 py-0.5 text-center font-bold text-xs"
+                          />
+                        ) : (
+                          <span>{row.block}</span>
+                        )}
+                      </td>
 
-                    {/* Col 4: SAMPLE SIZE (Does NOT repeat Sample Type, since Type of Sample is in header) */}
-                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <div className="space-y-1.5 text-left">
+                      {/* Col 4: SAMPLE SIZE (Individual row for each size) */}
+                      <td className="border-r border-black py-2 px-2 text-center align-middle font-bold text-[12px] text-black">
+                        {row.sizeLabel}
+                      </td>
+
+                      {/* Col 5: COLOR / WASH */}
+                      <td className="border-r border-black py-2 px-2 text-center align-middle">
+                        {isEditMode &&
+                        !isRequisitionLocked &&
+                        row.colorItemIndex !== undefined &&
+                        form.colorBreakdown?.[row.colorItemIndex] ? (
+                          <input
+                            type="text"
+                            value={form.colorBreakdown[row.colorItemIndex].color}
+                            onChange={(e) => {
+                              const nextCb = [...(form.colorBreakdown || [])];
+                              nextCb[row.colorItemIndex!] = {
+                                ...nextCb[row.colorItemIndex!],
+                                color: e.target.value,
+                              };
+                              setForm({ ...form, colorBreakdown: nextCb });
+                            }}
+                            className="w-full bg-amber-50 border border-amber-400 px-1 py-0.5 text-center font-bold text-xs"
+                          />
+                        ) : (
+                          <div className="font-bold text-[12px] text-black">
+                            {row.colorWash}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Col 6: FABRIC CODE (Supports different fabric per color wash sample) */}
+                      <td className="border-r border-black py-2 px-2 text-center align-middle">
+                        {isEditMode &&
+                        !isRequisitionLocked &&
+                        row.colorItemIndex !== undefined &&
+                        form.colorBreakdown?.[row.colorItemIndex] ? (
+                          <input
+                            type="text"
+                            value={
+                              form.colorBreakdown[row.colorItemIndex].fabricCode ||
+                              form.fabricCode
+                            }
+                            onChange={(e) => {
+                              const nextCb = [...(form.colorBreakdown || [])];
+                              nextCb[row.colorItemIndex!] = {
+                                ...nextCb[row.colorItemIndex!],
+                                fabricCode: e.target.value,
+                              };
+                              setForm({ ...form, colorBreakdown: nextCb });
+                            }}
+                            className="w-full bg-amber-50 border border-amber-400 px-1 py-0.5 text-center font-bold text-xs"
+                          />
+                        ) : (
+                          <div className="font-bold text-[12px] text-black">
+                            {row.fabricCode || '—'}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Col 7: FITTING */}
+                      <td className="border-r border-black py-2 px-2 text-center align-middle">
+                        {isEditMode && !isRequisitionLocked && rIdx === 0 ? (
                           <textarea
                             rows={2}
-                            value={form.sampleSizeLabel}
+                            value={form.fitting}
+                            onChange={(e) => setForm({ ...form, fitting: e.target.value })}
+                            className="w-full bg-amber-50 border border-amber-400 p-1 text-center font-bold text-xs"
+                          />
+                        ) : (
+                          <div className="font-bold text-[12px] text-black leading-snug">
+                            {row.fitting}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Col 8: THREAD */}
+                      <td className="border-r border-black py-2 px-2 text-center align-middle">
+                        {isEditMode && !isRequisitionLocked && rIdx === 0 ? (
+                          <textarea
+                            rows={2}
+                            value={form.threadNote || form.threadInstruction}
                             onChange={(e) =>
-                              setForm({ ...form, sampleSizeLabel: e.target.value })
+                              setForm({
+                                ...form,
+                                threadNote: e.target.value,
+                                threadInstruction: e.target.value,
+                              })
                             }
                             className="w-full bg-amber-50 border border-amber-400 p-1 text-center font-bold text-xs"
                           />
-                        </div>
-                      ) : (
-                        <div className="space-y-0.5 font-bold text-[12px] text-black leading-snug">
-                          {activeSizeBreakdown.length > 1 ? (
-                            <div className="space-y-0.5">
-                              {activeSizeBreakdown.map((item, idx) => (
-                                <div key={`${item.size}-${idx}`}>
-                                  {item.quantity}x Size {item.size}
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div>
-                              {activeTotalQty}x Size {activeSizeNames}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </td>
+                        ) : (
+                          <div className="font-bold text-[12px] text-black leading-snug">
+                            {row.thread}
+                          </div>
+                        )}
+                      </td>
 
-                    {/* Col 5: COLOR /WASH */}
-                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <input
-                          type="text"
-                          value={form.colorWash}
-                          onChange={(e) =>
-                            setForm({ ...form, colorWash: e.target.value })
-                          }
-                          placeholder="e.g. Mid wash"
-                          className="w-full bg-amber-50 border border-amber-400 px-1.5 py-1 text-center font-bold text-xs"
-                        />
-                      ) : activeColorBreakdown.length > 1 ? (
-                        <div className="space-y-0.5 font-bold text-[12px] text-black">
-                          {activeColorBreakdown.map((cItem, cIdx) => (
-                            <div key={`${cItem.color}-${cIdx}`}>
-                              {cItem.color} ({cItem.quantity} Pcs)
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="font-bold text-[12px] text-black">
-                          {form.colorWash || sample.color || 'Mid wash'}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Col 6: FABRIC CODE */}
-                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <input
-                          type="text"
-                          value={form.fabricCode}
-                          onChange={(e) => setForm({ ...form, fabricCode: e.target.value })}
-                          className="w-full bg-amber-50 border border-amber-400 px-1.5 py-1 text-center font-bold text-xs"
-                        />
-                      ) : (
-                        <div className="font-bold text-[12px] text-black">
-                          {form.fabricCode || sample.fabricCode}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Col 7: FITTING */}
-                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <textarea
-                          rows={2}
-                          value={form.fitting}
-                          onChange={(e) => setForm({ ...form, fitting: e.target.value })}
-                          className="w-full bg-amber-50 border border-amber-400 p-1 text-center font-bold text-xs"
-                        />
-                      ) : (
-                        <div className="font-bold text-[12px] text-black leading-snug">
-                          {form.fitting || 'As Tech Pack & comments'}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Col 8: THREAD */}
-                    <td className="border-r border-black py-2.5 px-2 text-center align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <textarea
-                          rows={2}
-                          value={form.threadNote || form.threadInstruction}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              threadNote: e.target.value,
-                              threadInstruction: e.target.value,
-                            })
-                          }
-                          className="w-full bg-amber-50 border border-amber-400 p-1 text-center font-bold text-xs"
-                        />
-                      ) : (
-                        <div className="font-bold text-[12px] text-black leading-snug">
-                          {form.threadNote || form.threadInstruction || 'Same as Instructions'}
-                        </div>
-                      )}
-                    </td>
-
-                    {/* Col 9: QTY */}
-                    <td className="py-2.5 px-2 text-center align-middle">
-                      {isEditMode && !isRequisitionLocked ? (
-                        <input
-                          type="text"
-                          value={form.quantityText}
-                          onChange={(e) =>
-                            setForm({ ...form, quantityText: e.target.value })
-                          }
-                          className="w-full bg-amber-50 border border-amber-400 px-1 py-1 text-center font-bold text-xs"
-                        />
-                      ) : (
+                      {/* Col 9: QTY */}
+                      <td className="py-2 px-2 text-center align-middle">
                         <div className="font-bold text-[12px] text-black whitespace-nowrap">
-                          {activeTotalQty} Pcs
+                          {row.quantity} {row.quantity === 1 ? 'Pc' : 'Pcs'}
                         </div>
-                      )}
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                  ))}
+
+                  {/* Summary Total Row when there are multiple size or color breakdown rows */}
+                  {printableRows.length > 1 && (
+                    <tr className="border-t-2 border-black font-black bg-slate-50 print:bg-transparent">
+                      <td
+                        colSpan={8}
+                        className="border-r border-black py-2 px-3 text-right uppercase text-[11px] text-black"
+                      >
+                        TOTAL QUANTITY ({printableRows.length} SIZE / COLOR ITEMS)
+                      </td>
+                      <td className="py-2 px-2 text-center text-[12px] text-black whitespace-nowrap font-black">
+                        {printableRows.reduce((sum, r) => sum + r.quantity, 0)} Pcs
+                      </td>
+                    </tr>
+                  )}
 
                   {/* =========================================================== */}
                   {/* OPTIONS UNDER SINGLE REQUISITION (Thread Mokab, Leg Panel,  */}

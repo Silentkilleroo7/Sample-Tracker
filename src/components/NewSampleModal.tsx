@@ -37,6 +37,7 @@ import {
   Sparkles,
   RefreshCw,
   FileText,
+  ScrollText,
 } from 'lucide-react';
 import {
   RequisitionOptions,
@@ -84,6 +85,7 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
   const [listedColors, setListedColors] = useState<string[]>([]);
   const [colorQuantities, setColorQuantities] = useState<Record<string, number>>({});
   const [colorWashes, setColorWashes] = useState<Record<string, string>>({});
+  const [colorFabrics, setColorFabrics] = useState<Record<string, string>>({});
   const [requisitionOptions, setRequisitionOptions] = useState<SingleRequisitionOptionItem[]>([]);
   const [customReqOptionName, setCustomReqOptionName] = useState('');
 
@@ -154,13 +156,16 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
             .filter(Boolean);
     const cQtyMap: Record<string, number> = {};
     const cWashMap: Record<string, string> = {};
+    const cFabMap: Record<string, string> = {};
     cBreakdown.forEach((c) => {
       cQtyMap[c.color] = c.quantity;
       if (c.wash) cWashMap[c.color] = c.wash;
+      if (c.fabricCode) cFabMap[c.color] = c.fabricCode;
     });
     setListedColors(parsedColors);
     setColorQuantities(cQtyMap);
     setColorWashes(cWashMap);
+    setColorFabrics(cFabMap);
     setColor('');
     const breakdown = getEffectiveSizeBreakdown(stored);
     const parsedSizes =
@@ -585,11 +590,14 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
     const nextColors = listedColors.filter((c) => c !== colorToRemove);
     const nextColorQtyMap = { ...colorQuantities };
     const nextColorWashMap = { ...colorWashes };
+    const nextColorFabrics = { ...colorFabrics };
     delete nextColorQtyMap[colorToRemove];
     delete nextColorWashMap[colorToRemove];
+    delete nextColorFabrics[colorToRemove];
     setListedColors(nextColors);
     setColorQuantities(nextColorQtyMap);
     setColorWashes(nextColorWashMap);
+    setColorFabrics(nextColorFabrics);
     if (nextColors.length > 0) {
       syncTotalQuantityFromColors(nextColors, nextColorQtyMap);
     } else if (listedSizes.length > 0) {
@@ -762,6 +770,9 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
 
     const currentWash = washType.trim() || 'Standard Wash';
     const currentSizesLabel = effectiveSizeString || 'Standard';
+    const currentFabricCode = selectedFabric?.code || customFabricCode.trim().toUpperCase() || '';
+    const currentFabricName = selectedFabric?.name || customFabricName.trim() || '';
+    const currentFabricId = selectedFabric?.id || '';
 
     if (combinedColors.length === 0) {
       return [];
@@ -769,26 +780,40 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
 
     if (listedColors.length === 0 && combinedColors.length > 0) {
       const basePerColor = Math.max(1, sizeBreakdownSum);
-      return combinedColors.map((c) => ({
+      return combinedColors.map((c) => {
+        const cFabCode = colorFabrics[c] || currentFabricCode;
+        const matchedFab = fabrics.find((f) => f.code === cFabCode || f.id === cFabCode);
+        return {
+          color: c,
+          wash: colorWashes[c]?.trim() || currentWash,
+          sizes: currentSizesLabel,
+          quantity: basePerColor,
+          fabricCode: cFabCode,
+          fabricName: matchedFab?.name || currentFabricName,
+          fabricId: matchedFab?.id || currentFabricId,
+        };
+      });
+    }
+
+    return combinedColors.map((c) => {
+      const cFabCode = colorFabrics[c] || currentFabricCode;
+      const matchedFab = fabrics.find((f) => f.code === cFabCode || f.id === cFabCode);
+      return {
         color: c,
         wash: colorWashes[c]?.trim() || currentWash,
         sizes: currentSizesLabel,
-        quantity: basePerColor,
-      }));
-    }
-
-    return combinedColors.map((c) => ({
-      color: c,
-      wash: colorWashes[c]?.trim() || currentWash,
-      sizes: currentSizesLabel,
-      quantity: Math.max(
-        1,
-        Number(
-          colorQuantities[c] ??
-            (combinedColors.length === 1 ? sizeBreakdownSum : Math.max(1, sizeBreakdownSum))
-        )
-      ),
-    }));
+        quantity: Math.max(
+          1,
+          Number(
+            colorQuantities[c] ??
+              (combinedColors.length === 1 ? sizeBreakdownSum : Math.max(1, sizeBreakdownSum))
+          )
+        ),
+        fabricCode: cFabCode,
+        fabricName: matchedFab?.name || currentFabricName,
+        fabricId: matchedFab?.id || currentFabricId,
+      };
+    });
   })();
 
   const effectiveColorString =
@@ -2370,6 +2395,52 @@ export const NewSampleModal: React.FC<NewSampleModalProps> = ({
                               <span className="text-[9px] text-slate-400 font-mono">pcs</span>
                             </div>
                           </div>
+                        </div>
+
+                        {/* Fabric selection for this specific color wash sample */}
+                        <div className="pt-1.5 border-t border-slate-800/80 space-y-1">
+                          <div className="flex items-center justify-between text-[9px]">
+                            <span className="text-emerald-400 font-bold flex items-center gap-1">
+                              <ScrollText className="w-3 h-3 text-emerald-400" />
+                              <span>Fabric for {c} Wash Sample:</span>
+                            </span>
+                            {colorFabrics[c] && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = { ...colorFabrics };
+                                  delete next[c];
+                                  setColorFabrics(next);
+                                }}
+                                className="text-[9px] text-slate-400 hover:text-amber-400 underline cursor-pointer"
+                              >
+                                Reset to Main
+                              </button>
+                            )}
+                          </div>
+                          <select
+                            value={colorFabrics[c] || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val) {
+                                setColorFabrics({ ...colorFabrics, [c]: val });
+                              } else {
+                                const next = { ...colorFabrics };
+                                delete next[c];
+                                setColorFabrics(next);
+                              }
+                            }}
+                            className="w-full bg-slate-950 border border-slate-700/80 rounded px-2 py-1 text-[11px] text-white focus:outline-none focus:border-emerald-400 font-mono"
+                          >
+                            <option value="">
+                              Main Fabric: {selectedFabric?.code || customFabricCode || 'Primary Fabric'}
+                            </option>
+                            {fabrics.map((f) => (
+                              <option key={f.id} value={f.code}>
+                                {f.code} - {f.name} ({f.availableYards} yds)
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
                         <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 border-t border-slate-800/80">

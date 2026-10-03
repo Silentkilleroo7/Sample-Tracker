@@ -1113,3 +1113,38 @@ export async function upsertComponentApprovalInSupabase(params: {
     console.warn('Supabase style_component_approvals upsert skipped:', err);
   }
 }
+
+/**
+ * Upserts a style record into the Supabase 'styles' table based on style_key (Style Number + Description)
+ */
+export async function upsertStyleInSupabase(style: any): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.from('styles').upsert(
+      {
+        id: style.id,
+        style_key: style.styleKey,
+        style_code: style.styleCode,
+        style_name: style.styleName,
+        buyer: style.buyer,
+        po_number: style.poNumber || '',
+        line_code: style.lineCode || '',
+        thumbnail: style.thumbnail || null,
+        images: style.images || [],
+        colors: style.colors || [],
+        fabrics: style.fabrics || [],
+        sample_ids: style.sampleIds || [],
+        sample_count: style.sampleCount || 1,
+        total_quantity: style.totalQuantity || 1,
+        per_pcs_consumption_yards: style.perPcsConsumptionYards || 1,
+        first_requisition_date: style.firstRequisitionDate,
+        last_requisition_date: style.lastRequisitionDate,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'style_key' }
+    );
+  } catch (err) {
+    console.warn('Supabase styles table upsert skipped safely:', err);
+  }
+}
+

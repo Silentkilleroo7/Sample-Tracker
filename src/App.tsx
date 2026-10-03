@@ -21,6 +21,7 @@ import {
   getSampleImage,
   getEffectivePerPcsConsumption,
   rankSamplesBySearchQuery,
+  aggregateStylesFromSamples,
 } from './types/sample';
 import {
   FabricItem,
@@ -51,6 +52,7 @@ import {
   clearAllDatabaseTablesInSupabase,
   syncAppUsersWithSupabase,
   recordUserLoginInSupabase,
+  upsertStyleInSupabase,
 } from './lib/supabase';
 
 import { Navbar } from './components/Navbar';
@@ -60,6 +62,7 @@ import { AppView } from './components/Sidebar';
 import { MainModulesBottom } from './components/MainModulesBottom';
 import { DashboardView } from './components/DashboardView';
 import { AllSamplesView } from './components/AllSamplesView';
+import { StylesSectionView } from './components/StylesSectionView';
 import { WashSectionView } from './components/WashSectionView';
 import { FinishingSectionView } from './components/FinishingSectionView';
 import { ApprovalParcelView } from './components/ApprovalParcelView';
@@ -446,23 +449,48 @@ export default function App() {
       newSample.requisitionForm.fabricRequiredYards = exactDeductedYards;
     }
 
-    // Auto deduct exact fabric amount (Per-Pcs Consumption * Total Sample Pcs) from Fabric Inventory
-    // and lock perPcsConsumptionYards on the fabric roll so it is never asked again
+    // Auto deduct exact fabric amount from Fabric Inventory.
+    // If different fabrics are used for different color wash samples, deduct per-fabric!
+    const colorBreakdownList = newSample.colorBreakdown || [];
+    const hasDifferentFabrics = colorBreakdownList.some(
+      (c) => c.fabricCode && c.fabricCode !== newSample.fabricCode
+    );
+
+    const fabricDeductions = new Map<string, number>();
+    if (hasDifferentFabrics) {
+      colorBreakdownList.forEach((c) => {
+        const fKey = (c.fabricCode || newSample.fabricCode || '').trim().toLowerCase();
+        if (fKey) {
+          const cQty = c.quantity || 1;
+          const cYds = Number((cQty * effectivePerPcs).toFixed(2));
+          fabricDeductions.set(fKey, (fabricDeductions.get(fKey) || 0) + cYds);
+        }
+      });
+    }
+
     if (deductYards || newSample.fabricId || newSample.fabricCode) {
       setFabrics((prev) =>
         prev.map((f) => {
-          const isMatchedFabric =
+          const fCodeLower = f.code.trim().toLowerCase();
+          const isPrimaryMatch =
             (newSample.fabricId && f.id === newSample.fabricId) ||
             (!newSample.fabricId &&
               newSample.fabricCode &&
-              f.code.trim().toLowerCase() === newSample.fabricCode.trim().toLowerCase());
+              fCodeLower === newSample.fabricCode.trim().toLowerCase());
 
-          if (isMatchedFabric) {
+          const deductionForThisFabric = hasDifferentFabrics
+            ? fabricDeductions.get(fCodeLower) ||
+              (isPrimaryMatch && !fabricDeductions.has(fCodeLower) ? exactDeductedYards : 0)
+            : isPrimaryMatch
+            ? exactDeductedYards
+            : 0;
+
+          if (deductionForThisFabric > 0) {
             const updatedAvailable = Number(
-              Math.max(0, f.availableYards - exactDeductedYards).toFixed(2)
+              Math.max(0, f.availableYards - deductionForThisFabric).toFixed(2)
             );
             const updatedAllocated = Number(
-              (f.allocatedYards + exactDeductedYards).toFixed(2)
+              (f.allocatedYards + deductionForThisFabric).toFixed(2)
             );
 
             // Link style code if not already linked
@@ -482,7 +510,7 @@ export default function App() {
             if (updatedAvailable <= 5) {
               sendPushNotification(
                 'Critical Fabric Shortage Alert!',
-                `Fabric ${f.code} has fallen to ${updatedAvailable.toFixed(2)} yds (≤ 5 yds threshold) after deducting ${exactDeductedYards} yds (${effectivePerPcs} yds/pc × ${totalQty} pcs) for Style ${newSample.styleCode}.`,
+                `Fabric ${f.code} has fallen to ${updatedAvailable.toFixed(2)} yds (≤ 5 yds threshold) after deducting ${deductionForThisFabric} yds for Style ${newSample.styleCode}.`,
                 'critical',
                 { fabricCode: f.code, styleCode: newSample.styleCode }
               );
@@ -504,8 +532,21 @@ export default function App() {
       );
     }
 
-    setSamples((prev) => [newSample, ...prev]);
+    const nextSamples = [newSample, ...samples];
+    setSamples(nextSamples);
     void upsertSampleInSupabase(newSample);
+
+    // Save and sync the consolidated style in Supabase based on Style Number AND Description
+    const allConsolidated = aggregateStylesFromSamples(nextSamples);
+    const matchedStyle = allConsolidated.find(
+      (st) =>
+        st.styleCode.toUpperCase() === (newSample.styleCode || '').trim().toUpperCase() &&
+        st.styleName.toUpperCase() === (newSample.styleName || '').trim().toUpperCase()
+    );
+    if (matchedStyle) {
+      void upsertStyleInSupabase(matchedStyle);
+    }
+
     setCompletedRequisitionSample(newSample);
     setIsRequisitionCompleteModalOpen(true);
 
@@ -579,7 +620,7 @@ export default function App() {
   };
 
   const handleSaveRequisitionForm = (sampleId: string, form: VolarRequisitionForm) => {
-    const firstRow = form.rows?.[0];
+    const firstRow = (form as any).rows?.[0];
     const effectiveThread =
       form.threadNote || form.trims?.threadNote || form.threadInstruction || '';
     const effectiveZipper =
@@ -1525,6 +1566,7 @@ export default function App() {
   const counts = {
     total: samples.length,
     requisition: samples.filter((s) => s.stage === 'requisition').length,
+    stylesCount: aggregateStylesFromSamples(samples).length,
     sewing: samples.filter((s) => s.stage === 'sewing').length,
     wash: samples.filter((s) => s.stage === 'wash').length,
     finishing: samples.filter((s) => s.stage === 'finishing').length,
@@ -1615,7 +1657,7 @@ export default function App() {
                     f.name,
                     f.color,
                     f.supplier,
-                    f.rackLocation,
+                    f.location,
                     f.composition,
                     String(f.availableYards || ''),
                     ...(f.awbShipments || []).map((a) => `${a.awbNumber} ${a.courier} ${a.status}`),
@@ -1633,12 +1675,11 @@ export default function App() {
                     t.buyer,
                     t.poNumber,
                     t.fabricCode,
-                    t.color,
                     t.reportNumber,
-                    t.labName,
+                    t.testingAgency,
+                    t.testPackage,
                     t.status,
-                    t.testStage,
-                    t.failureParameter,
+                    t.failReason,
                   ]
                     .filter(Boolean)
                     .join(' ')
@@ -1858,6 +1899,34 @@ export default function App() {
                   onOpenRequisitionSlip={(sample) => {
                     setCompletedRequisitionSample(sample);
                     setIsRequisitionCompleteModalOpen(true);
+                  }}
+                />
+              )}
+
+              {currentView === 'styles' && (isMerchandiser || isSewingUser) && (
+                <StylesSectionView
+                  samples={samples}
+                  userRole={currentUser.role}
+                  onSelectSample={(sample) => {
+                    setSelectedSampleForDetail(sample);
+                    setIsDetailModalOpen(true);
+                  }}
+                  onOpenRequisitionPrint={(sample) => {
+                    setCompletedRequisitionSample(sample);
+                    setIsRequisitionCompleteModalOpen(true);
+                  }}
+                  onNewRequisitionForStyle={(sample) => {
+                    if (!isMerchandiser) return;
+                    handleSelectStoredStyleToModify(sample);
+                  }}
+                  onNewRequisition={() => {
+                    if (!isMerchandiser) return;
+                    setSelectedStyleForModification(null);
+                    setIsNewSampleModalOpen(true);
+                  }}
+                  onNavigateToView={(view, filter) => {
+                    setCurrentView(view);
+                    if (filter?.stage) setInitialStageFilter(filter.stage);
                   }}
                 />
               )}

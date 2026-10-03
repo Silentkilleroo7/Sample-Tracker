@@ -9,6 +9,7 @@ import {
   ScrollText,
   AlertOctagon,
   FlaskConical,
+  Layers,
 } from 'lucide-react';
 import { AppView } from './Sidebar';
 import { UserRole } from '../types/auth';
@@ -20,6 +21,7 @@ interface MainModulesBottomProps {
   counts: {
     total: number;
     requisition?: number;
+    stylesCount?: number;
     sewing: number;
     wash: number;
     finishing: number;
@@ -47,6 +49,16 @@ export const MainModulesBottom: React.FC<MainModulesBottomProps> = ({
       count: counts.requisition ?? 0,
       badge: counts.lowFabric > 0 ? `${counts.lowFabric} Alert` : undefined,
       badgeVariant: counts.lowFabric > 0 ? 'critical' : 'neutral',
+      color: 'text-emerald-700',
+      allowedRoles: ['merchandiser', 'sewing'] as UserRole[],
+    },
+    {
+      id: 'styles' as AppView,
+      label: 'Styles',
+      mobileLabel: 'Styles',
+      subtitle: 'Catalog & Colorways',
+      icon: Layers,
+      count: counts.stylesCount ?? 0,
       color: 'text-emerald-700',
       allowedRoles: ['merchandiser', 'sewing'] as UserRole[],
     },

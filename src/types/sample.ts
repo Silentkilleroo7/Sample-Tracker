@@ -183,6 +183,11 @@ export interface ColorBreakdownItem {
   wash?: string;
   sizes?: string;
   quantity: number;
+  fabricId?: string;
+  fabricCode?: string;
+  fabricName?: string;
+  perPcsConsumptionYards?: number;
+  fabricRequiredYards?: number;
 }
 
 export interface SingleRequisitionOptionItem {
@@ -461,13 +466,23 @@ export function getEffectiveSizeName(sample: Partial<SampleItem>): string {
  */
 export function getEffectiveColorBreakdown(sample: Partial<SampleItem>): ColorBreakdownItem[] {
   if (sample.colorBreakdown && sample.colorBreakdown.length > 0) {
-    return sample.colorBreakdown;
+    return sample.colorBreakdown.map((c) => ({
+      ...c,
+      fabricId: c.fabricId || sample.fabricId || '',
+      fabricCode: c.fabricCode || sample.fabricCode || '',
+      fabricName: c.fabricName || sample.fabricName || '',
+    }));
   }
   if (
     sample.requisitionForm?.colorBreakdown &&
     sample.requisitionForm.colorBreakdown.length > 0
   ) {
-    return sample.requisitionForm.colorBreakdown;
+    return sample.requisitionForm.colorBreakdown.map((c) => ({
+      ...c,
+      fabricId: c.fabricId || sample.fabricId || '',
+      fabricCode: c.fabricCode || sample.fabricCode || '',
+      fabricName: c.fabricName || sample.fabricName || '',
+    }));
   }
   const rawColorStr = (sample.color || '').trim();
   const parsedColors = rawColorStr
@@ -477,6 +492,9 @@ export function getEffectiveColorBreakdown(sample: Partial<SampleItem>): ColorBr
   const washName = sample.washDetails?.washType || 'Standard Wash';
   const sizeName = getEffectiveSizeName(sample);
   const totalQty = Math.max(1, Number(sample.quantity || 1));
+  const fallbackFabricId = sample.fabricId || '';
+  const fallbackFabricCode = sample.fabricCode || '';
+  const fallbackFabricName = sample.fabricName || '';
 
   if (parsedColors.length === 0) {
     return [
@@ -485,6 +503,9 @@ export function getEffectiveColorBreakdown(sample: Partial<SampleItem>): ColorBr
         wash: washName,
         sizes: sizeName,
         quantity: totalQty,
+        fabricId: fallbackFabricId,
+        fabricCode: fallbackFabricCode,
+        fabricName: fallbackFabricName,
       },
     ];
   }
@@ -503,6 +524,9 @@ export function getEffectiveColorBreakdown(sample: Partial<SampleItem>): ColorBr
     wash: washName,
     sizes: sizeName,
     quantity: perColorQty + (idx < remainder ? 1 : 0),
+    fabricId: fallbackFabricId,
+    fabricCode: fallbackFabricCode,
+    fabricName: fallbackFabricName,
   }));
 }
 
@@ -1297,5 +1321,233 @@ export function rankSamplesBySearchQuery(
   results.sort((a, b) => b.score - a.score);
   return results;
 }
+
+// ============================================================================
+// STYLES MODULE: CATALOG & COLORWAY CONSOLIDATION
+// ============================================================================
+
+export interface StyleColorwayItem {
+  color: string;
+  wash?: string;
+  sizes?: string;
+  fabricId?: string;
+  fabricCode?: string;
+  fabricName?: string;
+  quantity?: number;
+  sampleId?: string;
+  sampleType?: string;
+  stage?: SampleStage;
+  createdAt?: string;
+}
+
+export interface StyleFabricSummaryItem {
+  fabricId?: string;
+  fabricCode: string;
+  fabricName?: string;
+  usedForColors?: string[];
+}
+
+export interface StyleCatalogItem {
+  id: string; // Composite key or uuid
+  styleKey: string; // Normalized: STYLE_CODE___STYLE_DESCRIPTION
+  styleCode: string; // Style Number
+  styleName: string; // Style Description
+  buyer: string;
+  poNumber?: string;
+  lineCode?: string;
+  thumbnail?: string;
+  images?: string[];
+  colors: StyleColorwayItem[];
+  fabrics: StyleFabricSummaryItem[];
+  sampleIds: string[];
+  samples: SampleItem[];
+  sampleCount: number;
+  perPcsConsumptionYards?: number;
+  totalQuantity: number;
+  firstRequisitionDate: string;
+  lastRequisitionDate: string;
+  activeStages: SampleStage[];
+}
+
+/**
+ * Composite key helper: Styles are grouped strictly by Style Number AND Style Description.
+ * "Some times, style number can be same but description has to match with."
+ */
+export function getStyleCompositeKey(styleCode?: string, styleName?: string): string {
+  const code = (styleCode || '').trim().toUpperCase();
+  const desc = (styleName || '').trim().toUpperCase();
+  return `${code}___${desc}`;
+}
+
+/**
+ * Aggregates all samples into a consolidated Style Catalog.
+ * When multiple colorways or multiple requisitions share the same Style Number and matching Description,
+ * all colors, fabrics, and sample requisitions are listed under one unified style.
+ */
+export function aggregateStylesFromSamples(samples: SampleItem[]): StyleCatalogItem[] {
+  const map = new Map<string, StyleCatalogItem>();
+
+  for (const s of samples) {
+    const code = (s.styleCode || '').trim();
+    if (!code) continue;
+    const name = (s.styleName || '').trim();
+    const key = getStyleCompositeKey(code, name);
+
+    const cBreakdown = getEffectiveColorBreakdown(s);
+    const primaryFabricCode = s.fabricCode || '';
+    const primaryFabricName = s.fabricName || '';
+    const primaryFabricId = s.fabricId || '';
+
+    // Colorways from this sample
+    const sampleColorways: StyleColorwayItem[] = cBreakdown.map((cb) => ({
+      color: cb.color,
+      wash: cb.wash || s.washDetails?.washType || 'Standard Wash',
+      sizes: cb.sizes || getEffectiveSizeName(s),
+      fabricId: cb.fabricId || primaryFabricId,
+      fabricCode: cb.fabricCode || primaryFabricCode,
+      fabricName: cb.fabricName || primaryFabricName,
+      quantity: cb.quantity,
+      sampleId: s.id,
+      sampleType: s.sampleType,
+      stage: s.stage,
+      createdAt: s.createdAt,
+    }));
+
+    if (!map.has(key)) {
+      // First time seeing this style number + description
+      const fabricsList: StyleFabricSummaryItem[] = [];
+      if (primaryFabricCode) {
+        fabricsList.push({
+          fabricId: primaryFabricId,
+          fabricCode: primaryFabricCode,
+          fabricName: primaryFabricName,
+          usedForColors: sampleColorways.map((c) => c.color),
+        });
+      }
+      // Check colors for different fabrics
+      for (const cw of sampleColorways) {
+        if (cw.fabricCode && !fabricsList.some((f) => f.fabricCode === cw.fabricCode)) {
+          fabricsList.push({
+            fabricId: cw.fabricId,
+            fabricCode: cw.fabricCode,
+            fabricName: cw.fabricName,
+            usedForColors: [cw.color],
+          });
+        }
+      }
+
+      map.set(key, {
+        id: `style-${key.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        styleKey: key,
+        styleCode: code.toUpperCase(),
+        styleName: name,
+        buyer: s.buyer || 'Direct Buyer',
+        poNumber: s.poNumber || '',
+        lineCode: s.lineCode || '',
+        thumbnail: s.thumbnail || (s.images && s.images[0]) || undefined,
+        images: s.images || (s.thumbnail ? [s.thumbnail] : []),
+        colors: sampleColorways,
+        fabrics: fabricsList,
+        sampleIds: [s.id],
+        samples: [s],
+        sampleCount: 1,
+        perPcsConsumptionYards: getEffectivePerPcsConsumption(s),
+        totalQuantity: s.quantity || 1,
+        firstRequisitionDate: s.createdAt,
+        lastRequisitionDate: s.updatedAt || s.createdAt,
+        activeStages: [s.stage],
+      });
+    } else {
+      // Existing style with same Style Number AND Style Description -> Consolidate!
+      const existing = map.get(key)!;
+      existing.sampleCount += 1;
+      existing.totalQuantity += s.quantity || 1;
+      if (!existing.sampleIds.includes(s.id)) {
+        existing.sampleIds.push(s.id);
+        existing.samples.push(s);
+      }
+      if (!existing.activeStages.includes(s.stage)) {
+        existing.activeStages.push(s.stage);
+      }
+
+      // Merge image if current existing does not have one
+      if (!existing.thumbnail && (s.thumbnail || (s.images && s.images[0]))) {
+        existing.thumbnail = s.thumbnail || (s.images && s.images[0]);
+      }
+      if (s.images && s.images.length > 0) {
+        const mergedImages = Array.from(new Set([...(existing.images || []), ...s.images]));
+        existing.images = mergedImages;
+      }
+
+      // Update date bounds
+      if (new Date(s.createdAt) < new Date(existing.firstRequisitionDate)) {
+        existing.firstRequisitionDate = s.createdAt;
+      }
+      if (new Date(s.updatedAt || s.createdAt) > new Date(existing.lastRequisitionDate)) {
+        existing.lastRequisitionDate = s.updatedAt || s.createdAt;
+      }
+
+      // Merge colors without duplicating exact identical colorway (same color + wash + fabric)
+      for (const cw of sampleColorways) {
+        const alreadyHasColor = existing.colors.some(
+          (c) =>
+            c.color.toLowerCase() === cw.color.toLowerCase() &&
+            (c.wash || '').toLowerCase() === (cw.wash || '').toLowerCase() &&
+            (c.fabricCode || '').toLowerCase() === (cw.fabricCode || '').toLowerCase()
+        );
+        if (!alreadyHasColor) {
+          existing.colors.push(cw);
+        }
+      }
+
+      // Merge fabrics
+      const allSampleFabrics: { code: string; name?: string; id?: string; color: string }[] = [];
+      if (primaryFabricCode) {
+        allSampleFabrics.push({
+          code: primaryFabricCode,
+          name: primaryFabricName,
+          id: primaryFabricId,
+          color: s.color,
+        });
+      }
+      for (const cw of sampleColorways) {
+        if (cw.fabricCode) {
+          allSampleFabrics.push({
+            code: cw.fabricCode,
+            name: cw.fabricName,
+            id: cw.fabricId,
+            color: cw.color,
+          });
+        }
+      }
+
+      for (const f of allSampleFabrics) {
+        const existingFab = existing.fabrics.find((ef) => ef.fabricCode === f.code);
+        if (existingFab) {
+          if (!existingFab.usedForColors?.includes(f.color)) {
+            existingFab.usedForColors = [...(existingFab.usedForColors || []), f.color];
+          }
+        } else {
+          existing.fabrics.push({
+            fabricId: f.id,
+            fabricCode: f.code,
+            fabricName: f.name,
+            usedForColors: [f.color],
+          });
+        }
+      }
+
+      if (!existing.perPcsConsumptionYards && getEffectivePerPcsConsumption(s) > 0) {
+        existing.perPcsConsumptionYards = getEffectivePerPcsConsumption(s);
+      }
+    }
+  }
+
+  // Return sorted by most recent requisition date
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.lastRequisitionDate).getTime() - new Date(a.lastRequisitionDate).getTime()
+  );
+}
+
 
 
