@@ -1,5 +1,6 @@
 import React from 'react';
 import { PushNotification } from '../types/notification';
+import { AppUser } from '../types/auth';
 import {
   X,
   Bell,
@@ -9,6 +10,7 @@ import {
   Info,
   Check,
   Volume2,
+  User,
 } from 'lucide-react';
 import { playDefaultNotificationSound } from '../utils/notificationSound';
 
@@ -16,6 +18,7 @@ interface NotificationDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   notifications: PushNotification[];
+  currentUser?: AppUser;
   onMarkAllAsRead: () => void;
   onClearNotifications: () => void;
   onNotificationClick: (notif: PushNotification) => void;
@@ -25,11 +28,19 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   isOpen,
   onClose,
   notifications,
+  currentUser,
   onMarkAllAsRead,
   onClearNotifications,
   onNotificationClick,
 }) => {
   if (!isOpen) return null;
+
+  const visibleNotifications = notifications.filter(
+    (n) =>
+      !n.targetUsername ||
+      !currentUser ||
+      n.targetUsername.toLowerCase() === currentUser.username.toLowerCase()
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
@@ -76,20 +87,20 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
               <span>Sound On (Test)</span>
             </button>
             <span className="text-[11px] text-slate-500 font-mono">
-              ({notifications.length})
+              ({visibleNotifications.length})
             </span>
           </div>
         </div>
 
         {/* List of Notifications */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {notifications.map((notif) => {
+          {visibleNotifications.map((notif) => {
             let icon = <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />;
             let borderClass = 'border-slate-800 bg-slate-800/40';
 
-            if (notif.type === 'critical') {
+            if (notif.type === 'critical' || notif.category === 'follow_up') {
               icon = <AlertOctagon className="w-4 h-4 text-rose-400 shrink-0 mt-0.5 animate-pulse" />;
-              borderClass = 'border-rose-500/40 bg-rose-950/30';
+              borderClass = 'border-rose-500/50 bg-rose-950/40 shadow-sm shadow-rose-900/30';
             } else if (notif.type === 'warning') {
               icon = <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />;
               borderClass = 'border-amber-500/30 bg-amber-950/20';
@@ -110,13 +121,22 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
                   {icon}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h4
-                        className={`text-xs font-bold ${
-                          notif.type === 'critical' ? 'text-rose-300' : 'text-white'
-                        }`}
-                      >
-                        {notif.title}
-                      </h4>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4
+                          className={`text-xs font-bold ${
+                            notif.type === 'critical' || notif.category === 'follow_up'
+                              ? 'text-rose-300'
+                              : 'text-white'
+                          }`}
+                        >
+                          {notif.title}
+                        </h4>
+                        {notif.targetUsername && (
+                          <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white font-mono text-[9px] font-bold uppercase">
+                            @{notif.targetUsername} ONLY
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-slate-500 font-mono">
                         {new Date(notif.timestamp).toLocaleTimeString([], {
                           hour: '2-digit',

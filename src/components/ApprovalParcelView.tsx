@@ -15,6 +15,7 @@ import {
 import { ProgressBar } from './ProgressBar';
 import { StyleProductImage } from './StyleProductImage';
 import { SampleTypeBadge } from './SampleTypeBadge';
+import { AppUser } from '../types/auth';
 import {
   PackageCheck,
   MessageSquare,
@@ -35,18 +36,22 @@ import {
   Paperclip,
   FileText,
   Download,
+  Tag,
+  Clock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface ApprovalParcelViewProps {
   samples: SampleItem[];
   stageMode?: 'ready_for_parcel' | 'approval_comments';
+  currentUser?: AppUser;
   onSelectSample: (sample: SampleItem) => void;
   onAdvanceStage: (sample: SampleItem) => void;
   onUpdateApprovalDetails: (sampleId: string, details: ApprovalDetails) => void;
   onUpdateParcelDetails: (sampleId: string, details: ParcelDetails) => void;
   onOpenComponentApproval?: (sample: SampleItem, component: ApprovableComponentKey) => void;
   onOpenFollowUp?: (sample: SampleItem) => void;
+  onOpenSampleCard?: (sample: SampleItem | null, isManualMode?: boolean) => void;
   onToggleWorkbookSent?: (sampleId: string) => void;
   onSendWhatsApp?: (sample: SampleItem, phone: string, customMessage?: string) => void;
 }
@@ -54,11 +59,13 @@ interface ApprovalParcelViewProps {
 export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
   samples,
   stageMode = 'approval_comments',
+  currentUser,
   onSelectSample,
   onAdvanceStage,
   onUpdateApprovalDetails,
   onOpenComponentApproval,
   onOpenFollowUp,
+  onOpenSampleCard,
   onToggleWorkbookSent,
   onSendWhatsApp,
 }) => {
@@ -157,9 +164,19 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
               : 'This page strictly displays only styles in Approval Comments Status. Record Wash, Thread, Zipper, and Button approval proofs (Note + PDF/Image) and buyer remarks.'}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => onOpenSampleCard && onOpenSampleCard(null, true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-blue-500/25 transition-all cursor-pointer"
+            title="Create and print 4-up sample cards / garment tags from scratch or requisition"
+          >
+            <Tag className="w-4 h-4 text-white" />
+            <span>Manual Requisition Card Maker</span>
+          </button>
+
           {stageMode === 'ready_for_parcel' ? (
-            <div className="p-3 bg-slate-900/90 rounded-xl border border-emerald-500/30 text-center min-w-[130px]">
+            <div className="p-3 bg-slate-900/90 rounded-xl border border-emerald-500/30 text-center min-w-[120px]">
               <span className="text-2xl font-mono font-black text-emerald-400">
                 {readyCount}
               </span>
@@ -168,7 +185,7 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
               </div>
             </div>
           ) : (
-            <div className="p-3 bg-slate-900/90 rounded-xl border border-emerald-500/30 text-center min-w-[130px]">
+            <div className="p-3 bg-slate-900/90 rounded-xl border border-emerald-500/30 text-center min-w-[120px]">
               <span className="text-2xl font-mono font-black text-emerald-400">
                 {approvalCount}
               </span>
@@ -421,7 +438,17 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                     </div>
 
                     {/* Follow Up & WhatsApp Actions */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onOpenSampleCard && onOpenSampleCard(sample, false)}
+                        className="px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-lg shadow-md shadow-blue-600/30 flex items-center gap-1.5 transition-all cursor-pointer"
+                        title="Open, Edit & Print Sample Card Garment Tag (Exact 4-up copy)"
+                      >
+                        <Tag className="w-3.5 h-3.5" />
+                        <span>Sample Card (Tag)</span>
+                      </button>
+
                       <div className="text-[11px] text-slate-400 flex items-center gap-1 bg-slate-800 px-2 py-1 rounded border border-slate-700">
                         <Phone className="w-3 h-3 text-emerald-400" />
                         <span className="font-mono text-emerald-300 text-[10px]">
@@ -453,6 +480,34 @@ export const ApprovalParcelView: React.FC<ApprovalParcelViewProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  {/* Scheduled Follow-up Banner for Assigned User */}
+                  {pDetails.followUp?.followUpDate && (
+                    <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-rose-400" />
+                        <span className="text-slate-400">
+                          Follow-up Scheduled:{' '}
+                          <strong className="text-white font-mono">{pDetails.followUp.followUpDate}</strong>
+                          {pDetails.followUp.followUpTime ? ` at ${pDetails.followUp.followUpTime}` : ''}
+                        </span>
+                        {pDetails.followUp.assignedUser && (
+                          <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/40 text-rose-300 font-mono text-[10px] font-bold">
+                            👤 Assigned to @{pDetails.followUp.assignedUser}
+                          </span>
+                        )}
+                      </div>
+
+                      {currentUser &&
+                        pDetails.followUp.assignedUser === currentUser.username &&
+                        pDetails.followUp.followUpDate <= new Date().toISOString().split('T')[0] && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-rose-600 text-white font-bold text-[10px] shadow-md shadow-rose-600/40 animate-pulse">
+                            <AlertCircle className="w-3 h-3" />
+                            <span>RED ALERT: Follow-up is due today for you!</span>
+                          </span>
+                        )}
+                    </div>
+                  )}
                 </div>
 
                 {/* APPROVAL REMARKS NOTE SECTION (Wash, Trims, Accessories) */}

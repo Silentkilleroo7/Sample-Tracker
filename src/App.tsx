@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   INITIAL_SAMPLES,
   INITIAL_FABRICS,
@@ -16,6 +16,7 @@ import {
   ApprovalDetails,
   ApprovableComponentKey,
   ParcelDetails,
+  SampleCardData,
   VolarRequisitionForm,
   generateWhatsAppFollowUpLink,
   getSampleImage,
@@ -75,6 +76,7 @@ import { SampleDetailModal } from './components/SampleDetailModal';
 import { RestockFabricModal } from './components/RestockFabricModal';
 import { AddFabricModal } from './components/AddFabricModal';
 import { FollowUpModal } from './components/FollowUpModal';
+import { SampleCardModal } from './components/SampleCardModal';
 import { RequisitionCompleteModal } from './components/RequisitionCompleteModal';
 import { NewBVTestModal } from './components/NewBVTestModal';
 import { UpdateBVResultModal } from './components/UpdateBVResultModal';
@@ -84,6 +86,7 @@ import { NotificationDrawer } from './components/NotificationDrawer';
 import { NotificationToastContainer } from './components/NotificationToastContainer';
 import { OfflineIndicator } from './components/PWAInstallButton';
 import { playDefaultNotificationSound } from './utils/notificationSound';
+import { AlertOctagon, Tag, Calendar, Package } from 'lucide-react';
 
 // Sound utility for real-time notification chimes (plays Default Notification Sound)
 function playNotificationChime(
@@ -397,6 +400,11 @@ export default function App() {
   const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
   const [selectedSampleForFollowUp, setSelectedSampleForFollowUp] = useState<SampleItem | null>(null);
 
+  // Sample Card Modal State (Exact copy of attachment, 4-up printable & manual maker)
+  const [isSampleCardModalOpen, setIsSampleCardModalOpen] = useState(false);
+  const [sampleForCardModal, setSampleForCardModal] = useState<SampleItem | null>(null);
+  const [isManualCardMakerMode, setIsManualCardMakerMode] = useState(false);
+
   // Test Modals State
   const [isNewTestModalOpen, setIsNewTestModalOpen] = useState(false);
   const [isUpdateResultModalOpen, setIsUpdateResultModalOpen] = useState(false);
@@ -409,12 +417,19 @@ export default function App() {
   const [isAddFabricModalOpen, setIsAddFabricModalOpen] = useState(false);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
 
-  // Push Notification Dispatcher
+  // Push Notification Dispatcher (Supports user-specific red follow-up alerts!)
   const sendPushNotification = (
     title: string,
     message: string,
     type: 'info' | 'success' | 'warning' | 'critical',
-    extra?: { sampleId?: string; fabricCode?: string; styleCode?: string }
+    extra?: {
+      sampleId?: string;
+      fabricCode?: string;
+      styleCode?: string;
+      targetUsername?: string;
+      isUserSpecific?: boolean;
+      category?: 'follow_up' | 'stage_update' | 'inventory' | 'general';
+    }
   ) => {
     const newNotif: PushNotification = {
       id: `notif-${Date.now()}`,
@@ -427,7 +442,14 @@ export default function App() {
     };
     setNotifications((prev) => [newNotif, ...prev]);
     void insertNotificationInSupabase(newNotif);
-    playNotificationChime(type, title, message);
+
+    // Audio chime: play for all general notifications, or if specifically targeted to the logged-in user
+    if (
+      !extra?.targetUsername ||
+      (currentUser && extra.targetUsername.toLowerCase() === currentUser.username.toLowerCase())
+    ) {
+      playNotificationChime(type, title, message);
+    }
   };
 
   // 4. Sample Requisition Creation (with Per-Pcs Fabric Consumption & Auto Inventory Deduction)
@@ -1398,6 +1420,163 @@ export default function App() {
     );
   };
 
+  // 9b. Sample Card Modal & Manual Card Maker Handlers (Exact copy of attachment)
+  const handleOpenSampleCard = (sample: SampleItem | null, isManualMode = false) => {
+    setSampleForCardModal(sample);
+    setIsManualCardMakerMode(isManualMode);
+    setIsSampleCardModalOpen(true);
+  };
+
+  const handleSaveSampleCard = (
+    sampleId: string | null,
+    cardData: SampleCardData,
+    saveAsParcel: boolean,
+    targetStage?: 'approval_comments' | 'ready_for_parcel'
+  ) => {
+    const nowIso = new Date().toISOString();
+    let updatedSampleRef: SampleItem | null = null;
+
+    if (sampleId) {
+      setSamples((prev) =>
+        prev.map((s) => {
+          if (s.id === sampleId) {
+            const nextStage = saveAsParcel ? 'approval_comments' : (targetStage || s.stage);
+            const historyNote = saveAsParcel
+              ? `Sample Card generated & saved as Parcel. Dispatched via ${cardData.courier || 'DHL'} (AWB: ${cardData.trackingNumber || 'Pending'}). Follow-up set for ${cardData.followUpDate || 'TBD'} (Assigned: @${cardData.assignedUser || currentUser?.username || 'user'}).`
+              : `Sample Card tag specs updated. Follow-up set for ${cardData.followUpDate || 'TBD'}.`;
+
+            const updated: SampleItem = {
+              ...s,
+              stage: nextStage,
+              updatedAt: nowIso,
+              parcelDetails: {
+                ...s.parcelDetails,
+                courier: cardData.courier || s.parcelDetails.courier,
+                trackingNumber: cardData.trackingNumber || s.parcelDetails.trackingNumber,
+                dispatchStatus: saveAsParcel ? 'dispatched' : s.parcelDetails.dispatchStatus,
+                parcelDate: cardData.dateSend || s.parcelDetails.parcelDate,
+                sampleCard: cardData,
+                followUp: {
+                  followUpDate: cardData.followUpDate || '',
+                  assignedUser: cardData.assignedUser,
+                  status: 'scheduled',
+                  whatsAppNumber: s.parcelDetails.followUp?.whatsAppNumber || '+1 (215) 555-0199',
+                  notes: cardData.notes || s.parcelDetails.followUp?.notes,
+                },
+              },
+              stageHistory: [
+                ...s.stageHistory,
+                {
+                  stage: nextStage,
+                  timestamp: nowIso,
+                  note: historyNote,
+                  operator: currentUser?.displayName || 'Merchandiser',
+                },
+              ],
+            };
+            updatedSampleRef = updated;
+            void upsertSampleInSupabase(updated);
+            return updated;
+          }
+          return s;
+        })
+      );
+    } else {
+      // Manual Mode: New parcel card created directly under Ready for Parcel
+      const newId = `smp-card-${Date.now()}`;
+      const newSample: SampleItem = {
+        id: newId,
+        styleCode: cardData.styleNo || `MANUAL-${Date.now().toString().slice(-4)}`,
+        styleName: cardData.designNo || 'Manual Parcel Sample',
+        buyer: cardData.buyer || 'Direct Buyer',
+        poNumber: 'PO-MANUAL',
+        lineCode: cardData.lineCode || 'LINE-01',
+        sampleType: (cardData.sampleTypeApproval ? cardData.sampleTypeApproval.split('\n')[0] : 'Red Seal Sample') as any,
+        color: cardData.color || 'Standard',
+        size: cardData.size || '12',
+        quantity: 1,
+        fabricId: 'fab-manual',
+        fabricCode: cardData.fabricDetails || 'FAB-MANUAL',
+        fabricName: cardData.fabricDetails || 'Cotton Spandex',
+        perPcsConsumptionYards: 1,
+        fabricRequiredYards: 1,
+        stage: saveAsParcel ? 'approval_comments' : 'ready_for_parcel',
+        priority: 'normal',
+        targetParcelDate: cardData.approvalDate || nowIso.split('T')[0],
+        shipmentDate: cardData.approvalDate || nowIso.split('T')[0],
+        isRequisitionLocked: false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        stageHistory: [
+          {
+            stage: saveAsParcel ? 'approval_comments' : 'ready_for_parcel',
+            timestamp: nowIso,
+            note: `Manual Requisition Card created. Dispatched as Parcel: ${saveAsParcel ? 'YES' : 'NO'}. Follow-up assigned to @${cardData.assignedUser || currentUser?.username || 'user'}.`,
+            operator: currentUser?.displayName || 'Merchandiser',
+          },
+        ],
+        washDetails: {
+          washType: cardData.color || 'Standard Wash',
+          washTechnician: 'Operator',
+          washFormula: 'Standard Eco Wash',
+        },
+        finishingDetails: {
+          finishingLine: 'Line-1',
+          supervisor: 'Supervisor',
+          ironingDone: false,
+          threadTrimmingDone: false,
+          taggingDone: false,
+          qualityPassed: false,
+        },
+        parcelDetails: {
+          courier: cardData.courier || 'DHL Express',
+          trackingNumber: cardData.trackingNumber || '',
+          parcelDate: cardData.dateSend || nowIso.split('T')[0],
+          recipient: cardData.buyer || 'Buyer Office',
+          destinationCountry: 'Buyer Country',
+          dispatchStatus: saveAsParcel ? 'dispatched' : 'pending',
+          workbookSent: true,
+          sampleCard: cardData,
+          followUp: {
+            followUpDate: cardData.followUpDate || '',
+            assignedUser: cardData.assignedUser,
+            status: 'scheduled',
+            whatsAppNumber: '+1 (215) 555-0199',
+          },
+        },
+        approvalDetails: {
+          washComments: '',
+          washApproved: false,
+          trimsComments: '',
+          trimsApproved: false,
+          accessoriesComments: '',
+          accessoriesApproved: false,
+          overallVerdict: 'pending',
+        },
+      };
+
+      updatedSampleRef = newSample;
+      setSamples((prev) => [newSample, ...prev]);
+      void upsertSampleInSupabase(newSample);
+    }
+
+    if (updatedSampleRef) {
+      const targetUser = cardData.assignedUser || currentUser?.username || 'user';
+      sendPushNotification(
+        '🚨 Parcel Card Saved & Follow-up Scheduled',
+        `Style ${(updatedSampleRef as SampleItem).styleCode} saved as parcel and assigned for follow-up on ${cardData.followUpDate || 'scheduled date'}. Action required for @${targetUser}!`,
+        'critical',
+        {
+          sampleId: (updatedSampleRef as SampleItem).id,
+          styleCode: (updatedSampleRef as SampleItem).styleCode,
+          targetUsername: targetUser,
+          isUserSpecific: true,
+          category: 'follow_up',
+        }
+      );
+    }
+  };
+
   // 10. Bureau Veritas (BV) Test Module Handlers
   const handleCreateBVTest = (testData: Partial<BVTestItem>) => {
     const newTest: BVTestItem = {
@@ -1585,6 +1764,23 @@ export default function App() {
   const isMerchandiser = currentUser.role === 'merchandiser';
   const isSewingUser = currentUser.role === 'sewing';
   const isWashUser = currentUser.role === 'wash';
+
+  // Specific Follow-up tracking for logged-in user (triggers targeted RED notification)
+  const userDueFollowUps = useMemo(() => {
+    if (!currentUser) return [];
+    const todayStr = new Date().toISOString().split('T')[0];
+    return samples.filter((s) => {
+      const f = s.parcelDetails?.followUp;
+      return (
+        f &&
+        f.assignedUser &&
+        f.assignedUser.toLowerCase() === currentUser.username.toLowerCase() &&
+        f.followUpDate &&
+        f.followUpDate <= todayStr &&
+        f.status !== 'completed'
+      );
+    });
+  }, [samples, currentUser]);
 
   return (
     <ImageZoomProvider onUpdateSampleThumbnail={isMerchandiser ? handleUpdateSampleThumbnail : undefined}>
@@ -1847,6 +2043,51 @@ export default function App() {
                   </div>
                 );
               })()}
+
+              {/* User-Specific RED Follow-up Alert Banner (Visible only to the assigned user) */}
+              {userDueFollowUps.length > 0 && (
+                <div className="mb-5 p-4 rounded-2xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white shadow-xl shadow-red-600/30 border border-red-400 flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in duration-300">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white shrink-0 animate-bounce">
+                      <AlertOctagon className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-black text-[10px] uppercase bg-black/40 px-2 py-0.5 rounded text-white border border-white/30">
+                          RED NOTIFICATION FOR @{currentUser.username.toUpperCase()} ONLY
+                        </span>
+                        <span className="text-xs font-bold bg-white text-red-700 px-2.5 py-0.5 rounded-full shadow">
+                          {userDueFollowUps.length} Parcel Follow-Up{userDueFollowUps.length > 1 ? 's' : ''} Due Today
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm font-bold mt-1 text-white">
+                        Follow-up is scheduled for you today on:{' '}
+                        <span className="underline font-mono">
+                          {userDueFollowUps.map((s: SampleItem) => `${s.styleCode} (${s.styleName})`).join(', ')}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSampleCard(userDueFollowUps[0], false)}
+                      className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-red-700 font-black text-xs shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Tag className="w-3.5 h-3.5" />
+                      <span>Open Parcel Card</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenFollowUp(userDueFollowUps[0])}
+                      className="px-3.5 py-2 rounded-xl bg-black/30 hover:bg-black/40 text-white font-bold text-xs transition-all cursor-pointer"
+                    >
+                      Follow-up Options / WhatsApp
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {currentView === 'dashboard' && (isMerchandiser || isSewingUser) && (
                 <DashboardView
                   samples={samples}
@@ -1998,6 +2239,7 @@ export default function App() {
                 <ApprovalParcelView
                   samples={samples}
                   stageMode="ready_for_parcel"
+                  currentUser={currentUser}
                   onSelectSample={(sample) => {
                     setSelectedSampleForDetail(sample);
                     setIsDetailModalOpen(true);
@@ -2009,6 +2251,7 @@ export default function App() {
                     setComponentApprovalTarget({ sample, component })
                   }
                   onOpenFollowUp={handleOpenFollowUp}
+                  onOpenSampleCard={handleOpenSampleCard}
                   onToggleWorkbookSent={handleToggleWorkbookSent}
                   onSendWhatsApp={handleSendWhatsAppNotification}
                 />
@@ -2018,6 +2261,7 @@ export default function App() {
                 <ApprovalParcelView
                   samples={samples}
                   stageMode="approval_comments"
+                  currentUser={currentUser}
                   onSelectSample={(sample) => {
                     setSelectedSampleForDetail(sample);
                     setIsDetailModalOpen(true);
@@ -2029,6 +2273,7 @@ export default function App() {
                     setComponentApprovalTarget({ sample, component })
                   }
                   onOpenFollowUp={handleOpenFollowUp}
+                  onOpenSampleCard={handleOpenSampleCard}
                   onToggleWorkbookSent={handleToggleWorkbookSent}
                   onSendWhatsApp={handleSendWhatsAppNotification}
                 />
@@ -2129,6 +2374,7 @@ export default function App() {
             isOpen={isNotificationDrawerOpen}
             onClose={() => setIsNotificationDrawerOpen(false)}
             notifications={notifications}
+            currentUser={currentUser}
             onMarkAllAsRead={() => {
               setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
               void markAllNotificationsReadInSupabase();
@@ -2294,6 +2540,20 @@ export default function App() {
             setSelectedSampleForDetail(sample);
             setIsDetailModalOpen(true);
           }}
+        />
+
+        {/* Printable Sample Card Modal (4-Up & Single Card, exact image copy with editing in printing mode) */}
+        <SampleCardModal
+          isOpen={isSampleCardModalOpen}
+          onClose={() => {
+            setIsSampleCardModalOpen(false);
+            setSampleForCardModal(null);
+          }}
+          sample={sampleForCardModal}
+          allSamples={samples}
+          currentUser={currentUser}
+          onSaveCard={handleSaveSampleCard}
+          isManualMode={isManualCardMakerMode}
         />
       </div>
     </ImageZoomProvider>

@@ -65,7 +65,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter(
+    (n) =>
+      !n.read &&
+      (!n.targetUsername || n.targetUsername.toLowerCase() === currentUser.username.toLowerCase())
+  ).length;
   const isMerchandiser = canUserMakeAllChanges(currentUser.role);
   const canViewFabric = canUserAccessFabricInventory(currentUser.role);
   const roleBadge = ROLE_BADGE_CONFIG[currentUser.role];

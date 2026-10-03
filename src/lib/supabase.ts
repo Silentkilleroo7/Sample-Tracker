@@ -564,6 +564,9 @@ export function mapRowToNotification(row: any): PushNotification {
     sampleId: row.sample_id || undefined,
     fabricCode: row.fabric_code || undefined,
     styleCode: row.style_code || undefined,
+    targetUsername: row.target_username || undefined,
+    category: row.category || undefined,
+    isUserSpecific: Boolean(row.target_username),
   };
 }
 
@@ -578,6 +581,8 @@ export function mapNotificationToRow(notif: PushNotification) {
     sample_id: notif.sampleId || null,
     fabric_code: notif.fabricCode || null,
     style_code: notif.styleCode || null,
+    target_username: notif.targetUsername || null,
+    category: notif.category || 'general',
   };
 }
 

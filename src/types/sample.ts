@@ -55,7 +55,36 @@ export interface FollowUpDetails {
   notes?: string;
   status: 'pending' | 'completed' | 'scheduled';
   whatsAppNumber: string; // e.g. "+1 (555) 234-5678" or "+8801712345678"
+  assignedUser?: string; // Target username who receives the RED notification only!
   lastNotifiedAt?: string;
+}
+
+export interface SampleCardData {
+  id?: string;
+  sampleId?: string;
+  dateSend: string; // e.g. "1-Oct-26"
+  styleNo: string; // e.g. "JCS27DN023"
+  designNo: string; // e.g. "POCKET FRONT CROP"
+  lineCode: string; // e.g. "F351287"
+  color: string; // e.g. "MID WASH"
+  department: string; // e.g. "Ladies"
+  season: string; // e.g. "Size -12" or "SS26"
+  size: string; // e.g. "12"
+  fabricDetails: string; // e.g. "99.5% C 0.5% Sp"
+  fabricWeightGsm: string; // e.g. "AW: 260 GSM OZ(+/-)"
+  supplier: string; // e.g. "Grand Apparels Designs"
+  factory: string; // e.g. "Volar Fashion / Unit 1"
+  sampleTypeApproval: string; // e.g. "Red Seal + Wash\nApproval Sample"
+  technologist: string; // e.g. "Zahid Anwar" or blank
+  buyer: string; // e.g. "Grand Apparels" or blank
+  approvalDate: string; // e.g. "15-Oct-26" or blank
+  followUpDate?: string; // Specific date for follow-up
+  assignedUser?: string; // User who receives notification
+  isDispatched?: boolean;
+  courier?: string;
+  trackingNumber?: string;
+  notes?: string;
+  updatedAt?: string;
 }
 
 export interface ParcelDetails {
@@ -71,6 +100,7 @@ export interface ParcelDetails {
   workbookSentBy?: string;
   workbookNotes?: string;
   followUp?: FollowUpDetails;
+  sampleCard?: SampleCardData;
 }
 
 export function isParcelCompleted(sample: SampleItem): boolean {
@@ -80,6 +110,79 @@ export function isParcelCompleted(sample: SampleItem): boolean {
     sample.stage === 'ready_for_parcel' ||
     sample.stage === 'approval_comments'
   );
+}
+
+export function formatSampleCardDate(d?: Date | string): string {
+  const dateObj = d ? new Date(d) : new Date();
+  if (isNaN(dateObj.getTime())) return typeof d === 'string' ? d : '';
+  const day = dateObj.getDate();
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[dateObj.getMonth()];
+  const year = String(dateObj.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+}
+
+export function createDefaultSampleCardData(sample?: Partial<SampleItem>): SampleCardData {
+  if (!sample) {
+    return {
+      dateSend: formatSampleCardDate(new Date()),
+      styleNo: '',
+      designNo: '',
+      lineCode: '',
+      color: '',
+      department: 'Ladies',
+      season: 'Size -12',
+      size: '12',
+      fabricDetails: '99.5% C 0.5% Sp',
+      fabricWeightGsm: 'AW: 260 GSM OZ(+/-)',
+      supplier: 'Grand Apparels Designs',
+      factory: 'Volar Fashion Ltd.',
+      sampleTypeApproval: 'Red Seal + Wash\nApproval Sample',
+      technologist: '',
+      buyer: '',
+      approvalDate: '',
+      followUpDate: new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0],
+      assignedUser: '',
+    };
+  }
+
+  const existingCard = sample.parcelDetails?.sampleCard;
+  if (existingCard) {
+    return { ...existingCard };
+  }
+
+  const primaryColor = sample.color || (sample.colorBreakdown && sample.colorBreakdown[0]?.color) || 'MID WASH';
+  const primarySize = sample.size || (sample.sizeBreakdown && sample.sizeBreakdown[0]?.size) || '12';
+  const sizeFormatted = primarySize.toLowerCase().startsWith('size') ? primarySize : `Size -${primarySize}`;
+
+  const cleanSampleType = sample.sampleType || 'Red Seal';
+  const factoryApprovalText = cleanSampleType.toLowerCase().includes('wash')
+    ? `${cleanSampleType}\nApproval Sample`
+    : `${cleanSampleType} + Wash\nApproval Sample`;
+
+  return {
+    sampleId: sample.id,
+    dateSend: formatSampleCardDate(sample.parcelDetails?.parcelDate || sample.updatedAt || new Date()),
+    styleNo: sample.styleCode || '',
+    designNo: sample.styleName || '',
+    lineCode: sample.lineCode || '',
+    color: primaryColor,
+    department: 'Ladies',
+    season: sizeFormatted,
+    size: primarySize,
+    fabricDetails: sample.fabricName || sample.fabricCode || '99.5% C 0.5% Sp',
+    fabricWeightGsm: 'AW: 260 GSM OZ(+/-)',
+    supplier: 'Grand Apparels Designs',
+    factory: 'Volar Fashion Ltd.',
+    sampleTypeApproval: factoryApprovalText,
+    technologist: sample.requisitionForm?.requestedBy || '',
+    buyer: sample.buyer || '',
+    approvalDate: sample.targetParcelDate ? formatSampleCardDate(sample.targetParcelDate) : '',
+    followUpDate: sample.parcelDetails?.followUp?.followUpDate || new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0],
+    assignedUser: sample.parcelDetails?.followUp?.assignedUser || '',
+    courier: sample.parcelDetails?.courier || 'DHL Express',
+    trackingNumber: sample.parcelDetails?.trackingNumber || '',
+  };
 }
 
 export function generateWhatsAppFollowUpLink(sample: SampleItem, phone: string, customMessage?: string): string {

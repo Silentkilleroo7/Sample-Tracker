@@ -285,12 +285,13 @@ body {
   }
 
   #requisition-printable-slip,
-  #printable-requisition-sheet {
+  #printable-requisition-sheet,
+  #printable-sample-card-sheet {
     display: block !important;
     position: static !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 2mm !important;
     box-shadow: none !important;
     color: #000000 !important;
@@ -304,7 +305,8 @@ body {
   }
 
   #requisition-printable-slip *,
-  #printable-requisition-sheet * {
+  #printable-requisition-sheet *,
+  #printable-sample-card-sheet * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
